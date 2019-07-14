@@ -39,6 +39,7 @@ type SettingMessage struct {
 // Weather updates channel.
 var weatherUpdate *uibroadcaster
 var trafficUpdate *uibroadcaster
+var radarUpdate *uibroadcaster
 var gdl90Update *uibroadcaster
 
 func handleGDL90WS(conn *websocket.Conn) {
@@ -97,6 +98,7 @@ func handleJsonIo(conn *websocket.Conn) {
 	}
 	// Subscribe the socket to receive updates.
 	trafficUpdate.AddSocket(conn)
+	radarUpdate.AddSocket(conn)
 	weatherRawUpdate.AddSocket(conn)
 	situationUpdate.AddSocket(conn)
 
@@ -144,6 +146,37 @@ func handleTrafficWS(conn *websocket.Conn) {
 		time.Sleep(1 * time.Second)
 	}
 }
+
+func handleRadarWS(conn *websocket.Conn) {
+	trafficMutex.Lock()
+        log.Printf("Radar WS client connected. # of sockets: %d\n", len(radarUpdate.sockets));	
+        for _, traf := range traffic {
+		if !traf.Position_valid { // Don't send unless a valid position exists.
+			continue
+		}
+		trafficJSON, _ := json.Marshal(&traf)
+		conn.Write(trafficJSON)
+	}
+	// Subscribe the socket to receive updates.
+	radarUpdate.AddSocket(conn)
+	trafficMutex.Unlock()
+
+	radarUpdate.SendJSON(globalSettings);
+
+	// Connection closes when function returns. Since uibroadcast is writing and we don't need to read anything (for now), just keep it busy.
+	for {
+		buf := make([]byte, 1024)
+		_, err := conn.Read(buf)
+		if err != nil {
+			break
+		}
+		if buf[0] != 0 { // Dummy.
+			continue
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+
 
 func handleStatusWS(conn *websocket.Conn) {
 	//	log.Printf("Web client connected.\n")
@@ -258,7 +291,6 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 		// raw, _ := httputil.DumpRequest(r, true)
 		// log.Printf("handleSettingsSetRequest:raw: %s\n", raw)
 
-		var resetWiFi bool
 		decoder := json.NewDecoder(r.Body)
 		for {
 			var msg map[string]interface{} // support arbitrary JSON
@@ -313,6 +345,12 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						}
 					case "PPM":
 						globalSettings.PPM = int(val.(float64))
+					case "RadarLimits":
+						globalSettings.RadarLimits = int(val.(float64))
+						radarUpdate.SendJSON(globalSettings)
+					case "RadarRange":
+						globalSettings.RadarRange = int(val.(float64))
+						radarUpdate.SendJSON(globalSettings)
 					case "Baud":
 						if serialOut, ok := globalSettings.SerialOutputs["/dev/serialout0"]; ok { //FIXME: Only one device for now.
 							newBaud := int(val.(float64))
@@ -370,17 +408,15 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						}
 						globalSettings.StaticIps = ips
 					case "WiFiSSID":
-						globalSettings.WiFiSSID = val.(string)
-						resetWiFi = true
+						setWifiSSID(val.(string))
 					case "WiFiChannel":
-						globalSettings.WiFiChannel = int(val.(float64))
-						resetWiFi = true
+						setWifiChannel(int(val.(float64)))
 					case "WiFiSecurityEnabled":
-						globalSettings.WiFiSecurityEnabled = val.(bool)
-						resetWiFi = true
+						setWifiSecurityEnabled(val.(bool))
 					case "WiFiPassphrase":
-						globalSettings.WiFiPassphrase = val.(string)
-						resetWiFi = true
+						setWifiPassphrase(val.(string))
+					case "WiFiIPAddress":
+						setWifiIPAddress(val.(string))
 					case "GDL90MSLAlt_Enabled":
 						globalSettings.GDL90MSLAlt_Enabled = val.(bool)
 					case "SkyDemonAndroidHack":
@@ -390,26 +426,7 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				saveSettings()
-				if resetWiFi {
-					saveWiFiUserSettings()
-					go func() {
-						time.Sleep(time.Second)
-						cmd := exec.Command("ifdown", "wlan0")
-						if err := cmd.Start(); err != nil {
-							log.Printf("Error shutting down WiFi: %s\n", err.Error())
-						}
-						if err = cmd.Wait(); err != nil {
-							log.Printf("Error shutting down WiFi: %s\n", err.Error())
-						}
-						cmd = exec.Command("ifup", "wlan0")
-						if err := cmd.Start(); err != nil {
-							log.Printf("Error starting WiFi: %s\n", err.Error())
-						}
-						if err = cmd.Wait(); err != nil {
-							log.Printf("Error starting WiFi: %s\n", err.Error())
-						}
-					}()
-				}
+				applyNetworkSettings(false)
 			}
 		}
 
@@ -795,6 +812,7 @@ func viewLogs(w http.ResponseWriter, r *http.Request) {
 func managementInterface() {
 	weatherUpdate = NewUIBroadcaster()
 	trafficUpdate = NewUIBroadcaster()
+	radarUpdate = NewUIBroadcaster()
 	situationUpdate = NewUIBroadcaster()
 	weatherRawUpdate = NewUIBroadcaster()
 	gdl90Update = NewUIBroadcaster()
@@ -833,6 +851,13 @@ func managementInterface() {
 				Handler: websocket.Handler(handleTrafficWS)}
 			s.ServeHTTP(w, req)
 		})
+	http.HandleFunc("/radar",
+		func(w http.ResponseWriter, req *http.Request) {
+			s := websocket.Server{
+				Handler: websocket.Handler(handleRadarWS)}
+			s.ServeHTTP(w, req)
+		})
+
 
 	http.HandleFunc("/jsonio",
 		func(w http.ResponseWriter, req *http.Request) {

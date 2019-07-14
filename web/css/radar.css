@@ -164,3 +164,23 @@
     fill: #121512;
 }
 
+.radar .tSmall {
+    line-height: 0.8;
+    font-size: 0.9em;
+    font-family: sans-serif;
+    text-anchor: middle;
+    font-weight: bold;
+    stroke-width: 0;
+    fill: white;
+}
+
+.radar .tSmallInvert {
+    line-height: 0.8;
+    font-size: 0.9em;
+    font-family: sans-serif;
+    text-anchor: middle;
+    font-weight: bold;
+    stroke-width: 0;
+    fill: #121512;
+}
+
