@@ -32,12 +32,69 @@ func sendNetFLARM(msg string) {
 
 }
 
+func makeFlarmPFLAUString(ti TrafficInfo) (msg string) {
+	// syntax: PFLAU,<RX>,<TX>,<GPS>,<Power>,<AlarmLevel>,<RelativeBearing>,<AlarmType>,<RelativeVertical>,<RelativeDistance>,<ID>
+	gpsStatus := 0
+	if isGPSValid() {
+		gpsStatus = 2
+	}
+
+	dist, bearing, _, _ := distRect(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(ti.Lat), float64(ti.Lng))
+	relativeVertical := computeRelativeVertical(ti)
+	alarmLevel := computeAlarmLevel(dist, relativeVertical)
+	if bearing > 180 {
+		bearing = -(360 - bearing)
+	}
+	alarmType := 0
+	if alarmLevel > 0 {
+		alarmType = 2
+	}
+	// TODO: we are always airbourne for now
+	if alarmLevel > 0 {
+		msg = fmt.Sprintf("PFLAU,%d,1,%d,1,%d,%d,%d,%d,%d", len(traffic), gpsStatus, alarmLevel, int32(bearing), alarmType, relativeVertical, int32(math.Abs(dist)))
+	} else {
+		msg = fmt.Sprintf("PFLAU,%d,1,%d,1,0,,0,,", len(traffic), gpsStatus)
+	}
+
+	checksumPFLAU := byte(0x00)
+	for i := range msg {
+		checksumPFLAU = checksumPFLAU ^ byte(msg[i])
+	}
+	msg = (fmt.Sprintf("$%s*%02X\r\n", msg, checksumPFLAU))
+	return
+}
+
+// TODO: only very simplistic implementation
+func computeAlarmLevel(dist float64, relativeVertical int32) (alarmLevel uint8) {
+	if (dist < 926) && (relativeVertical < 152) && (relativeVertical > -152) { // 926 m = 0.5 NM; 152m = 500'
+		alarmLevel = 3
+	} else if (dist < 1852) && (relativeVertical < 304) && (relativeVertical > -304) { // 1852 m = 1.0 NM ; 304 m = 1000'
+		alarmLevel = 2
+	} else {
+		alarmLevel = 0
+	}
+	return
+}
+
+func computeRelativeVertical(ti TrafficInfo) (relativeVertical int32) {
+	altf := mySituation.BaroPressureAltitude
+	if !isTempPressValid() && isGPSValid() { // if no pressure altitude available, use GPS altitude
+		altf = mySituation.GPSAltitudeMSL
+	}
+	if ti.AltIsGNSS && isGPSValid() {
+		// Altitude coming from OGN. We set the geoid separation to 0 in the OGN config, so OGN reports ellipsoid alt - we need to compare to that
+		altf = mySituation.GPSHeightAboveEllipsoid
+	}
+	relativeVertical = int32(float32(ti.Alt)*0.3048 - altf*0.3048) // convert to meters
+	return
+}
+
 /*
 	makeFlarmPFLAAString() creates a NMEA-formatted PFLAA string (FLARM traffic format) with checksum from the referenced
 		traffic object.
 */
 
-func makeFlarmPFLAAString(ti TrafficInfo) (msg string, valid bool) {
+func makeFlarmPFLAAString(ti TrafficInfo) (msg string, valid bool, alarmLevel uint8) {
 
 	/*	Format: $PFLAA,<AlarmLevel>,<RelativeNorth>,<RelativeEast>,<RelativeVertical>,<IDType>,<ID>,<Track>,<TurnRate>,<GroundSpeed>, <ClimbRate>,<AcftType>*<checksum>
 		            $PFLAA,0,-10687,-22561,-10283,1,A4F2EE,136,0,269,0.0,0*4E
@@ -78,7 +135,7 @@ func makeFlarmPFLAAString(ti TrafficInfo) (msg string, valid bool) {
 							F = static object
 	*/
 
-	var alarmLevel, idType, checksum uint8
+	var idType, checksum uint8
 	var relativeNorth, relativeEast, relativeVertical, groundSpeed int32
 	var msg2 string
 
@@ -105,19 +162,8 @@ func makeFlarmPFLAAString(ti TrafficInfo) (msg string, valid bool) {
 	relativeEast = int32(distE)
 	//}
 
-	altf := mySituation.BaroPressureAltitude
-	if !isTempPressValid() { // if no pressure altitude available, use GPS altitude
-		altf = mySituation.GPSAltitudeMSL
-	}
-	relativeVertical = int32(float32(ti.Alt)*0.3048 - altf*0.3048) // convert to meters
-
-	// demo of alarm levels... may remove for final release.
-	//dist /= 5
-	if (dist < 926) && (relativeVertical < 152) && (relativeVertical > -152) { // 926 m = 0.5 NM; 152m = 500'
-		alarmLevel = 2
-	} else if (dist < 1852) && (relativeVertical < 304) && (relativeVertical > -304) { // 1852 m = 1.0 NM ; 304 m = 1000'
-		alarmLevel = 1
-	}
+	relativeVertical = computeRelativeVertical(ti)
+	alarmLevel = computeAlarmLevel(dist, relativeVertical)
 
 	if ti.Speed_valid {
 		groundSpeed = int32(float32(ti.Speed) * 0.5144) // convert to m/s
@@ -306,9 +352,9 @@ func makeGPGGAString() string {
 	lng = deg*100 + min
 
 	numSV := thisSituation.GPSSatellites
-	if numSV > 12 {
-		numSV = 12
-	}
+	//if numSV > 12 {
+	//	numSV = 12
+	//}
 
 	//hdop := float32(thisSituation.Accuracy / 4.0)
 	//if hdop < 0.7 {hdop = 0.7}
@@ -322,9 +368,7 @@ func makeGPGGAString() string {
 	if isGPSValid() {
 		msg = fmt.Sprintf("GPGGA,%02.f%02.f%05.2f,%010.5f,%s,%011.5f,%s,%d,%d,%.2f,%.1f,M,%.1f,M,,", hr, mins, sec, lat, ns, lng, ew, thisSituation.GPSFixQuality, numSV, hdop, alt, geoidSep)
 	} else {
-		msg = fmt.Sprintf("GPTXT,Nope")
-
-		//msg = fmt.Sprintf("GPRMC,,%s,,,,,,,%02d%02d%02d,%s,%s,%s", status, dd, mm, yy, magVar, mvEW, mode) // return null lat-lng and velocity if invalid GPS
+		msg = fmt.Sprintf("GPGGA,,,,,,0,%d,,,,,,,", numSV)
 	}
 
 	var checksum byte
@@ -450,10 +494,10 @@ func handleMessages(msgchan <-chan string, addchan <-chan tcpClient, rmchan <-ch
 				go func(mch chan<- string) { mch <- msg }(ch)
 			}
 		case client := <-addchan:
-			log.Printf("New client: %v\n", client.conn)
+			log.Printf("New client: %v\n", client.conn.RemoteAddr().String())
 			clients[client.conn] = client.ch
 		case client := <-rmchan:
-			log.Printf("Client disconnects: %v\n", client.conn)
+			log.Printf("Client disconnects: %v\n", client.conn.RemoteAddr().String())
 			delete(clients, client.conn)
 		}
 	}

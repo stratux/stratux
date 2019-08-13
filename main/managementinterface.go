@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user" 
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -421,6 +422,8 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.GDL90MSLAlt_Enabled = val.(bool)
 					case "SkyDemonAndroidHack":
 						globalSettings.SkyDemonAndroidHack = val.(bool)
+					case "EstimateBearinglessDist":
+						globalSettings.EstimateBearinglessDist = val.(bool)
 					default:
 						log.Printf("handleSettingsSetRequest:json: unrecognized key:%s\n", key)
 					}
@@ -889,7 +892,12 @@ func managementInterface() {
 	http.HandleFunc("/downloadahrslogs", handleDownloadAHRSLogsRequest)
 	http.HandleFunc("/downloaddb", handleDownloadDBRequest)
 
-	err := http.ListenAndServe(managementAddr, nil)
+	usr, _ := user.Current()
+	addr := managementAddr
+	if usr.Username != "root" {
+		addr = ":8000" // Make sure we can run without root priviledges on different port
+	}
+	err := http.ListenAndServe(addr, nil)
 
 	if err != nil {
 		log.Printf("managementInterface ListenAndServe: %s\n", err.Error())

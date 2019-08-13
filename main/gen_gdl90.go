@@ -1167,6 +1167,7 @@ type settings struct {
 	WiFiIPAddress        string
 	GDL90MSLAlt_Enabled  bool
 	SkyDemonAndroidHack  bool
+	EstimateBearinglessDist bool
 	RadarLimits          int
 	RadarRange           int
 }
@@ -1250,6 +1251,7 @@ func defaultSettings() {
 	globalSettings.StaticIps = make([]string, 0)
 	globalSettings.GDL90MSLAlt_Enabled = true
 	globalSettings.SkyDemonAndroidHack = false
+	globalSettings.EstimateBearinglessDist = true
 
 	globalSettings.WiFiChannel = 1
 	globalSettings.WiFiIPAddress = "192.168.10.1"
@@ -1425,6 +1427,7 @@ func printStats() {
 			log.Printf(" - Last GPS fix: %s, GPS solution type: %d using %d satellites (%d/%d seen/tracked), NACp: %d, est accuracy %.02f m\n", stratuxClock.HumanizeTime(mySituation.GPSLastFixLocalTime), mySituation.GPSFixQuality, mySituation.GPSSatellites, mySituation.GPSSatellitesSeen, mySituation.GPSSatellitesTracked, mySituation.GPSNACp, mySituation.GPSHorizontalAccuracy)
 			log.Printf(" - GPS vertical velocity: %.02f ft/sec; GPS vertical accuracy: %v m\n", mySituation.GPSVerticalSpeed, mySituation.GPSVerticalAccuracy)
 		}
+		log.Printf(" - Mode-S Distance factors (<5000, <10000, >10000): %f, %f, %f", estimatedDistFactors[0], estimatedDistFactors[1], estimatedDistFactors[2])
 		sensorsOutput := make([]string, 0)
 		if globalSettings.IMU_Sensor_Enabled {
 			sensorsOutput = append(sensorsOutput, fmt.Sprintf("Last IMU read: %s", stratuxClock.HumanizeTime(mySituation.AHRSLastAttitudeTime)))
@@ -1576,6 +1579,10 @@ func clearDebugLogFile() {
 	}
 }
 
+func isX86DebugMode() bool {
+	return runtime.GOARCH == "i386" || runtime.GOARCH == "amd64"
+}
+
 func main() {
 	// Catch signals for graceful shutdown.
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -1702,7 +1709,9 @@ func main() {
 	initDataLog()
 
 	// Start the AHRS sensor monitoring.
-	initI2CSensors()
+	if !isX86DebugMode() {
+		initI2CSensors()
+	}
 
 	// Start the GPS external sensor monitoring.
 	initGPS()
@@ -1766,3 +1775,4 @@ func main() {
 		select {}
 	}
 }
+

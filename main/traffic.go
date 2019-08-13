@@ -200,6 +200,8 @@ func sendTrafficUpdates() {
 	msgFLARM := ""
 	msgFlarmCount := 0
 	var bestEstimate TrafficInfo
+	var highestAlarmLevel uint8
+	var highestAlarmTraffic TrafficInfo
 
 	if globalSettings.DEBUG && (stratuxClock.Time.Second()%15) == 0 {
 		log.Printf("List of all aircraft being tracked:\n")
@@ -220,7 +222,7 @@ func sendTrafficUpdates() {
 		}
 		
 		// As bearingless targets, we show the closest estimated traffic that is between +-3000ft
-		if !ti.Position_valid && (bestEstimate.DistanceEstimated == 0 || ti.DistanceEstimated < bestEstimate.DistanceEstimated) {
+		if !ti.Position_valid && (bestEstimate.DistanceEstimated == 0 || ti.DistanceEstimated < bestEstimate.DistanceEstimated) && ti.Icao_addr != uint32(code) {
 			if ti.Alt != 0 && math.Abs(float64(ti.Alt) - float64(currAlt)) < 2000 {
 				bestEstimate = ti
 			}
@@ -243,14 +245,12 @@ func sendTrafficUpdates() {
 		//log.Printf("Traffic age of %X is %f seconds\n",icao,ti.Age)
 		if ti.Age > 2 { // if nothing polls an inactive ti, it won't push to the webUI, and its Age won't update.
 			trafficUpdate.SendJSON(ti)
-			if float32(ti.Alt) <= currAlt + float32(globalSettings.RadarLimits) * 1.3 {   //take 30% more to see moving outs
-				// altitude lower than upper boundary
-				if float32(ti.Alt) >= currAlt - float32(globalSettings.RadarLimits) * 1.3 { 
-					// altitude higher than upper boundary 
-					if !ti.Position_valid || ti.Distance<float64(globalSettings.RadarRange) * 1852.0 * 1.3 {    //allow more so that aircraft moves out
-						radarUpdate.SendJSON(ti)
-					}
-				}
+		}
+		if ti.Age < 6 && ti.Icao_addr != uint32(code) {
+			if float32(ti.Alt) <= currAlt + float32(globalSettings.RadarLimits) * 1.3 && //take 30% more to see moving outs
+			   float32(ti.Alt) >= currAlt - float32(globalSettings.RadarLimits) * 1.3 && // altitude lower than upper boundary
+			   (!ti.Position_valid || ti.Distance<float64(globalSettings.RadarRange) * 1852.0 * 1.3) {    //allow more so that aircraft moves out
+				radarUpdate.SendJSON(ti)
 			}
 		}
 		if ti.Position_valid && ti.Age < 6 { // ... but don't pass stale data to the EFB.
@@ -271,7 +271,11 @@ func sendTrafficUpdates() {
 					msgs = append(msgs, make([]byte, 0))
 				}
 				msgs[cur_n] = append(msgs[cur_n], makeTrafficReportMsg(ti)...)
-				thisMsgFLARM, validFLARM := makeFlarmPFLAAString(ti)
+				thisMsgFLARM, validFLARM, alarmLevel := makeFlarmPFLAAString(ti)
+				if alarmLevel > highestAlarmLevel {
+					highestAlarmLevel = alarmLevel
+					highestAlarmTraffic = ti
+				}
 				//log.Printf(thisMsgFLARM)
 				if validFLARM {
 					//sendNetFLARM(thisMsgFLARM)
@@ -294,30 +298,36 @@ func sendTrafficUpdates() {
 
 	sendNetFLARM(msgFLARM)
 	// Also send the nearest best bearingless
-	if bestEstimate.DistanceEstimated > 0 && bestEstimate.DistanceEstimated < 15000 {
-		msg, valid := makeFlarmPFLAAString(bestEstimate)
+	if globalSettings.EstimateBearinglessDist && bestEstimate.DistanceEstimated > 0 && bestEstimate.DistanceEstimated < 15000 {
+		msg, valid, _ := makeFlarmPFLAAString(bestEstimate)
 		if valid { 
 			sendNetFLARM(msg)
 		}
+
+		if isGPSValid() {
+			fakeTargets := calculateModeSFakeTargets(bestEstimate)
+			fakeMsg :=  make([]byte, 0)
+			for _, ti := range fakeTargets {
+				fakeMsg = append(fakeMsg, makeTrafficReportMsg(ti)...)
+			}
+			sendGDL90(fakeMsg, false)
+		}
 	}
 
-	// syntax: PFLAU,<RX>,<TX>,<GPS>,<Power>,<AlarmLevel>,<RelativeBearing>,<AlarmType>,<RelativeVertical>,<RelativeDistance>,<ID>
-	/*msgPFLAU := fmt.Sprintf("PFLAU,%d,1,2,1,0,,0,,", msgFlarmCount)
-	// to-do: update <gps> field with flight / ground status
-
-	checksumPFLAU := byte(0x00)
-	for i := range msgPFLAU {
-		checksumPFLAU = checksumPFLAU ^ byte(msgPFLAU[i])
-	}
-	msgPFLAU = (fmt.Sprintf("$%s*%02X\r\n", msgPFLAU, checksumPFLAU))
-	sendNetFLARM(msgPFLAU)*/
+	msgPFLAU := makeFlarmPFLAUString(highestAlarmTraffic)
+	sendNetFLARM(msgPFLAU)
 }
 
 // Used to tune to our radios. We compare our estimate to real values for ADS-B Traffic.
-// If we tend to estimate too high, we reduce this value, otherwise we increase it
-var estimatedDistFactor = 3000.0
+// If we tend to estimate too high, we reduce this value, otherwise we increase it.
+// We also try to correct for different transponder transmit power, by assuming that aircraft that fly high are bigger aircraft
+// and have a stronger transponder. Low aircraft are small aircraft with weak transmission power.
+// This is only a wild guess, but seems to help a bit. To do so, we use different estimatedDistFactors for different
+// altitude buckets: <5000ft, 5000-10000ft, >10000ft
+var estimatedDistFactors [3]float64 = [3]float64{2500.0, 2800.0, 3000.0}
 func estimateDistance(ti *TrafficInfo) {
-	dist := math.Pow(2.0, -ti.SignalLevel / 6.0) * estimatedDistFactor;  // distance approx. in meters, 6dB for double distance
+	altClass := int32(math.Max(0.0, math.Min(float64(ti.Alt / 5000), 2.0)))
+	dist := math.Pow(2.0, -ti.SignalLevel / 6.0) * estimatedDistFactors[altClass];  // distance approx. in meters, 6dB for double distance
 
 	lambda := 0.2;
 	timeDiff := ti.Timestamp.Sub(ti.DistanceEstimatedLastTs).Seconds() * 1000
@@ -338,13 +348,46 @@ func estimateDistance(ti *TrafficInfo) {
 		} else {
 			errorFactor = ti.Distance / ti.DistanceEstimated
 		}
-		estimatedDistFactor += errorFactor
+		estimatedDistFactors[altClass] += errorFactor
 		//log.Printf("Estimate off: %f, new factor: %f", errorFactor, estimatedDistFactor)
-		if (estimatedDistFactor < 1.0) {
-			estimatedDistFactor = 1.0
+		if (estimatedDistFactors[altClass] < 1.0) {
+			estimatedDistFactors[altClass] = 1.0
 		}
 	}
 
+}
+
+ // calculates coordinates of a point defined by a location, a bearing, and a distance, thanks to 0x74-0x62
+func calcLocationForBearingDistance(lat1, lon1, bearingDeg, distanceNm float64) (lat2, lon2 float64) {
+	lat1Rad := radians(lat1)
+	lon1Rad := radians(lon1)
+	bearingRad := radians(bearingDeg)
+	distanceRad := distanceNm / (180 * 60 / math.Pi)
+
+	lat2Rad := math.Asin(math.Sin(lat1Rad)*math.Cos(distanceRad) + math.Cos(lat1Rad)*math.Sin(distanceRad)*math.Cos(bearingRad))
+	distanceLon := math.Atan2(math.Sin(bearingRad)*math.Sin(distanceRad)*math.Cos(lat1Rad), math.Cos(distanceRad)-math.Sin(lat1Rad)*math.Sin(lat2Rad))
+	lon2Rad := math.Mod(lon1Rad-distanceLon+math.Pi, 2.0*math.Pi) - math.Pi
+
+	lat2 = degrees(lat2Rad)
+	lon2 = degrees(lon2Rad)
+
+	return
+}
+
+func calculateModeSFakeTargets(bearinglessTi TrafficInfo) []TrafficInfo {
+	result := make([]TrafficInfo, 8)
+	for i := 0; i < 8; i++ {
+		ti := bearinglessTi
+		lat, lon := calcLocationForBearingDistance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(i * 45), bearinglessTi.DistanceEstimated / 1852.0)
+		ti.Lat = float32(lat)
+		ti.Lng = float32(lon)
+		ti.Icao_addr = uint32(i) // So that the EFB shows it as a different aircraft
+		ti.Speed = 0
+		ti.Speed_valid = true
+		ti.Tail = "MODE S"
+		result[i] = ti
+	}
+	return result
 }
 
 func postProcessTraffic(ti *TrafficInfo) {
@@ -364,21 +407,6 @@ func registerTrafficUpdate(ti TrafficInfo) {
 		}
 	*/ // Send all traffic to the websocket and let JS sort it out. This will provide user indication of why they see 1000 ES messages and no traffic.
 	trafficUpdate.SendJSON(ti)
-
-	var currAlt float32
-	currAlt = mySituation.BaroPressureAltitude
-	if currAlt == 99999 {   // no valid BaroAlt, take GPS instead, better than nothing
-		currAlt = mySituation.GPSAltitudeMSL
-	}
-    if float32(ti.Alt) <= currAlt + float32(globalSettings.RadarLimits) * 1.3 {   //take 30% more to see moving outs
-		// altitude lower than upper boundary
-		if float32(ti.Alt) >= currAlt - float32(globalSettings.RadarLimits) * 1.3 { 
-			// altitude higher than upper boundary 
-			if !ti.Position_valid || ti.Distance < float64(globalSettings.RadarRange) * 1852.0 * 1.3 {    //allow more if aircraft moves out
-				radarUpdate.SendJSON(ti)
-			}
-		}
-	}
 }
 
 func isTrafficAlertable(ti TrafficInfo) bool {
