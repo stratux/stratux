@@ -127,10 +127,10 @@ func fanControl() {
 	delay := time.NewTicker(delaySeconds * time.Second)
 
 	for {
-		if myFanControl.TempCurrent >= 65.0 {
+		if myFanControl.TempCurrent >= 60.0 {
 			C.digitalWrite(cPin, C.HIGH)
 			myFanControl.PWMDutyCurrent = 1 //only to update totalFanOnTime
-		} else if myFanControl.TempCurrent <= 55.0 {
+		} else if myFanControl.TempCurrent <= 50.0 {
 			C.digitalWrite(cPin, C.LOW)
 			myFanControl.PWMDutyCurrent = 0 //only to update totalFanOnTime
 		}
