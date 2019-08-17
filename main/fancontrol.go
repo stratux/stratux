@@ -115,11 +115,6 @@ func fanControl() {
 	time.Sleep(5 * time.Second)
 	C.digitalWrite(cPin, C.LOW)
 
-	C.pwmSetMode(C.PWM_MODE_MS)
-	C.pinMode(cPin, C.PWM_OUTPUT)
-	C.pwmSetRange(C.uint(myFanControl.PWMDutyMax))
-	C.pwmSetClock(pwmClockDivisor)
-	C.pwmWrite(cPin, C.int(myFanControl.PWMDutyMin))
 	myFanControl.TempCurrent = 0
 	go cpuTempMonitor(func(cpuTemp float32) {
 		if isCPUTempValid(cpuTemp) {
@@ -132,26 +127,15 @@ func fanControl() {
 	delay := time.NewTicker(delaySeconds * time.Second)
 
 	for {
-		if myFanControl.TempCurrent > (myFanControl.TempTarget + hysteresis) {
-			myFanControl.PWMDutyCurrent = iMax(iMin(myFanControl.PWMDutyMax, myFanControl.PWMDutyCurrent+1), myFanControl.PWMDutyMin)
-		} else if myFanControl.TempCurrent < (myFanControl.TempTarget - hysteresis) {
-			myFanControl.PWMDutyCurrent = iMax(myFanControl.PWMDutyCurrent-1, 0)
-			if myFanControl.PWMDutyCurrent < myFanControl.PWMDutyMin {
-				myFanControl.PWMDutyCurrent = 0
-			}
+		if myFanControl.TempCurrent >= 65.0 {
+			C.digitalWrite(cPin, C.HIGH)
+			myFanControl.PWMDutyCurrent = 1 //only to update totalFanOnTime
+		} else if myFanControl.TempCurrent <= 55.0 {
+			C.digitalWrite(cPin, C.LOW)
+			myFanControl.PWMDutyCurrent = 0 //only to update totalFanOnTime
 		}
-		//log.Println(myFanControl.TempCurrent, " ", myFanControl.PWMDutyCurrent)
-		C.pwmWrite(cPin, C.int(myFanControl.PWMDutyCurrent))
 		<-delay.C
-		if myFanControl.PWMDutyCurrent == myFanControl.PWMDutyMax && myFanControl.TempCurrent >= failsafeTemp {
-			// Reached the maximum temperature. We stop using PWM control and set the fan to "on" permanently.
-			break
-		}
 	}
-
-	// Default to "ON".
-	C.pinMode(cPin, C.OUTPUT)
-	C.digitalWrite(cPin, C.HIGH)
 }
 
 // Service has embedded daemon
