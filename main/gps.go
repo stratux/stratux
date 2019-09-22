@@ -218,7 +218,9 @@ func initGPSSerial() bool {
 		device = "/dev/ttyAMA0"
 		globalStatus.GPS_detected_type = GPS_TYPE_UART
 	} else {
-		log.Printf("No suitable device found.\n")
+		if globalSettings.DEBUG {
+			log.Printf("No GPS device found.\n")
+		}
 		return false
 	}
 	if globalSettings.DEBUG {
@@ -435,7 +437,7 @@ func initGPSSerial() bool {
 func validateNMEAChecksum(s string) (string, bool) {
 	//validate format. NMEA sentences start with "$" and end in "*xx" where xx is the XOR value of all bytes between
 	if !(strings.HasPrefix(s, "$") && strings.Contains(s, "*")) {
-		return "Invalid NMEA message", false
+		return "", false
 	}
 
 	// strip leading "$" and split at "*"
@@ -896,7 +898,9 @@ func processNMEALine(l string) (sentenceUsed bool) {
 
 	l_valid, validNMEAcs := validateNMEAChecksum(l)
 	if !validNMEAcs {
-		log.Printf("GPS error. Invalid NMEA string: %s\n", l_valid) // remove log message once validation complete
+		if len(l_valid) > 0 {
+			log.Printf("GPS error. Invalid NMEA string: %s\n", l_valid) // remove log message once validation complete
+		}
 		return false
 	}
 	x := strings.Split(l_valid, ",")
@@ -2126,17 +2130,17 @@ func isGPSGroundTrackValid() bool {
 }
 
 func isGPSClockValid() bool {
-	return stratuxClock.Since(mySituation.GPSLastGPSTimeStratuxTime) < 15*time.Second
+	return stratuxClock.Since(mySituation.GPSLastGPSTimeStratuxTime).Seconds() < 15
 }
 
 func isAHRSValid() bool {
 	// If attitude information gets to be over 1 second old, declare invalid.
 	// If no GPS then we won't use or send attitude information.
-	return (globalSettings.DeveloperMode || isGPSValid()) && stratuxClock.Since(mySituation.AHRSLastAttitudeTime) < 1*time.Second
+	return (globalSettings.DeveloperMode || isGPSValid()) && stratuxClock.Since(mySituation.AHRSLastAttitudeTime).Seconds() < 1
 }
 
 func isTempPressValid() bool {
-	return stratuxClock.Since(mySituation.BaroLastMeasurementTime) < 15*time.Second
+	return stratuxClock.Since(mySituation.BaroLastMeasurementTime).Seconds() < 15
 }
 
 func pollGPS() {

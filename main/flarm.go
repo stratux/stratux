@@ -13,8 +13,10 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math"
 	"net"
@@ -130,6 +132,44 @@ func decodeFLARMAddressType(addressType byte) string {
 	}
 }
 
+var ognTailNumberCache = make(map[string]string)
+func lookupOgnTailNumber(flarmid string) string {
+	if len(ognTailNumberCache) == 0 {
+		log.Printf("Parsing OGN device db")
+		ddb, err := ioutil.ReadFile("/etc/ddb.json")
+		if err != nil {
+			log.Printf("Failed to read OGN device db")
+			return flarmid
+		}
+		var data map[string]interface{}
+		err = json.Unmarshal(ddb, &data)
+		if err != nil {
+			log.Printf("Failed to parse OGN device db")
+			return flarmid
+		}
+		devlist := data["devices"].([]interface{})
+		for i := 0; i < len(devlist); i++ {
+			dev := devlist[i].(map[string]interface{})
+			flarmid := dev["device_id"].(string)
+			tail := dev["registration"].(string)
+			ognTailNumberCache[flarmid] = tail
+		}
+		log.Printf("Successfully parsed OGN device db")
+	}
+	if tail, ok := ognTailNumberCache[flarmid]; ok {
+		return tail
+	}
+	return flarmid
+}
+
+func getTailNumber(flarmid string) string {
+	tail := lookupOgnTailNumber(flarmid)
+	if globalSettings.DisplayTrafficSource {
+		tail = "fl" + tail
+	}
+	return tail
+}
+
 func watchCommand(command *exec.Cmd) {
 	// wait for command to terminate
 	err := command.Wait()
@@ -204,6 +244,7 @@ func replaceFlarmDecodingProcess(lonDeg float32, latDeg float32, oldDecodingProc
 	go func() {
 		for {
 			line, err := bufio.NewReader(decoderOutput).ReadString('\n')
+			parseOgnStdoutMessage(line)
 			if err == nil {
 				if globalSettings.DEBUG {
 					log.Println("FLARM: ogn-decode stdout:", strings.TrimSpace(line))
@@ -265,6 +306,178 @@ func ognCoordToDegrees(coordinate float64) float64 {
 	return degrees
 }
 
+func atof32(val string) float32 {
+	res, _ := strconv.ParseFloat(val, 32)
+	return float32(res)
+}
+
+// Traffic messages look like this
+// 0.458sec:868.188MHz:   8:2:AABBCC 085804: [ +45.5312, +8.1234]deg  123m  +0.0m/s   0.0m/s 000.0deg  +0.0deg/sec 0 03x05m 00f_-12.36kHz 45.2/61.0dB/0  0e    0.0km 000.0deg +69.4deg   ?
+func parseOgnStdoutMessage(message string) {
+	// See https://github.com/glidernet/python-ogn-client/blob/master/ogn/parser/pattern.py
+	// PATTERN_TELNET_50001
+	rx := `(?P<pps_offset>\d\.\d+)sec:(?P<frequency>\d+\.\d+)MHz:\s+
+(?P<aircraft_type>.):(?P<address_type>\d):(?P<address>[A-F0-9]{6})\s
+(?P<timestamp>\d{6}):\s
+\[\s*(?P<latitude>[+-]\d+\.\d+),\s*(?P<longitude>[+-]\d+\.\d+)\]deg\s*
+(?P<altitude>\d+)m\s*
+(?P<climb_rate>[+-]\d+\.\d+)m/s\s*
+(?P<ground_speed>\d+\.\d+)m/s\s*
+(?P<track>\d+\.\d+)deg\s*
+(?P<turn_rate>[+-]\d+\.\d+)deg/sec\s*
+(?P<magic_number>\d+)\s*
+(?P<gps_status>[0-9x]+)m\s*
+(?P<channel>\d+)(?P<flarm_timeslot>[f_])(?P<ogn_timeslot>[o_])\s*
+(?P<frequency_offset>[+-]\d+\.\d+)kHz\s*
+(?P<decode_quality>\d+\.\d+)/(?P<signal_quality>\d+\.\d+)dB/(?P<demodulator_type>\d+)\s+
+(?P<error_count>\d+)e\s*
+(?P<distance>\d+\.\d+)km\s*
+(?P<bearing>\d+\.\d+)deg\s*
+(?P<phi>[+-]\d+\.\d+)deg\s*
+(?P<multichannel>\+)?\s*
+\?\s*
+R?\s*
+(B(?P<baro_altitude>\d+))?`
+	rx = strings.Replace(rx, "\n", "", -1)
+	var reAttrs = regexp.MustCompile(rx)
+	match := reAttrs.FindStringSubmatch(message)
+	if match == nil {
+		//log.Printf("Match error for %s", message)
+		return
+	}
+	// Append flarm message to message log
+	var thisMsg msg
+	thisMsg.MessageClass = MSGCLASS_FLARM
+	thisMsg.TimeReceived = stratuxClock.Time
+	thisMsg.Data = message
+	MsgLog = append(MsgLog, thisMsg)
+
+	attrMap := make(map[string]string)
+	for i, name := range reAttrs.SubexpNames() {
+        if i != 0 && name != "" {
+			if len(match) > i {
+				attrMap[name] = match[i]
+			} else {
+				log.Printf("??: " + message)
+				attrMap[name] = ""
+			}
+			//log.Printf("%s: %s", name, match[i])
+        }
+	}
+
+	// store aircraft information
+	var ti TrafficInfo
+	addressBytes, _ := hex.DecodeString(attrMap["address"])
+	addressBytes = append([]byte{0}, addressBytes...)
+	address := binary.BigEndian.Uint32(addressBytes)
+
+
+	trafficMutex.Lock()
+	defer trafficMutex.Unlock()
+	
+	// check if traffic is already known
+	if existingTi, ok := traffic[address]; ok {
+		ti = existingTi
+	}
+	ti.Icao_addr = address
+	if len(ti.Tail) == 0 {
+		ti.Tail = getTailNumber(attrMap["address"]) // Might have better tail from ADS-B. Don't overwrite.
+	}
+	ti.Last_source = TRAFFIC_SOURCE_FLARM
+
+	ti.Timestamp = time.Now().UTC()
+	var age time.Duration
+	ts := attrMap["timestamp"]
+	if len(ts) == 6 {
+		// 112233 (hour/min/sec)
+		currTs := time.Now().UTC()
+		hour, _ := strconv.Atoi(ts[0:2])
+		min, _ := strconv.Atoi(ts[2:4])
+		sec, _ := strconv.Atoi(ts[4:6])
+		signalTs := time.Date(currTs.Year(), currTs.Month(), currTs.Day(), hour, min, sec, 0, time.UTC)
+		age = ti.Timestamp.Sub(signalTs)
+		if age.Seconds() > 30 || age.Seconds() < -1 {
+			// Sometimes we get some invalid traffic that is wrongly detected by OGN. Make sure that
+			// at least the timestamp makes some sense, so our new traffic info does not time out immediately (or never if far in the future)
+			log.Printf("Discarding likely invalid OGN target: %s", message)
+			return 
+		}
+		ti.Timestamp = signalTs
+	}
+
+
+	// set altitude
+	// To keep the rest of the system as simple as possible, we want to work with barometric altitude everywhere.
+	// To do so, we use our own known geoid separation and pressure difference to compute the expected barometric altitude of the traffic.
+	alt := atof32(attrMap["altitude"]) * 3.28084 // m in ft
+	if isGPSValid() && isTempPressValid() {
+		ti.Alt = int32(float32(alt) - mySituation.GPSHeightAboveEllipsoid + mySituation.BaroPressureAltitude)
+	} else {
+		ti.Alt = int32(alt)
+		ti.AltIsGNSS = true
+	}
+
+	// set vertical speed
+	vVel, _ := strconv.ParseFloat(attrMap["climb_rate"], 32)
+	ti.Vvel = int16(vVel * 196.85) // m/s in ft/min
+
+	// set latitude
+	ti.Lat = atof32(attrMap["latitude"])
+
+	// set longitude
+	ti.Lng = atof32(attrMap["longitude"])
+
+	// set track
+	ti.Track = uint16(atof32(attrMap["track"]))
+
+	// set speed
+	ti.Speed = uint16(atof32(attrMap["ground_speed"]) * 1.94384)  // m/s in kt
+	ti.Speed_valid = true
+
+	ti.SignalLevel = float64(atof32(attrMap["decode_quality"]))
+
+	// TODO: The timestamp of the position might actually be older (see signalTs computed above)
+	// However, that would result in a jumping "age" column (older from flarm, newer from ads-b overwriting each other)
+	// We can also not skip the flarm signal if it's older than the old ti's Timestamp, because that way,
+	// we would throw away flarm data, even if the older ti is only from Mode-S and has no position info.
+	// For now, we just live with it and set the timestamp to current.
+	ti.Timestamp = time.Now().UTC()
+
+	if isGPSValid() {
+		ti.Distance, ti.Bearing = distance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(ti.Lat), float64(ti.Lng))
+		ti.BearingDist_valid = true
+	}
+
+	ti.Position_valid = true
+	ti.ExtrapolatedPosition = false
+	ti.Last_seen = stratuxClock.Time.Add(-age)
+	ti.Last_alt = stratuxClock.Time.Add(-age)
+
+	if acType, ok := attrMap["aircraft_type"]; ok {
+		switch(acType) {
+		case "1": ti.Emitter_category = 9 // glider = glider
+		case "2", "5", "8": ti.Emitter_category = 1 // tow, drop, piston = light
+		case "3": ti.Emitter_category = 7 // helicopter = helicopter
+		case "4": ti.Emitter_category = 11 // skydiver
+		case "6", "7": ti.Emitter_category = 12 // hang glider / paraglider
+		case "9": ti.Emitter_category = 3 // jet = large
+		case "B", "C": ti.Emitter_category = 10 // Balloon, airship = lighter than air
+		}
+	}
+
+	// update traffic database
+	traffic[ti.Icao_addr] = ti
+
+	// notify
+	registerTrafficUpdate(ti)
+
+	// mark traffic as seen
+	seenTraffic[ti.Icao_addr] = true
+}
+
+// TODO: processing of APRS data is deprecated. Instead, we parse stdout of ogn-decode, which
+// seems to be more up to date and has a higher update rate
+// DEPRECATED
 func processAprsData(aprsData string) {
 	// prepare all regular expressions
 	var reBeaconData = regexp.MustCompile(`^(.+?)>APRS,(.+?):/(\d{6})+h(\d{4}\.\d{2})(N|S)(.)(\d{5}\.\d{2})(E|W)(.)((\d{3})/(\d{3}))?/A=(\d{6})`)
@@ -421,8 +634,18 @@ func processAprsData(aprsData string) {
 		ti.SignalLevel = data.SignalStrength
 
 		// add timestamp
-		// TODO use timestamp from FLARM message
-		ti.Timestamp = stratuxClock.Time
+		ti.Timestamp = time.Now().UTC()
+		var age time.Duration
+		if len(data.Timestamp) == 6 {
+			// 112233 (hour/min/sec)
+			currTs := time.Now().UTC()
+			hour, _ := strconv.Atoi(data.Timestamp[0:2])
+			min, _ := strconv.Atoi(data.Timestamp[2:4])
+			sec, _ := strconv.Atoi(data.Timestamp[4:6])
+			signalTs := time.Date(currTs.Year(), currTs.Month(), currTs.Day(), hour, min, sec, 0, time.UTC)
+			age = ti.Timestamp.Sub(signalTs)
+			ti.Timestamp = signalTs
+		}
 
 		if isGPSValid() {
 			ti.Distance, ti.Bearing = distance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(ti.Lat), float64(ti.Lng))
@@ -431,8 +654,8 @@ func processAprsData(aprsData string) {
 
 		ti.Position_valid = true
 		ti.ExtrapolatedPosition = false
-		ti.Last_seen = stratuxClock.Time
-		ti.Last_alt = stratuxClock.Time
+		ti.Last_seen = stratuxClock.Time.Add(-age)
+		ti.Last_alt = stratuxClock.Time.Add(-age)
 
 		// update traffic database
 		traffic[ti.Icao_addr] = ti
@@ -503,7 +726,7 @@ func handleAprsConnection(conn net.Conn) {
 			// return authentication successful (credentials are not verified in current implementation)
 			conn.Write([]byte(fmt.Sprintf("# logresp %s verified, server %s\r\n", username, "STRATUX")))
 		} else {
-			processAprsData(message)
+			// processAprsData(message)
 		}
 	}
 
