@@ -60,7 +60,7 @@ const (
 	failsafeTemp = 65
 
 	// how often to update
-	delaySeconds = 30
+	delaySeconds = 10
 
 	// GPIO-1/BCM "18"/Pin 12 on a Raspberry Pi 3
 	defaultPin = 1
@@ -130,7 +130,7 @@ func fanControl() {
 		if myFanControl.TempCurrent >= 50.0 {
 			C.digitalWrite(cPin, C.HIGH)
 			myFanControl.PWMDutyCurrent = 1 //only to update totalFanOnTime
-		} else if myFanControl.TempCurrent <= 40.0 {
+		} else if myFanControl.TempCurrent <= 45.0 {
 			C.digitalWrite(cPin, C.LOW)
 			myFanControl.PWMDutyCurrent = 0 //only to update totalFanOnTime
 		}
