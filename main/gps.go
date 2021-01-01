@@ -142,6 +142,8 @@ var Satellites map[string]SatelliteInfo
 
 var ognTrackerConfigured = false;
 
+var ublox = false;
+
 /*
 u-blox5_Referenzmanual.pdf
 Platform settings
@@ -218,16 +220,20 @@ func initGPSSerial() bool {
 	if _, err := os.Stat("/dev/ublox9"); err == nil { // u-blox 8 (RY83xAI over USB).
 		device = "/dev/ublox9"
 		globalStatus.GPS_detected_type = GPS_TYPE_UBX9
+		ublox = true
 	} else if _, err := os.Stat("/dev/ublox8"); err == nil { // u-blox 8 (RY83xAI or GPYes 2.0).
 		device = "/dev/ublox8"
 		globalStatus.GPS_detected_type = GPS_TYPE_UBX8
+		ublox = true
 		gpsTimeOffsetPpsMs = 80 * time.Millisecond // Ublox 8 seems to have higher delay
 	} else if _, err := os.Stat("/dev/ublox7"); err == nil { // u-blox 7 (VK-172, VK-162 Rev 2, GPYes, RY725AI over USB).
 		device = "/dev/ublox7"
 		globalStatus.GPS_detected_type = GPS_TYPE_UBX7
+		ublox = true
 	} else if _, err := os.Stat("/dev/ublox6"); err == nil { // u-blox 6 (VK-162 Rev 1).
 		device = "/dev/ublox6"
 		globalStatus.GPS_detected_type = GPS_TYPE_UBX6
+		ublox = true
 	} else if _, err := os.Stat("/dev/prolific0"); err == nil { // Assume it's a BU-353-S4 SIRF IV.
 		//TODO: Check a "serialout" flag and/or deal with multiple prolific devices.
 		isSirfIV = true
@@ -293,25 +299,7 @@ func initGPSSerial() bool {
 		if globalSettings.DEBUG {
 			log.Printf("Finished writing SiRF GPS config to %s. Opening port to test connection.\n", device)
 		}
-	} else if globalStatus.GPS_detected_type == GPS_TYPE_UBX6 || globalStatus.GPS_detected_type == GPS_TYPE_UBX7 ||
-	          globalStatus.GPS_detected_type == GPS_TYPE_UBX8 || globalStatus.GPS_detected_type == GPS_TYPE_UBX9 {
-
-		// Byte order for UBX configuration is little endian.
-
-		// GNSS configuration CFG-GNSS for ublox 7 and higher, p. 125 (v8)
-
-		// Notes: ublox8 is multi-GNSS capable (simultaneous decoding of GPS and GLONASS, or
-		// GPS and Galileo) if SBAS (e.g. WAAS) is unavailable. This may provide robustness
-		// against jamming / interference on one set of frequencies. However, this will drop the
-		// position reporting rate to 5 Hz during times multi-GNSS is in use. This shouldn't affect
-		// gpsattitude too much --  without WAAS corrections, the algorithm could get jumpy at higher
-		// sampling rates.
-
-		// load default configuration             |      clearMask     |  |     saveMask       |  |     loadMask       |  deviceMask
-		//p.Write(makeUBXCFG(0x06, 0x09, 13, []byte{0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x03}))
-		//time.Sleep(100* time.Millisecond) // pause and wait for the GPS to finish configuring itself before closing / reopening the port
-
-
+	} else if ublox {
 		if globalStatus.GPS_detected_type == GPS_TYPE_UBX9 {
 			if globalSettings.DEBUG {
 				log.Printf("ublox 9 detected\n")
@@ -508,7 +496,7 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x02, 0x00, 0x05, 0x00, 0x05, 0x00, 0x00})) // GSA - GNSS DOP and Active Satellites
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x03, 0x00, 0x05, 0x00, 0x05, 0x00, 0x00})) // GSV - GNSS Satellites in View
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x04, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00})) // RMC - Recommended Minimum data
-	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x05, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00})) // VGT - Course over ground and Ground speed
+	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // VTG - Course over ground and Ground speed
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // GRS - GNSS Range Residuals
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // GST - GNSS Pseudo Range Error Statistics
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // ZDA - Time and Date<
@@ -557,6 +545,7 @@ func configureOgnTracker() {
 	serialPort.Flush()
 
 	globalStatus.GPS_detected_type = GPS_TYPE_OGNTRACKER
+	ublox = true
 }
 
 // func validateNMEAChecksum determines if a string is a properly formatted NMEA sentence with a valid checksum.
@@ -1204,7 +1193,7 @@ func processNMEALine(l string) (sentenceUsed bool) {
 			globalStatus.GPS_detected_type |= GPS_PROTOCOL_NMEA
 		}
 
-		if x[2] != "A" { // invalid fix
+		if (ublox == false) && (x[2] != "A") { // invalid fix
 			tmpSituation.GPSFixQuality = 0 // Just a note.
 			return false
 		}
@@ -1243,35 +1232,37 @@ func processNMEALine(l string) (sentenceUsed bool) {
 			}
 		}
 
-		// Latitude.
-		if len(x[3]) < 4 {
-			return false
-		}
-		hr, err1 = strconv.Atoi(x[3][0:2])
-		minf, err2 := strconv.ParseFloat(x[3][2:], 32)
-		if err1 != nil || err2 != nil {
-			return false
-		}
-		tmpSituation.GPSLatitude = float32(hr) + float32(minf/60.0)
-		if x[4] == "S" { // South = negative.
-			tmpSituation.GPSLatitude = -tmpSituation.GPSLatitude
-		}
-		// Longitude.
-		if len(x[5]) < 5 {
-			return false
-		}
-		hr, err1 = strconv.Atoi(x[5][0:3])
-		minf, err2 = strconv.ParseFloat(x[5][3:], 32)
-		if err1 != nil || err2 != nil {
-			return false
-		}
-		tmpSituation.GPSLongitude = float32(hr) + float32(minf/60.0)
-		if x[6] == "W" { // West = negative.
-			tmpSituation.GPSLongitude = -tmpSituation.GPSLongitude
-		}
+		if ublox == false {
+			// Latitude.
+			if len(x[3]) < 4 {
+				return false
+			}
+			hr, err1 = strconv.Atoi(x[3][0:2])
+			minf, err2 := strconv.ParseFloat(x[3][2:], 32)
+			if err1 != nil || err2 != nil {
+				return false
+			}
+			tmpSituation.GPSLatitude = float32(hr) + float32(minf/60.0)
+			if x[4] == "S" { // South = negative.
+				tmpSituation.GPSLatitude = -tmpSituation.GPSLatitude
+			}
+			// Longitude.
+			if len(x[5]) < 5 {
+				return false
+			}
+			hr, err1 = strconv.Atoi(x[5][0:3])
+			minf, err2 = strconv.ParseFloat(x[5][3:], 32)
+			if err1 != nil || err2 != nil {
+				return false
+			}
+			tmpSituation.GPSLongitude = float32(hr) + float32(minf/60.0)
+			if x[6] == "W" { // West = negative.
+				tmpSituation.GPSLongitude = -tmpSituation.GPSLongitude
+			}
 
-		tmpSituation.GPSLastFixLocalTime = stratuxClock.Time
-
+			tmpSituation.GPSLastFixLocalTime = stratuxClock.Time
+		}
+		
 		// ground speed in kts (field 7)
 		groundspeed, err := strconv.ParseFloat(x[7], 32)
 		if err != nil {
@@ -1324,24 +1315,25 @@ func processNMEALine(l string) (sentenceUsed bool) {
 			return false
 		}
 
-		// field 1: operation mode
-		// M: manual forced to 2D or 3D mode
-		// A: automatic switching between 2D and 3D modes
+		if ublox == false {
+			// field 1: operation mode
+			// M: manual forced to 2D or 3D mode
+			// A: automatic switching between 2D and 3D modes
 
-		/*
-			if (x[1] != "A") && (x[1] != "M") { // invalid fix ... but x[2] is a better indicator of fix quality. Deprecating this.
+			/*
+				if (x[1] != "A") && (x[1] != "M") { // invalid fix ... but x[2] is a better indicator of fix quality. Deprecating this.
+					tmpSituation.GPSFixQuality = 0 // Just a note.
+					return false
+				}
+			*/
+
+			// field 2: solution type
+			// 1 = no solution; 2 = 2D fix, 3 = 3D fix. WAAS status is parsed from GGA message, so no need to get here
+			if (x[2] == "") || (x[2] == "1") { // missing or no solution
 				tmpSituation.GPSFixQuality = 0 // Just a note.
 				return false
 			}
-		*/
-
-		// field 2: solution type
-		// 1 = no solution; 2 = 2D fix, 3 = 3D fix. WAAS status is parsed from GGA message, so no need to get here
-		if (x[2] == "") || (x[2] == "1") { // missing or no solution
-			tmpSituation.GPSFixQuality = 0 // Just a note.
-			return false
 		}
-
 		// fields 3-14: satellites in solution
 		var svStr string
 		var svType uint8
@@ -1560,17 +1552,17 @@ func processNMEALine(l string) (sentenceUsed bool) {
 
 			// hack workaround for GSA 12-sv limitation... if this is a SBAS satellite, we have a SBAS solution, and signal is greater than some arbitrary threshold, set InSolution
 			// drawback is this will show all tracked SBAS satellites as being in solution.
-			if thisSatellite.Type == SAT_TYPE_SBAS {
-				if mySituation.GPSFixQuality == 2 {
-					if thisSatellite.Signal > 16 {
-						thisSatellite.InSolution = true
-						thisSatellite.TimeLastSolution = stratuxClock.Time
-					}
-				} else { // quality == 0 or 1
-					thisSatellite.InSolution = false
-					//log.Printf("WAAS satellite %s is marked as out of solution GSV\n", svStr) // DEBUG
-				}
-			}
+			// if thisSatellite.Type == SAT_TYPE_SBAS {
+			// 	if mySituation.GPSFixQuality == 2 {
+			// 		if thisSatellite.Signal > 16 {
+			// 			thisSatellite.InSolution = true
+			// 			thisSatellite.TimeLastSolution = stratuxClock.Time
+			// 		}
+			// 	} else { // quality == 0 or 1
+			// 		thisSatellite.InSolution = false
+			// 		//log.Printf("WAAS satellite %s is marked as out of solution GSV\n", svStr) // DEBUG
+			// 	}
+			// }
 
 			if globalSettings.DEBUG {
 				inSolnStr := " "
