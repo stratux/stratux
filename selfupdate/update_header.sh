@@ -62,8 +62,34 @@ cp -f motd /etc/motd
 #fan control utility
 /opt/stratux/bin/fancontrol install
 
+# overlayctl
+cp -f overlayctl init-overlay /sbin/
+/sbin/overlayctl install
+
+# Make sure apt cache doesn't fill up the overlay
+systemctl disable apt-daily.timer
+systemctl disable apt-daily-upgrade.timer
+
+# cleanup after switch to overlayfs: remove tmpfs lines from fstab, move stratux.conf to /boot and potentially enable the overlay depending on user settings
+cat /etc/fstab | grep -v tmpfs > /tmp/fstab
+mv /tmp/fstab /etc/fstab
+mv /etc/stratux.conf /boot/stratux.conf
+
+# Add optional usb stick mount if it's not already there
+if [ "$(grep /dev/sda1 /etc/fstab)" == "" ]; then
+    echo -e "\n/dev/sda1             /var/log        auto    defaults,nofail,noatime,x-systemd.device-timeout=1ms  0       2" >> /etc/fstab
+fi
+
 cd /
 rm -rf /root/stratux-update
+
+# re-enable overlay if it is configured. TODO: switch to jq for json parsing in the future once it's available in all installations
+if [ "$(cat /boot/stratux.conf | grep 'PersistentLogging.:true')" != "" ]; then
+    /sbin/overlayctl disable
+else
+    /sbin/overlayctl enable
+fi
+mkdir -p /overlay/robase
 
 exit 0
 

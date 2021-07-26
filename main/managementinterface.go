@@ -45,13 +45,40 @@ type SettingMessage struct {
 	Value   bool   `json:"state"`
 }
 
+type MbTileConnectionCacheEntry struct {
+	Path string
+	Conn *sql.DB
+	fileTime time.Time
+}
+
+func (this *MbTileConnectionCacheEntry) IsOutdated() bool {
+	file, err := os.Stat(this.Path)
+	if err != nil {
+		return true
+	}
+	modTime := file.ModTime()
+	return modTime != this.fileTime
+}
+
+func NewMbTileConnectionCacheEntry(path string, conn *sql.DB) *MbTileConnectionCacheEntry {
+	file, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	return &MbTileConnectionCacheEntry{path, conn, file.ModTime()}
+}
+
+var mbtileCacheLock = sync.Mutex{}
+var mbtileConnectionCache = make(map[string]MbTileConnectionCacheEntry)
+
+
 // Weather updates channel.
 var weatherUpdate *uibroadcaster
 var trafficUpdate *uibroadcaster
 var radarUpdate *uibroadcaster
 var gdl90Update *uibroadcaster
-var mbtileConnectionCache = make(map[string]*sql.DB)
-var mbtileCacheLock = sync.Mutex{}
+
+
 
 func handleGDL90WS(conn *websocket.Conn) {
 	// Subscribe the socket to receive updates.
@@ -491,30 +518,10 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func setPersistentLogging(persistent bool) {
-	bytes, err := ioutil.ReadFile("/etc/fstab")
-	if err != nil {
-		addSingleSystemErrorf("save-settings", "can't read /etc/fstab: %s", err.Error())
-		return
-	}
-	fstab := string(bytes)
 	if persistent {
-		fstab = strings.ReplaceAll(fstab, "\ntmpfs", "\n#tmpfs")
+		overlayctl("disable")
 	} else {
-		for strings.Count(fstab, "#tmpfs") > 0 { // do in a loop so if, for whatever reason, stratux.conf is not in sync to fstab, we remove all preceeding #
-			fstab = strings.ReplaceAll(fstab, "#tmpfs", "tmpfs")
-		}
-		if strings.Count(fstab, "tmpfs") == 0 {
-			// Never configured for tmpfs stuff.. append initial config
-			fstab += "\n"
-			fstab += "tmpfs    /var/log    tmpfs    defaults,noatime,nosuid,mode=0755,size=100m    0 0\n"
-			fstab += "tmpfs    /tmp        tmpfs    defaults,noatime,nosuid,size=100m    0 0\n"
-			fstab += "tmpfs    /var/tmp    tmpfs    defaults,noatime,nosuid,size=30m    0 0\n"
-		}
-	}
-	err = ioutil.WriteFile("/etc/fstab", []byte(fstab), 0644)
-	if err != nil {
-		addSingleSystemErrorf("save-settings", "can't write /etc/fstab: %s", err.Error())
-		return
+		overlayctl("enable")
 	}
 }
 
@@ -752,6 +759,7 @@ func handleDownloadDBRequest(w http.ResponseWriter, r *http.Request) {
 func handleUpdatePostRequest(w http.ResponseWriter, r *http.Request) {
 	setNoCache(w)
 	setJSONHeaders(w)
+	overlayctl("unlock")
 	reader, err := r.MultipartReader()
 	if err != nil {
 		log.Printf("Update failed from %s (%s).\n", r.RemoteAddr, err.Error())
@@ -771,7 +779,7 @@ func handleUpdatePostRequest(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		fi, err := os.OpenFile("/root/TMP_update-stratux-v.sh", os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666)
+		fi, err := os.OpenFile("/overlay/robase/root/TMP_update-stratux-v.sh", os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0666)
 		if err != nil {
 			log.Printf("Update failed from %s (%s).\n", r.RemoteAddr, err.Error())
 			return
@@ -785,8 +793,11 @@ func handleUpdatePostRequest(w http.ResponseWriter, r *http.Request) {
 
 		break
 	}
-	os.Rename("/root/TMP_update-stratux-v.sh", "/root/update-stratux-v.sh")
-	log.Printf("%s uploaded %s for update.\n", r.RemoteAddr, "/root/update-stratux-v.sh")
+
+	
+	os.Rename("/overlay/robase/root/TMP_update-stratux-v.sh", "/overlay/robase/root/update-stratux-v.sh")
+	log.Printf("%s uploaded %s for update.\n", r.RemoteAddr, "/overlay/robase/root/update-stratux-v.sh")
+	overlayctl("disable")
 	// Successful update upload. Now reboot.
 	go delayReboot()
 }
@@ -911,15 +922,21 @@ func connectMbTilesArchive(path string) (*sql.DB, error) {
 	mbtileCacheLock.Lock()
 	defer mbtileCacheLock.Unlock()
 	if conn, ok := mbtileConnectionCache[path]; ok {
-		return conn, nil
-	} else {
-		conn, err := sql.Open("sqlite3", path + "?mode=ro")
-		if err != nil {
-			return nil, err
+		if !conn.IsOutdated() {
+			return conn.Conn, nil
 		}
-		mbtileConnectionCache[path] = conn
-		return conn, nil
+		log.Printf("Reloading MBTiles " + path)
 	}
+
+	conn, err := sql.Open("sqlite3", "file:" + path + "?mode=ro")
+	if err != nil {
+		return nil, err
+	}
+	cacheEntry := NewMbTileConnectionCacheEntry(path, conn)
+	if cacheEntry != nil {
+		mbtileConnectionCache[path] = *NewMbTileConnectionCacheEntry(path, conn)
+	}
+	return conn, nil
 }
 
 func tileToDegree(z, x, y int) (lon, lat float64) {

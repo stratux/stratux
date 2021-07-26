@@ -25,7 +25,7 @@ apt update
 apt clean
 
 PATH=/root/fake:$PATH apt install --yes libjpeg62-turbo-dev libconfig9 rpi-update hostapd isc-dhcp-server tcpdump git cmake \
-    libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python-serial
+    libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python-serial jq
 
 # try to reduce writing to SD card as much as possible, so they don't get bricked when yanking the power cable
 # Disable swap...
@@ -40,6 +40,8 @@ systemctl enable ssh
 systemctl disable dhcpcd
 systemctl disable hciuart
 systemctl disable hostapd
+systemctl disable apt-daily.timer
+systemctl disable apt-daily-upgrade.timer
 
 sed -i 's/INTERFACESv4=""/INTERFACESv4="wlan0"/g' /etc/default/isc-dhcp-server
 
@@ -144,8 +146,18 @@ cp -f modules.txt /etc/modules
 #boot settings
 cp -f config.txt /boot/
 
+#rootfs overlay stuff
+cp -f overlayctl init-overlay /sbin/
+overlayctl install
+# init-overlay replaces raspis initial partition size growing.. Make sure we call that manually (see init-overlay script)
+touch /var/grow_root_part
+mkdir -p /overlay/robase # prepare so we can bind-mount root even if overlay is disabled
+
 #startup scripts
 cp -f rc.local /etc/rc.local
+
+# Optionally mount /dev/sda1 as /var/log - for logging to USB stick
+echo -e "\n/dev/sda1             /var/log        auto    defaults,nofail,noatime,x-systemd.device-timeout=1ms  0       2" >> /etc/fstab
 
 #disable serial console
 sed -i /boot/cmdline.txt -e "s/console=serial0,[0-9]\+ //"
@@ -153,12 +165,7 @@ sed -i /boot/cmdline.txt -e "s/console=serial0,[0-9]\+ //"
 #Set the keyboard layout to US.
 sed -i /etc/default/keyboard -e "/^XKBLAYOUT/s/\".*\"/\"us\"/"
 
-# Mount logs/tmp stuff as tmpfs
-echo "" >> /etc/fstab # newline
-echo "tmpfs    /var/log    tmpfs    defaults,noatime,nosuid,mode=0755,size=100m    0 0" >> /etc/fstab
-echo "tmpfs    /tmp        tmpfs    defaults,noatime,nosuid,size=100m    0 0" >> /etc/fstab
-echo "tmpfs    /var/tmp    tmpfs    defaults,noatime,nosuid,size=30m    0 0" >> /etc/fstab
-
-
 # Clean up source tree - we don't need it at runtime
 rm -r /root/stratux
+
+
