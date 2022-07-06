@@ -13,6 +13,8 @@ endif
 
 ifeq ($(debug),true)
 	BUILDINFO := -gcflags '-N -l' $(BUILDINFO)
+else
+	BUILDINFO := -ldflags='-s -w' $(BUILDINFO)
 endif
 
 ARCH=$(shell arch)
@@ -29,7 +31,7 @@ endif
 all:
 	make xdump978 xdump1090 xrtlais gen_gdl90 $(PLATFORMDEPENDENT)
 
-gen_gdl90: main/*.go common/*.go serialGPSDevice/*.go bleGPSDevice/*.go
+gen_gdl90: main/*.go common/*.go gps/*.go
 	LIBRARY_PATH=$(CURDIR) CGO_CFLAGS_ALLOW="-L$(CURDIR)" go build $(BUILDINFO) -o gen_gdl90 -p 4 ./main/
 
 fancontrol: fancontrol_main/*.go common/*.go

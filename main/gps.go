@@ -22,7 +22,7 @@ import (
 
 	"os/exec"
 
-	"github.com/b3nn0/stratux/v2/bleGPSDevice"
+	"github.com/b3nn0/stratux/v2/gps"
 	"github.com/b3nn0/stratux/v2/common"
 	//	"github.com/b3nn0/stratux/v2/serialGPSDevice"
 )
@@ -1575,7 +1575,7 @@ func (s GPSDeviceManager) listenInternal(gpsNMEALineChannel chan common.GpsNmeaL
 	log.Printf("GPS: listenInternal: Started")
 	qh := s.qh.Add()
 	defer s.qh.Done()
-	bleGPSDevice := bleGPSDevice.New()
+	bleGPSDevice := gps.NewBleGPSDevice()
 
 	Satellites = make(map[string]SatelliteInfo)
 

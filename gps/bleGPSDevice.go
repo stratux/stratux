@@ -7,7 +7,7 @@
 	ais.go: Routines for reading AIS traffic
 */
 
-package bleGPSDevice
+package gps
 
 import (
 	"log"
@@ -53,7 +53,7 @@ type BleGPSDevice struct {
 	qh                      *common.QuitHelper
 }
 
-func New() BleGPSDevice {
+func NewBleGPSDevice() BleGPSDevice {
 	return BleGPSDevice{
 		adapter:                 *bluetooth.DefaultAdapter,
 		bleGPSTrafficDeviceList: cmap.New(),
@@ -65,6 +65,7 @@ We must increase <limit name="max_match_rules_per_connection">8192</limit>
 under /etc/dbus-1/system.d/bluetooth.conf
 See logs stratux dbus-daemon[300]: [system] Connection ":1.28" is not allowed to add more match rules (increase limits in configuration file if required; max_match_rules_p
 er_connection=512)
+change /boot/config.txt and set # dtoverlay=disable-bt
 */
 
 var (
@@ -240,7 +241,8 @@ func (b BleGPSDevice) rxListener(bleDeviceInfo bleDeviceInfo, sentenceChannel ch
 	defer func() {
 		watchdogTimer.Stop()
 	}()
-	notificationCallback := func(value []byte) {
+
+	enaNotifyErr := tx.EnableNotifications(func(value []byte) {
 		// Reset the watchdig timer
 		atomic.StoreInt32(&receivedDataSize, int32(0))
 		watchdogTimer.Stop()
@@ -253,21 +255,19 @@ func (b BleGPSDevice) rxListener(bleDeviceInfo bleDeviceInfo, sentenceChannel ch
 		copy(receivedData, value)
 		condition.Signal()
 		mutex.Unlock()
-	}
-
-	enaNotifyErr := tx.EnableNotifications(notificationCallback)
+	})
 
 	if enaNotifyErr != nil {
 		return enaNotifyErr
 	}
 
 	defer func() {
-		tx.StopNotify()
+		//tx.StopNotify()
 	}()
 
 	select {
 	case <-qh:
-		tx.StopNotify()
+		//tx.StopNotify()
 		return nil
 	case <-notificationCalledca:
 		return nil

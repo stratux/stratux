@@ -7,7 +7,7 @@
 	gps.go: GPS functions, GPS init, AHRS status messages, other external sensor monitoring.
 */
 
-package serialGPSDevice
+package gps
 
 import (
 	"errors"
@@ -22,7 +22,6 @@ import (
 	"os"
 
 	"github.com/b3nn0/stratux/v2/common"
-	"github.com/b3nn0/stratux/v2/nmea"
 )
 
 type GlobalSettings struct {
@@ -185,19 +184,19 @@ func (s serialGPSDevice) initGPSSerial() bool {
 		log.Printf("Using SiRFIV config.\n")
 
 		// Enable 5Hz. (To switch back to 1Hz: $PSRF103,00,7,00,0*22)
-		p.Write(nmea.MakeNMEACmd("PSRF103,00,6,00,0"))
+		p.Write(common.MakeNMEACmd("PSRF103,00,6,00,0"))
 		// Enable GGA.
-		p.Write(nmea.MakeNMEACmd("PSRF103,00,00,01,01"))
+		p.Write(common.MakeNMEACmd("PSRF103,00,00,01,01"))
 		// Enable GSA.
-		p.Write(nmea.MakeNMEACmd("PSRF103,02,00,01,01"))
+		p.Write(common.MakeNMEACmd("PSRF103,02,00,01,01"))
 		// Enable RMC.
-		p.Write(nmea.MakeNMEACmd("PSRF103,04,00,01,01"))
+		p.Write(common.MakeNMEACmd("PSRF103,04,00,01,01"))
 		// Enable VTG.
-		p.Write(nmea.MakeNMEACmd("PSRF103,05,00,01,01"))
+		p.Write(common.MakeNMEACmd("PSRF103,05,00,01,01"))
 		// Enable GSV (once every 5 position updates)
-		p.Write(nmea.MakeNMEACmd("PSRF103,03,00,05,01"))
+		p.Write(common.MakeNMEACmd("PSRF103,03,00,05,01"))
 		// Enable 38400 baud.
-		p.Write(nmea.MakeNMEACmd("PSRF100,1,38400,8,1,0"))
+		p.Write(common.MakeNMEACmd("PSRF100,1,38400,8,1,0"))
 
 		if globalSettings.DEBUG {
 			log.Printf("Finished writing SiRF GPS config to %s. Opening port to test connection.\n", device)
@@ -288,7 +287,7 @@ func (s serialGPSDevice) initGPSSerial() bool {
 		cfg[12] = 0x03
 		cfg[13] = 0x00
 
-		// outProtoMask. NMEA. Little endian.
+		// outProtoMask. common. Little endian.
 		cfg[14] = 0x02
 		cfg[15] = 0x00
 
@@ -349,9 +348,9 @@ func (s serialGPSDevice) detectOpenSerialPort(device string, baudrates []int) (*
 			p.Read(buffer)
 			splitted := strings.Split(string(buffer), "\n")
 			for _, line := range splitted {
-				_, validNMEAcs := nmea.ValidateNMEAChecksum(line)
+				_, validNMEAcs := common.ValidateNMEAChecksum(line)
 				if validNMEAcs {
-					// looks a lot like NMEA.. use it
+					// looks a lot like common.. use it
 					log.Printf("Detected serial port %s with baud %d", device, baud)
 					// Make sure the NMEA is immediately parsed once, so updateStatus() doesn't see the GPS as disconnected before
 					// first msg arrives
@@ -468,7 +467,7 @@ func (s serialGPSDevice) configureOgnTracker() {
 	}
 
 	s.gpsTimeOffsetPpsMs = 200 * time.Millisecond
-	s.serialPort.Write([]byte(nmea.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n")) // Also force NavRate directly, just to make sure it's always set
+	s.serialPort.Write([]byte(common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n")) // Also force NavRate directly, just to make sure it's always set
 
 	s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // query current configuration
 
@@ -486,14 +485,14 @@ func (s serialGPSDevice) getOgnTrackerConfigString() string {
 	/* TODO: RVT
 	msg := fmt.Sprintf("$POGNS,Address=0x%s,AddrType=%d,AcftType=%d,Pilot=%s,Reg=%s,TxPower=%d,Hard=STX,Soft=%s",
 		globalSettings.OGNAddr, globalSettings.OGNAddrType, globalSettings.OGNAcftType, globalSettings.OGNPilot, globalSettings.OGNReg, globalSettings.OGNTxPower, stratuxVersion[1:])
-	msg = nmea.AppendNmeaChecksum(msg)
+	msg = common.AppendNmeaChecksum(msg)
 	return msg + "\r\n"
 	RVT: TODO */
 	return ""
 }
 
 func getOgnTrackerConfigQueryString() string {
-	return nmea.AppendNmeaChecksum("$POGNS") + "\r\n"
+	return common.AppendNmeaChecksum("$POGNS") + "\r\n"
 }
 
 func (s serialGPSDevice) configureOgnTrackerFromSettings() {
