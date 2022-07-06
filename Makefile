@@ -3,7 +3,9 @@ ifeq "$(CIRCLECI)" "true"
 	BUILDINFO=
 	PLATFORMDEPENDENT=
 else
-	LFLAGS=-X main.stratuxVersion=`git describe --tags --abbrev=0` -X main.stratuxBuild=`git log -n 1 --pretty=%H`  
+    # TODO: RVT beable to decide on DEV or PROD build
+	LDFLAGS=-ldflags="-s -w"
+	LFLAGS=-X main.stratuxVersion="v1.6r1-eu028-vp" -X main.stratuxBuild=`git log -n 1 --pretty=%H`  
 	BUILDINFO=-ldflags "$(LFLAGS)"
 	BUILDINFO_STATIC=-ldflags "-extldflags -static $(LFLAGS)"
 	PLATFORMDEPENDENT=fancontrol
@@ -27,7 +29,7 @@ endif
 all:
 	make xdump978 xdump1090 xrtlais gen_gdl90 $(PLATFORMDEPENDENT)
 
-gen_gdl90: main/*.go common/*.go
+gen_gdl90: main/*.go common/*.go serialGPSDevice/*.go bleGPSDevice/*.go
 	LIBRARY_PATH=$(CURDIR) CGO_CFLAGS_ALLOW="-L$(CURDIR)" go build $(BUILDINFO) -o gen_gdl90 -p 4 ./main/
 
 fancontrol: fancontrol_main/*.go common/*.go

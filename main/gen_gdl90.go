@@ -33,8 +33,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/b3nn0/stratux/common"
 	"github.com/b3nn0/stratux/uatparse"
+	"github.com/b3nn0/stratux/v2/common"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/ricochet2200/go-disk-usage/du"
 )
@@ -47,7 +47,8 @@ var debugLogf string    // Set according to OS config.
 var dataLogFilef string // Set according to OS config.
 
 const (
-	STRATUX_HOME   = "/opt/stratux/"
+	STRATUX_HOME_PROD  = "/opt/stratux/"
+	STRATUX_HOME_DEV   = "/home/pi/stratux/"	
 	configLocation = "/boot/stratux.conf"
 	managementAddr = ":80"
 	logDir         = "/var/log/"
@@ -85,30 +86,9 @@ const (
 	LON_LAT_RESOLUTION = float32(180.0 / 8388608.0)
 	TRACK_RESOLUTION   = float32(360.0 / 256.0)
 
-	/*
-		GPS_TYPE_NMEA     = 0x01
-		GPS_TYPE_UBX      = 0x02
-		GPS_TYPE_SIRF     = 0x03
-		GPS_TYPE_MEDIATEK = 0x04
-		GPS_TYPE_FLARM    = 0x05
-		GPS_TYPE_GARMIN   = 0x06
-	*/
-
-	GPS_TYPE_UBX9     = 0x09
-	GPS_TYPE_UBX8     = 0x08
-	GPS_TYPE_UBX7     = 0x07
-	GPS_TYPE_UBX6     = 0x06
-	GPS_TYPE_PROLIFIC = 0x02
-	GPS_TYPE_UART     = 0x01
-	GPS_TYPE_SERIAL   = 0x0A
-	GPS_TYPE_OGNTRACKER = 0x03
-	GPS_TYPE_SOFTRF_DONGLE = 0x0B
-	GPS_TYPE_NETWORK  = 0x0C
-	GPS_PROTOCOL_NMEA = 0x10
-	// other GPS types to be defined as needed
-
 )
 
+var STRATUX_HOME string
 var logFileHandle *os.File
 
 var maxSignalStrength int
@@ -803,7 +783,7 @@ func heartBeatSender() {
 
 			sendNetFLARM(makeGPRMCString(), time.Second, -1)
 			sendNetFLARM(makeGPGGAString(), time.Second, 0)
-			if isTempPressValid() && mySituation.BaroSourceType != BARO_TYPE_NONE && mySituation.BaroSourceType != BARO_TYPE_ADSBESTIMATE {
+			if isTempPressValid() && mySituation.BaroSourceType != common.BARO_TYPE_NONE && mySituation.BaroSourceType != common.BARO_TYPE_ADSBESTIMATE {
 				sendNetFLARM(makePGRMZString(), time.Second, 0)
 			}
 			sendNetFLARM("$GPGSA,A,3,,,,,,,,,,,,,1.0,1.0,1.0*33\r\n", time.Second, 1)
@@ -942,19 +922,20 @@ func updateStatus() {
 		globalStatus.GPS_solution = "Unknown"
 	}
 
-	if !(globalStatus.GPS_connected) || !(isGPSConnected()) { // isGPSConnected looks for valid NMEA messages. GPS_connected is set by gpsSerialReader and will immediately fail on disconnected USB devices, or in a few seconds after "blocked" comms on ttyAMA0.
+	// TODO: RVT See if we still need this
+	// if !(globalStatus.GPS_connected) || !(isGPSConnected()) { // isGPSConnected looks for valid NMEA messages. GPS_connected is set by gpsSerialReader and will immediately fail on disconnected USB devices, or in a few seconds after "blocked" comms on ttyAMA0.
 
-		mySituation.muSatellite.Lock()
-		Satellites = make(map[string]SatelliteInfo)
-		mySituation.muSatellite.Unlock()
+	// 	mySituation.muSatellite.Lock()
+	// 	Satellites = make(map[string]SatelliteInfo)
+	// 	mySituation.muSatellite.Unlock()
 
-		mySituation.GPSSatellites = 0
-		mySituation.GPSSatellitesSeen = 0
-		mySituation.GPSSatellitesTracked = 0
-		mySituation.GPSFixQuality = 0
-		globalStatus.GPS_solution = "Disconnected"
-		globalStatus.GPS_connected = false
-	}
+	// 	mySituation.GPSSatellites = 0
+	// 	mySituation.GPSSatellitesSeen = 0
+	// 	mySituation.GPSSatellitesTracked = 0
+	// 	mySituation.GPSFixQuality = 0
+	// 	globalStatus.GPS_solution = "Disconnected"
+	// 	globalStatus.GPS_connected = false
+	// }
 
 	globalStatus.GPS_satellites_locked = mySituation.GPSSatellites
 	globalStatus.GPS_satellites_seen = mySituation.GPSSatellitesSeen
@@ -1214,6 +1195,10 @@ type settings struct {
 	OGNReg               string
 	OGNTxPower           int
 
+	BleGPSEnabled		 bool
+	BleEnabledDevices    string
+	GPSPreferredSource   int
+
 	PWMDutyMin           int
 }
 
@@ -1231,7 +1216,7 @@ type status struct {
 	OGN_messages_last_minute                   uint
 	OGN_messages_max                           uint
 	OGN_connected                              bool
-	APRS_connected                              bool
+	APRS_connected   						   bool
 	AIS_messages_last_minute                   uint
 	AIS_messages_max                           uint
 	AIS_connected                              bool
@@ -1244,6 +1229,7 @@ type status struct {
 	GPS_satellites_tracked                     uint16
 	GPS_position_accuracy                      float32
 	GPS_connected                              bool
+	GPS_source  						       uint
 	GPS_solution                               string
 	GPS_detected_type                          uint
 	GPS_NetworkRemoteIp                        string // for NMEA via TCP from OGN tracker: display remote IP to configure the OGN tracker
@@ -1319,6 +1305,10 @@ func defaultSettings() {
 	globalSettings.PWMDutyMin = 0
 
 	globalSettings.OGNI2CTXEnabled = true
+
+	globalSettings.BleGPSEnabled = false
+	globalSettings.GPSPreferredSource = 0
+	globalSettings.BleEnabledDevices = ""
 }
 
 func readSettings() {
@@ -1546,6 +1536,7 @@ func gracefulShutdown() {
 	// Shut down SDRs.
 	sdrKill()
 	pingKill()
+	//bleKill()
 
 	// Shut down data logging.
 	if dataLogStarted {
@@ -1615,6 +1606,12 @@ func main() {
 	go signalWatcher()
 
 	stratuxClock = NewMonotonic() // Start our "stratux clock".
+
+	if common.IsRunningAsRoot() {
+		STRATUX_HOME = STRATUX_HOME_PROD
+	} else {
+		STRATUX_HOME = STRATUX_HOME_DEV
+	}
 
 	// Set up mySituation, do it here so logging JSON doesn't panic
 	mySituation.muGPS = &sync.Mutex{}
@@ -1726,7 +1723,16 @@ func main() {
 	initI2CSensors()
 
 	// Start the GPS external sensor monitoring.
-	initGPS()
+	gpsDeviceManager := NewGPSDeviceManager()
+
+	go gpsDeviceManager.Listen()
+
+	// 
+	go gpsAttitudeSender()
+
+	// Send AHRS message in FF format every 200ms.
+	go ffAttitudeSender()
+
 
 	// Start the heartbeat message loop in the background, once per second.
 	go heartBeatSender()

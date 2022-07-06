@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/b3nn0/stratux/common"
+	"github.com/b3nn0/stratux/v2/common"
 )
 
 /*
@@ -29,19 +29,6 @@ import (
 		defined by NETWORK_FLARM_NMEA in gen_gdl90.go as a non-queueable message to be used in XCSoar. It will also queue
 		the message into a channel so it can be	sent out to a TCP server.
 */
-
-// Append checksum and to nmea string
-func appendNmeaChecksum(nmea string) string {
-	start := 0
-	if nmea[0] == '$' {
-		start = 1
-	}
-	checksum := byte(0x00)
-	for i := start; i < len(nmea); i++ {
-		checksum = checksum ^ byte(nmea[i])
-	}
-	return fmt.Sprintf("%s*%02X", nmea, checksum)
-}
 
 func makeFlarmPFLAUString(ti TrafficInfo) (msg string) {
 	// syntax: PFLAU,<RX>,<TX>,<GPS>,<Power>,<AlarmLevel>,<RelativeBearing>,<AlarmType>,<RelativeVertical>,<RelativeDistance>,<ID>
@@ -78,7 +65,7 @@ func makeFlarmPFLAUString(ti TrafficInfo) (msg string) {
 	} else {
 		msg = fmt.Sprintf("$PFLAU,%d,1,%d,1,0,,0,,,", len(traffic), gpsStatus)
 	}
-	msg = appendNmeaChecksum(msg)
+	msg = common.AppendNmeaChecksum(msg)
 	msg += "\r\n"
 	return
 }
@@ -246,7 +233,7 @@ func makeFlarmPFLAAString(ti TrafficInfo) (msg string, valid bool, alarmLevel ui
 		msg = fmt.Sprintf("$PFLAA,%d,%d,,%d,%d,%s,,,,%0.1f,%s", alarmLevel, int32(math.Abs(dist)), relativeVertical, idType, idstr, climbRate, acType) // prototype for bearingless traffic
 	}
 	//msg = fmt.Sprintf("PFLAA,%d,%d,%d,%d,%d,%X!%s,%d,,%d,%0.1f,%d", alarmLevel, relativeNorth, relativeEast, relativeVertical, idType, ti.Icao_addr, ti.Tail, ti.Track, groundSpeed, climbRate, acType)
-	msg = appendNmeaChecksum(msg)
+	msg = common.AppendNmeaChecksum(msg)
 	msg += "\r\n"
 
 	valid = true
@@ -342,7 +329,7 @@ func makeGPRMCString() string {
 	} else {
 		msg = fmt.Sprintf("$GPRMC,,%s,,,,,,,%02d%02d%02d,%s,%s,%s", status, dd, mm, yy, magVar, mvEW, mode) // return null lat-lng and velocity if invalid GPS
 	}
-	msg = appendNmeaChecksum(msg)
+	msg = common.AppendNmeaChecksum(msg)
 	msg += "\r\n"
 	return msg
 }
@@ -415,7 +402,7 @@ func makeGPGGAString() string {
 		msg = fmt.Sprintf("$GPGGA,,,,,,0,%d,,,,,,,", numSV)
 	}
 
-	msg = appendNmeaChecksum(msg)
+	msg = common.AppendNmeaChecksum(msg)
 	msg += "\r\n"
 	return msg
 
@@ -423,7 +410,7 @@ func makeGPGGAString() string {
 
 func makePGRMZString() string {
 	msg := fmt.Sprintf("$PGRMZ,%d,f,3", int(mySituation.BaroPressureAltitude))
-	msg = appendNmeaChecksum(msg)
+	msg = common.AppendNmeaChecksum(msg)
 	msg += "\r\n"
 	return msg
 }
@@ -459,7 +446,7 @@ func makeAHRSLevilReport() {
 	}
 
 	msg := fmt.Sprintf("$RPYL,%d,%d,%d,%d,%d,%d,0", roll, pitch, hdg, slip_skid, yaw_rate, g)
-	appendNmeaChecksum(msg)
+	common.AppendNmeaChecksum(msg)
 	sendNetFLARM(msg + "\r\n", 100 * time.Millisecond, 4)
 }
 
@@ -469,7 +456,7 @@ func atof32(val string) float32 {
 }
 
 // Read data from a raw $PFLAU/$PFLAA message (i.e. when serial flarm device is connected)
-func parseFlarmNmeaMessage(message []string) {
+func processFlarmNmeaMessage(message []string) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Error parsing NMEA " + strings.Join(message, ","))

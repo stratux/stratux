@@ -24,7 +24,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -36,6 +35,7 @@ import (
 
 	"database/sql"
 
+	"github.com/b3nn0/stratux/v2/common"
 	_ "github.com/mattn/go-sqlite3"
 
 	humanize "github.com/dustin/go-humanize"
@@ -358,6 +358,12 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.Ping_Enabled = val.(bool)
 					case "OGNI2CTXEnabled":
 						globalSettings.OGNI2CTXEnabled = val.(bool)
+					case "BleGPSEnabled":
+						globalSettings.BleGPSEnabled = val.(bool)
+					case "BleEnabledDevices":
+						globalSettings.BleEnabledDevices = val.(string)
+					case "GPSPreferredSource":
+						globalSettings.GPSPreferredSource = int(val.(float64))
 					case "GPS_Enabled":
 						globalSettings.GPS_Enabled = val.(bool)
 					case "IMU_Sensor_Enabled":
@@ -518,7 +524,7 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 				saveSettings()
 				applyNetworkSettings(false, false)
 				if reconfigureOgnTracker {
-					configureOgnTrackerFromSettings()
+					// TODO: RVT configureOgnTrackerFromSettings()
 				}
 				if reconfigureFancontrol {
 					exec.Command("killall", "-SIGUSR1", "fancontrol").Run();
@@ -830,7 +836,14 @@ func defaultServer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "max-age=360") // 5 min, so that if user installs update, he will revalidate soon enough
 	//	setNoCache(w)
 
-	http.FileServer(http.Dir(STRATUX_HOME + "/www")).ServeHTTP(w, r)
+	var wwwDir string
+	if common.IsRunningAsRoot() {
+		wwwDir = "/www"
+	} else {
+		wwwDir = "/web/"
+	}
+
+	http.FileServer(http.Dir(STRATUX_HOME + wwwDir)).ServeHTTP(w, r)
 }
 
 func handleroPartitionRebuild(w http.ResponseWriter, r *http.Request) {
@@ -1174,14 +1187,14 @@ func managementInterface() {
 	http.HandleFunc("/tiles/tilesets", handleTilesets)
 	http.HandleFunc("/tiles/", handleTile)
 
-	usr, _ := user.Current()
-	addr := managementAddr
-	if usr.Username != "root" {
+	var addr string
+	if !common.IsRunningAsRoot() {
 		addr = ":8000" // Make sure we can run without root priviledges on different port
+	} else {
+		addr = managementAddr
 	}
-	err := http.ListenAndServe(addr, nil)
 
-	if err != nil {
+	if err :=http.ListenAndServe(addr, nil); err != nil {
 		log.Printf("managementInterface ListenAndServe: %s\n", err.Error())
 	}
 }

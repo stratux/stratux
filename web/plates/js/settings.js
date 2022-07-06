@@ -4,6 +4,8 @@ SettingsCtrl.$inject = ['$rootScope', '$scope', '$state', '$location', '$window'
 
 // create our controller function with all necessary logic
 function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
+	$scope.GPSPreferredSources = ['Serial', 'BlueTooth']
+
 	$scope.countryCodes = {
 		"":"Unspecified",
 		"AD":"Andorra",
@@ -260,7 +262,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
-	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
+	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'BleGPSEnabled', 'IMU_Sensor_Enabled',
 		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
 
 	var settings = {};
@@ -300,7 +302,10 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.Ping_Enabled = settings.Ping_Enabled;
 		$scope.GPS_Enabled = settings.GPS_Enabled;
 		$scope.OGNI2CTXEnabled = settings.OGNI2CTXEnabled;
-
+		$scope.BleGPSEnabled = settings.BleGPSEnabled;
+		$scope.BleEnabledDevices = settings.BleEnabledDevices;
+		$scope.GPSPreferredSource = settings.GPSPreferredSource;
+		
 		$scope.IMU_Sensor_Enabled = settings.IMU_Sensor_Enabled;
 		$scope.BMP_Sensor_Enabled = settings.BMP_Sensor_Enabled;
 		$scope.DisplayTrafficSource = settings.DisplayTrafficSource;
@@ -347,7 +352,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.$parent.updateTheme($scope.DarkMode);
 
 
-		$scope.CountryCodeList = countryCodes;
+		$scope.CountryCodeList = $scope.countryCodes;
 	}
 
 	function getSettings() {
@@ -447,6 +452,26 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			}
 			var newsettings = {
 				"WatchList": settings["WatchList"]
+			};
+			// console.log(angular.toJson(newsettings));
+			setSettings(angular.toJson(newsettings));
+		}
+	};
+
+	$scope.updateBle = function () {
+		if ($scope.BleEnabledDevices !== settings["BleEnabledDevices"]) {
+			var newsettings = {
+				"BleEnabledDevices": $scope.BleEnabledDevices
+			};
+			// console.log(angular.toJson(newsettings));
+			setSettings(angular.toJson(newsettings));
+		}
+	};
+
+	$scope.updateGpsPrefSource = function (sourceNum) {
+		if (sourceNum !== settings["GPSPreferredSource"]) {
+			var newsettings = {
+				"GPSPreferredSource": sourceNum
 			};
 			// console.log(angular.toJson(newsettings));
 			setSettings(angular.toJson(newsettings));
@@ -712,6 +737,28 @@ angular.module('appControllers')
 					}
 				}
 				ctrl.$parsers.push(watchListValidation);
+			}
+		};
+	})
+	.directive('bleInput', function() { // directive for ICAO space-separated watch list validation
+		return {
+			require: 'ngModel',
+			link: function(scope, element, attr, ctrl) {
+				function bleValidation(value) {
+					// Names of possible BLE devices
+					var valid = (new RegExp("^(([0-9a-zA-Z-_]*)([,][0-9a-zA-Z-_]*)*)$", "g")).test(value);
+					ctrl.$setValidity('BLEListInput', valid);
+					if (valid) {
+						value = value.split(",")
+							.map( f => f.trim())
+							.filter( f => f.length > 0)
+							.join(",")
+						return value;
+					} else {
+						return "";
+					}
+				}
+				ctrl.$parsers.push(bleValidation);
 			}
 		};
 	})

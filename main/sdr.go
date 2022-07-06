@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/b3nn0/stratux/godump978"
+	"github.com/b3nn0/stratux/v2/godump978"
 	rtl "github.com/jpoirier/gortlsdr"
 )
 

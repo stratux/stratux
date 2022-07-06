@@ -10,7 +10,7 @@ import (
 
 	"github.com/b3nn0/goflying/ahrs"
 	"github.com/b3nn0/goflying/ahrsweb"
-	"github.com/b3nn0/stratux/common"
+	"github.com/b3nn0/stratux/v2/common"
 	"github.com/b3nn0/stratux/sensors"
 	"github.com/kidoman/embd"
 	_ "github.com/kidoman/embd/host/all"
@@ -148,7 +148,7 @@ func tempAndPressureSender() {
 		}
 		// Assuming timer is reasonably accurate, use a regular ewma
 		mySituation.BaroVerticalSpeed = u*mySituation.BaroVerticalSpeed + (1-u)*float32(altitude-altLast)/(float32(dt)/60)
-		mySituation.BaroSourceType = BARO_TYPE_BMP280
+		mySituation.BaroSourceType = common.BARO_TYPE_BMP280
 		mySituation.muBaro.Unlock()
 		altLast = altitude
 	}

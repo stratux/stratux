@@ -24,6 +24,8 @@ import (
 	"github.com/tarm/serial"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
+
+	"github.com/b3nn0/stratux/v2/common"
 )
 
 
@@ -246,16 +248,18 @@ func tcpNMEAInListener() {
 		go handleNmeaInConnection(conn)
 	}	
 }
+
+// TODO: THis should become a seperate device that can handle NMEA string such that we can still decide where to get traffic and where to get GPS data from
 func handleNmeaInConnection(c net.Conn) {
 	defer c.Close()
 	reader := bufio.NewReader(c)
 	// Set to fixed GPS_TYPE_NETWORK in the beginning, to override previous detected NMEA types
-	globalStatus.GPS_detected_type = GPS_TYPE_NETWORK
+	globalStatus.GPS_detected_type = common.GPS_TYPE_NETWORK
 	globalStatus.GPS_NetworkRemoteIp = strings.Split(c.RemoteAddr().String(), ":")[0]
 	for {
 		globalStatus.GPS_connected = true
 		// Keep detected protocol, only ensure type=network
-		globalStatus.GPS_detected_type = GPS_TYPE_NETWORK | (globalStatus.GPS_detected_type & 0xf0)
+		globalStatus.GPS_detected_type = common.GPS_TYPE_NETWORK | (globalStatus.GPS_detected_type & 0xf0)
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			break

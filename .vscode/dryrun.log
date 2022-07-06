@@ -1,0 +1,6 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory '/home/pi/stratux'
+ 
+make xdump978 xdump1090 xrtlais gen_gdl90 fancontrol
+make: Leaving directory '/home/pi/stratux'
+ 

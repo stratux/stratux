@@ -1,0 +1,603 @@
+make all --print-data-base --no-builtin-variables --no-builtin-rules --question
+# GNU Make 4.3
+# Built for aarch64-unknown-linux-gnu
+# Copyright (C) 1988-2020 Free Software Foundation, Inc.
+# License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+# This is free software: you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+
+# Make data base, printed on Mon Jul  4 09:59:22 2022
+
+# Variables
+
+# environment
+LC_ALL = C
+# environment
+NO_AT_BRIDGE = 1
+# environment
+VSCODE_CWD = /home/pi
+# makefile (from 'Makefile', line 10)
+BUILDINFO_STATIC = -ldflags "-extldflags -static $(LFLAGS)"
+# environment
+TEXTDOMAIN = Linux-PAM
+# default
+MAKE_COMMAND := make
+# environment
+VSCODE_HANDLES_SIGPIPE = true
+# environment
+GOPATH = /home/pi/go_path
+# automatic
+@D = $(patsubst %/,%,$(dir $@))
+# makefile (from 'Makefile', line 1)
+STRATUX_HOME := /opt/stratux/
+# environment
+VSCODE_HANDLES_UNCAUGHT_ERRORS = true
+# default
+.VARIABLES := 
+# environment
+PWD = /home/pi/stratux
+# automatic
+%D = $(patsubst %/,%,$(dir $%))
+# automatic
+^D = $(patsubst %/,%,$(dir $^))
+# environment
+VSCODE_LOG_STACK = false
+# automatic
+%F = $(notdir $%)
+# environment
+LANG = C
+# default
+.LOADED := 
+# default
+.INCLUDE_DIRS = /usr/local/include /usr/include /usr/include
+# makefile
+MAKEFLAGS = pqrR
+# makefile
+CURDIR := /home/pi/stratux
+# environment
+VSCODE_PIPE_LOGGING = true
+# environment
+APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = true
+# automatic
+*D = $(patsubst %/,%,$(dir $*))
+# makefile (from 'Makefile', line 9)
+BUILDINFO = -ldflags "$(LFLAGS)"
+# environment
+MFLAGS = -pqrR
+# default
+.SHELLFLAGS := -c
+# automatic
++D = $(patsubst %/,%,$(dir $+))
+# makefile (from 'Makefile', line 1)
+MAKEFILE_LIST := Makefile
+# automatic
+@F = $(notdir $@)
+# environment
+VSCODE_VERBOSE_LOGGING = true
+# environment
+XDG_SESSION_TYPE = tty
+# automatic
+?D = $(patsubst %/,%,$(dir $?))
+# automatic
+*F = $(notdir $*)
+# environment
+DBUS_SESSION_BUS_ADDRESS = unix:path=/run/user/1000/bus
+# automatic
+<D = $(patsubst %/,%,$(dir $<))
+# environment
+VSCODE_NLS_CONFIG = {"locale":"en","availableLanguages":{}}
+# default
+MAKE_HOST := aarch64-unknown-linux-gnu
+# makefile
+SHELL = /bin/sh
+# default
+MAKECMDGOALS := all
+# environment
+SHLVL = 1
+# environment
+MAKELEVEL := 0
+# default
+MAKE = $(MAKE_COMMAND)
+# environment
+PATH = /home/pi/go/bin:/home/pi/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/remote-cli:/home/pi/.local/bin:/opt/stratux/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games
+# default
+MAKEFILES := 
+# environment
+MOTD_SHOWN = pam
+# automatic
+^F = $(notdir $^)
+# environment
+GOROOT = /home/pi/go
+# environment
+SSH_CLIENT = 192.168.178.106 63468 22
+# environment
+VSCODE_LOG_NATIVE = false
+# automatic
+?F = $(notdir $?)
+# environment
+LS_COLORS = 
+# automatic
++F = $(notdir $+)
+# 'override' directive
+GNUMAKEFLAGS := 
+# environment
+BROWSER = /home/pi/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/helpers/browser.sh
+# environment
+LOGNAME = pi
+# makefile
+.DEFAULT_GOAL := all
+# makefile (from 'Makefile', line 18)
+ARCH = $(shell arch)
+# environment
+USER = pi
+# default
+MAKE_VERSION := 4.3
+# 'override' directive
+.SHELLSTATUS := 0
+# makefile (from 'Makefile', line 7)
+LDFLAGS = -ldflags="-s -w"
+# environment
+VSCODE_EXTHOST_WILL_SEND_SOCKET = true
+# environment
+VSCODE_AGENT_FOLDER = /home/pi/.vscode-server
+# environment
+_ = /home/pi/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/node
+# environment
+XDG_RUNTIME_DIR = /run/user/1000
+# environment
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-3bf82683-1b6c-49ed-a97b-616a48be54ba.sock
+# environment
+GOMODCACHE = /home/pi/go_path/pkg/mod
+# makefile (from 'Makefile', line 11)
+PLATFORMDEPENDENT = fancontrol
+# environment
+XDG_SESSION_CLASS = user
+# environment
+VSCODE_AMD_ENTRYPOINT = vs/workbench/api/node/extensionHostProcess
+# environment
+HOME = /home/pi
+# environment
+XDG_SESSION_ID = 6
+# environment
+GOPROXY = https://proxy.golang.org,direct
+# default
+.RECIPEPREFIX := 
+# automatic
+<F = $(notdir $<)
+# default
+SUFFIXES := 
+# default
+.FEATURES := target-specific order-only second-expansion else-if shortest-stem undefine oneshell nocomment grouped-target extra-prereqs archives jobserver output-sync check-symlink load
+# makefile (from 'Makefile', line 8)
+LFLAGS = -X main.stratuxVersion="v1.6r1-eu028-vp" -X main.stratuxBuild=`git log -n 1 --pretty=%H`  
+# makefile (from 'Makefile', line 20)
+OGN_RX_BINARY = ogn/ogn-rx-eu_aarch64
+# environment
+SSH_CONNECTION = 192.168.178.106 63468 192.168.178.192 22
+# variable set hash-table stats:
+# Load=82/1024=8%, Rehash=0, Collisions=2/122=2%
+
+# Pattern-specific Variable Values
+
+# No pattern-specific variable values.
+
+# Directories
+
+# ble_main: could not be stat'd.
+# . (device 45826, inode 138734): 43 files, no impossibilities.
+# serialGPSDevice (device 45826, inode 139645): 3 files, no impossibilities.
+# main (device 45826, inode 139289): 25 files, no impossibilities.
+# nmea (device 45826, inode 140805): 3 files, no impossibilities.
+# bleGPSDevice (device 45826, inode 139181): 3 files, no impossibilities.
+# fancontrol_main (device 45826, inode 139255): 3 files, no impossibilities.
+# common (device 45826, inode 139210): 8 files, no impossibilities.
+
+# 88 files, no impossibilities in 8 directories.
+
+# Implicit Rules
+
+# No implicit rules.
+
+# Files
+
+# Not a target:
+main/monotonic.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+serialGPSDevice/serialGPSDevice.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/datalog.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/messagequeue.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+common/equations.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/lowpower_uat.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+common/cputemp.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+nmea/nmea.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/ogn.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+Makefile:
+#  Implicit rule search has been done.
+#  Last modified 2022-07-04 02:03:13.719994951
+#  File has been updated.
+#  Successfully updated.
+
+ogn/ddb.json:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 61):
+	cd ogn && ./fetch_ddb.sh
+
+# Not a target:
+main/networksettings.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+common/helpers.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/ogn-aprs.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/ping.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+xdump1090:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 42):
+	git submodule update --init
+	cd dump1090 && make BLADERF=no
+
+clean:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 116):
+	rm -f gen_gdl90 libdump978.so fancontrol ahrs_approx
+	cd dump1090 && make clean
+	cd dump978 && make clean
+	cd rtl-ais && make clean
+
+# Not a target:
+main/uibroadcast.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/gps.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+xrtlais:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 49):
+	git submodule update --init
+	cd rtl-ais && sed -i 's/^LDFLAGS+=-lpthread.*/LDFLAGS+=-lpthread -lm -lrtlsdr -L \/usr\/lib\//' Makefile && make
+
+# Not a target:
+main/network.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+fancontrol_main/fancontrol.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/gps_backgroundtasks.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/gps_nmeaParsers.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+xdump978:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 46):
+	cd dump978 && make lib
+
+fancontrol: fancontrol_main/fancontrol.go common/QuiteHelper.go common/consts.go common/cputemp.go common/equations.go common/gpsNmeaLine.go common/helpers.go
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 36):
+	go build $(BUILDINFO) -o fancontrol -p 4 ./fancontrol_main/
+
+gen_gdl90: main/ais.go main/clientconnection.go main/datalog.go main/flarm-nmea.go main/gen_gdl90.go main/gps.go main/gps_backgroundtasks.go main/gps_nmeaParsers.go main/lowpower_uat.go main/managementinterface.go main/messagequeue.go main/monotonic.go main/network.go main/networksettings.go main/ogn-aprs.go main/ogn.go main/ping.go main/plugin.go main/sdr.go main/sensors.go main/traffic.go main/uibroadcast.go main/xplane.go common/QuiteHelper.go common/consts.go common/cputemp.go common/equations.go common/gpsNmeaLine.go common/helpers.go nmea/nmea.go serialGPSDevice/serialGPSDevice.go bleGPSDevice/bleGPSDevice.go
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 33):
+	LIBRARY_PATH=$(CURDIR) CGO_CFLAGS_ALLOW="-L$(CURDIR)" go build $(BUILDINFO) -o gen_gdl90 -p 4 ./main/
+
+# Not a target:
+common/consts.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+ble: ble_main/*.go common/QuiteHelper.go common/consts.go common/cputemp.go common/equations.go common/gpsNmeaLine.go common/helpers.go bleGPSDevice/bleGPSDevice.go
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 39):
+ 
+	go build $(BUILDINFO) -o ble -p 4 ./ble_main/
+
+# Not a target:
+common/gpsNmeaLine.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/xplane.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+optinstall: www ogn/ddb.json
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 64):
+	mkdir -p $(STRATUX_HOME)/bin
+	mkdir -p $(STRATUX_HOME)/www
+	mkdir -p $(STRATUX_HOME)/ogn
+	mkdir -p $(STRATUX_HOME)/cfg
+	mkdir -p $(STRATUX_HOME)/lib
+	mkdir -p $(STRATUX_HOME)/mapdata
+	chmod a+rwx $(STRATUX_HOME)/mapdata # so users can upload their stuff as user pi
+	# binaries
+	cp -f gen_gdl90 $(STRATUX_HOME)/bin/
+	cp -f fancontrol $(STRATUX_HOME)/bin/
+	cp -f dump1090/dump1090 $(STRATUX_HOME)/bin
+	cp -f rtl-ais/rtl_ais $(STRATUX_HOME)/bin
+	cp -f $(OGN_RX_BINARY) $(STRATUX_HOME)/bin/ogn-rx-eu
+	chmod +x $(STRATUX_HOME)/bin/*
+	# Libs
+	cp -f libdump978.so $(STRATUX_HOME)/lib/
+	# map data
+	cp -ru mapdata/* $(STRATUX_HOME)/mapdata/
+	# OGN stuff
+	cp -f ogn/ddb.json ogn/esp32-ogn-tracker-bin-*.zip ogn/install-ogntracker-firmware-pi.sh ogn/fetch_ddb.sh $(STRATUX_HOME)/ogn
+	# Scripts
+	cp __opt__stratux__bin__stratux-pre-start.sh $(STRATUX_HOME)/bin/stratux-pre-start.sh
+	chmod 744 $(STRATUX_HOME)/bin/stratux-pre-start.sh
+	cp -f image/stratux-wifi.sh $(STRATUX_HOME)/bin/
+	cp -f image/sdr-tool.sh $(STRATUX_HOME)/bin/
+	chmod 755 $(STRATUX_HOME)/bin/*
+	# Config templates
+	cp -f image/stratux-dnsmasq.conf.template $(STRATUX_HOME)/cfg/
+	cp -f image/interfaces.template $(STRATUX_HOME)/cfg/
+	cp -f image/wpa_supplicant.conf.template $(STRATUX_HOME)/cfg/
+	cp -f image/wpa_supplicant_ap.conf.template $(STRATUX_HOME)/cfg/
+
+# Not a target:
+.DEFAULT:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+all:
+#  Command line target.
+#  Implicit rule search has not been done.
+#  Implicit/static pattern stem: ''
+#  File does not exist.
+#  File has been updated.
+#  Needs to be updated (-q is set).
+# automatic
+# @ := all
+# automatic
+# * := 
+# automatic
+# < := 
+# automatic
+# + := 
+# automatic
+# % := 
+# automatic
+# ^ := 
+# automatic
+# ? := 
+# automatic
+# | := 
+# variable set hash-table stats:
+# Load=8/32=25%, Rehash=0, Collisions=1/12=8%
+#  recipe to execute (from 'Makefile', line 30):
+	make xdump978 xdump1090 xrtlais gen_gdl90 $(PLATFORMDEPENDENT)
+
+# Not a target:
+bleGPSDevice/bleGPSDevice.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/clientconnection.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/managementinterface.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/traffic.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/plugin.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/ais.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+test:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 55):
+	make -C test
+
+# Not a target:
+main/sensors.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+ble_main/*.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+www:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 58):
+	make -C web
+
+install: optinstall
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 104):
+	-$(STRATUX_HOME)/bin/fancontrol remove
+	$(STRATUX_HOME)/bin/fancontrol install
+	# System configuration
+	cp image/10-stratux.rules /etc/udev/rules.d/10-stratux.rules
+	cp image/99-uavionix.rules /etc/udev/rules.d/99-uavionix.rules
+	cp __lib__systemd__system__stratux.service /lib/systemd/system/stratux.service
+	chmod 644 /lib/systemd/system/stratux.service
+	ln -fs /lib/systemd/system/stratux.service /etc/systemd/system/multi-user.target.wants/stratux.service
+
+# Not a target:
+main/sdr.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+common/QuiteHelper.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+.SUFFIXES:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/flarm-nmea.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+.PHONY: test
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# Not a target:
+main/gen_gdl90.go:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+# files hash-table stats:
+# Load=51/1024=5%, Rehash=0, Collisions=3/115=3%
+# VPATH Search Paths
+
+# No 'vpath' search paths.
+
+# No general ('VPATH' variable) search path.
+
+# strcache buffers: 1 (0) / strings = 126 / storage = 1691 B / avg = 13 B
+# current buf: size = 8162 B / used = 1691 B / count = 126 / avg = 13 B
+
+# strcache performance: lookups = 184 / hit rate = 31%
+# hash-table stats:
+# Load=126/8192=2%, Rehash=0, Collisions=4/184=2%
+# Finished Make data base on Mon Jul  4 09:59:22 2022
+
+ 

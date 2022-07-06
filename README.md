@@ -26,6 +26,7 @@ This repository offers code and binaries that can help you to build your own tra
 * X-Plane 11 compatible output for EFBs that support simulator input (experimental, unsupported. Might make it possible to connect Garmin Pilot). Based on original work by 0x74-0x62
 * Support for WiFi Direct connection to make it possible to let Android have mobile data connection while connected to the Stratux
 * Many more small features, bug fixes and tweaks all over the place
+* AIS Support, allow to see shipping data (shown as ground vehicles) (by [rvt](https://github.com/rvt)
 
 ## Building the Europe Edition
 Due to the modular nature of Stratux, there are many possibilities how you can build it to your needs.
