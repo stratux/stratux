@@ -13,8 +13,14 @@ type GpsNmeaLine struct {
 	Name string                       // Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
 	NmeaLine string					  // Received NMEA Line
 	GpsTimeOffsetPpsMs time.Duration  // Estimated GPS offset
-	GpsDetectedType uint            // This is the type, like OGN, ubloc or SOFTRF
-	GpsSource uint                   // This is the source, network, Blue Tooth or serial
+	GpsDetectedType uint              // This is the type, like OGN, ubloc or SOFTRF
+	GpsSource uint                    // This is the source, network, Blue Tooth or serial
+}
+
+type DiscoveredDevice struct {
+	Name string
+	Connected bool
+	GpsSource uint
 }
 
 func (line GpsNmeaLine) Print() {
@@ -26,3 +32,4 @@ func (line GpsNmeaLine) Print() {
 		line.GpsSource,
 	)
 }
+

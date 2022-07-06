@@ -23,15 +23,15 @@ import (
 	"tinygo.org/x/bluetooth"
 )
 
-// Holds information about a device that is currently within a list of devices we connect to
-type bleDeviceInfo struct {
+// Holds information about a device that is currently within a list of discovered devices
+type discoveredDeviceInfo struct {
 	Connected bool
 	MAC       string
 	name      string
 }
 
 // Hold's information about a device that has beeing scanned
-type bleScanInfo struct {
+type scanInfoResult struct {
 	MAC  string
 	name string
 }
@@ -39,7 +39,7 @@ type bleScanInfo struct {
 // Used to send from a received NMEA string data to the switchboard
 type nmeaNewLine struct {
 	nmeaLine string
-	device   bleDeviceInfo // We assume that when we just received a NMEA line, the device is not lost so the data structure always exists
+	device   discoveredDeviceInfo // We assume that when we just received a NMEA line, the device is not lost so the data structure always exists
 }
 
 //type BleGPSDevice interface {
@@ -50,6 +50,7 @@ type nmeaNewLine struct {
 type BleGPSDevice struct {
 	adapter                 bluetooth.Adapter
 	bleGPSTrafficDeviceList cmap.ConcurrentMap
+	discoveredDevices		[]string
 	qh                      *common.QuitHelper
 }
 
@@ -66,6 +67,13 @@ under /etc/dbus-1/system.d/bluetooth.conf
 See logs stratux dbus-daemon[300]: [system] Connection ":1.28" is not allowed to add more match rules (increase limits in configuration file if required; max_match_rules_p
 er_connection=512)
 change /boot/config.txt and set # dtoverlay=disable-bt
+
+// sudo apt install pi-bluetooth bluez-tools
+// sudo modprobe btusb
+// dtparam=krnbt=on
+// dtoverlay=disable-bt
+// sudo usermod -G bluetooth -a <username>
+
 */
 
 var (
@@ -74,39 +82,28 @@ var (
 	txUUID          = bluetooth.CharacteristicUUIDUARTTX
 )
 
+// WATCHDOG for the blue device, if we do not receive data at least once a second we will diconnect and re-connect
 const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
-// advertisementListener will scan for any nearby devices add notifies them on the bleScanInfoChannel for any found devices
+// advertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
 // It's possible to get scan rounds for some time without seeing an advertisement so we should not connect to an device
 // after we see it's advertisement. We rather should remember we have seen it and then connect to it at some point.
-func (b BleGPSDevice) advertisementListener(allowedDeviceList []string, bleScanInfoChannel chan bleScanInfo) {
-	qh := b.qh.Add() //
+func (b BleGPSDevice) advertisementListener(scanInfoResultChan chan scanInfoResult) {
+	qh := b.qh.Add()
 	defer b.qh.Done()
-
-	// Non blocking channel so we get out of the interrupt routine quickly
-	chScanResult := make(chan bluetooth.ScanResult, 1)
 
 	go func() {
 		err := b.adapter.Scan(
 			// Note: within func we are within a interrupt service route
-			// so we do not want to spend a lot of time here or do a lot of work
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+				// CHeck for Nordic serial service
 				if !result.AdvertisementPayload.HasServiceUUID(serviceUARTUUID) {
 					return
 				}
-				// If we stop the scan we keep discovering existing devices
-				// However, we get messages like these in varlog Connection ":1.10" is not allowed to add more match rules (increase limits in configuration file if required; max_match_rules_per_connection=8192)
-				// If we do not top the scan, we do not correctly re-discover existing devices but we do not get the error message in the log
-				chScanResult <- result
+				// Address must exist otherwhise we cannot connect to it
+				if result.Address != nil {
+					scanInfoResultChan <- scanInfoResult{result.Address.String(), result.LocalName()}
+				}
 			})
 		if err != nil {
 			log.Printf("Failed to start scan %s", err.Error())
@@ -114,60 +111,37 @@ func (b BleGPSDevice) advertisementListener(allowedDeviceList []string, bleScanI
 		}
 	}()
 
-	defer func() {
-		b.adapter.StopScan()
-	}()
-
-	for {
-		select {
-		case <-qh:
-			b.adapter.StopScan()
-			return
-		case foundDevice := <-chScanResult:
-			if foundDevice.Address == nil {
-				break
-			}
-
-			// Only allow names we see in our list. It's possible that the mac changes so we match by name, but once found
-			// we do assume that the MAC never changes again. However, it can change if for example a user replaces a device with the same
-			// capabilities and names it the same..
-			if !stringInSlice(foundDevice.LocalName(), allowedDeviceList) {
-				log.Printf("Device : %s Not in approved list of %s", foundDevice.LocalName(), strings.Join(allowedDeviceList[:], ","))
-				break
-			}
-			bleScanInfoChannel <- bleScanInfo{foundDevice.Address.String(), foundDevice.LocalName()}
-			break
-		}
-	}
+	<-qh
+	b.adapter.StopScan()
 }
 
 /**
 Coonect to our bluetooth device and listen on the RX channel for NMEA sentences
 **/
-func (b BleGPSDevice) rxListener(bleDeviceInfo bleDeviceInfo, sentenceChannel chan nmeaNewLine) error {
+func (b BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan nmeaNewLine) error {
 	qh := b.qh.Add()
 	defer b.qh.Done()
 
-	address, _ := bluetooth.ParseMAC(bleDeviceInfo.MAC)
+	address, _ := bluetooth.ParseMAC(discoveredDeviceInfo.MAC)
 	btAddress := bluetooth.MACAddress{MAC: address}
 
 	// Connect to device
 	device, err := b.adapter.Connect(bluetooth.Address{MACAddress: btAddress}, bluetooth.ConnectionParams{})
 	if err != nil {
-		log.Printf("Failed to connect to : %s : %s", bleDeviceInfo.name, err.Error())
+		log.Printf("Failed to connect to : %s : %s", discoveredDeviceInfo.name, err.Error())
 		return err
 	}
 
-	log.Printf("Connected to : " + bleDeviceInfo.name)
+	log.Printf("Connected to : " + discoveredDeviceInfo.name)
 	defer func() {
 		device.Disconnect()
-		log.Printf("Disconnected from : %s", bleDeviceInfo.name)
+		log.Printf("Disconnected from : %s", discoveredDeviceInfo.name)
 	}()
 
 	// Connected. Look up the Nordic UART Service,
 	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUARTUUID})
 	if err != nil {
-		log.Printf("Failed to discover service : %s : %s", bleDeviceInfo.name, err.Error())
+		log.Printf("Failed to discover service : %s : %s", discoveredDeviceInfo.name, err.Error())
 		return err
 	}
 	service := services[0]
@@ -175,7 +149,7 @@ func (b BleGPSDevice) rxListener(bleDeviceInfo bleDeviceInfo, sentenceChannel ch
 	// Get the two characteristics present in this service.
 	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{rxUUID, txUUID})
 	if err != nil {
-		log.Printf("Failed RX services : %s : %s", bleDeviceInfo.name, err.Error())
+		log.Printf("Failed RX services : %s : %s", discoveredDeviceInfo.name, err.Error())
 		return err
 	}
 
@@ -214,7 +188,7 @@ func (b BleGPSDevice) rxListener(bleDeviceInfo bleDeviceInfo, sentenceChannel ch
 						sentenceStarted = false
 						thisOne := string(byteArray[0:charPosition])
 						//fmt.Printf("%s\r\n", thisOne)
-						sentenceChannel <- nmeaNewLine{thisOne, bleDeviceInfo}
+						sentenceChannel <- nmeaNewLine{thisOne, discoveredDeviceInfo}
 					}
 
 					// Start of a new NMEA sentence
@@ -244,10 +218,10 @@ func (b BleGPSDevice) rxListener(bleDeviceInfo bleDeviceInfo, sentenceChannel ch
 
 	enaNotifyErr := tx.EnableNotifications(func(value []byte) {
 		// Reset the watchdig timer
-		atomic.StoreInt32(&receivedDataSize, int32(0))
+		atomic.StoreInt32(&exitFunction, int32(0))
 		watchdogTimer.Stop()
 		watchdogTimer.Reset(WATCHDOG_RECEIVE_TIMER)
-		atomic.StoreInt32(&receivedDataSize, int32(1))
+		atomic.StoreInt32(&exitFunction, int32(1))
 
 		// Copy received data
 		mutex.Lock()
@@ -288,7 +262,7 @@ func (b BleGPSDevice) connectionMonitor(sentenceChannel chan nmeaNewLine) {
 			return
 		case <-ticker.C:
 			for entry := range b.bleGPSTrafficDeviceList.IterBuffered() {
-				info := entry.Val.(*bleDeviceInfo)
+				info := entry.Val.(*discoveredDeviceInfo)
 
 				if !info.Connected {
 					info.Connected = true
@@ -345,22 +319,29 @@ func (b BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel chan
 		return
 	}
 
-	newAddressChannel := make(chan bleScanInfo)
+	scanInfoResultChannel := make(chan scanInfoResult)
 	nmeaSentenceChannel := make(chan nmeaNewLine, 0)
 
 	go b.connectionMonitor(nmeaSentenceChannel)
 	go b.switchBoard(nmeaSentenceChannel, gpsNMEALineChannel)
-	go b.advertisementListener(allowedDeviceList, newAddressChannel)
+	go b.advertisementListener(scanInfoResultChannel)
 
 	for {
 		select {
 		case <-qh:
 			return
-		case address := <-newAddressChannel:
-			added := b.bleGPSTrafficDeviceList.SetIfAbsent(address.MAC, &bleDeviceInfo{Connected: false, MAC: address.MAC, name: address.name})
-			if added {
-				log.Printf("Adding device : %s", address.name)
+		case address := <-scanInfoResultChannel:
+			// Only allow names we see in our list in our allowed list
+			if !common.StringInSlice(address.name, allowedDeviceList) {
+				log.Printf("Device : %s Not in approved list of %s", address.name, strings.Join(allowedDeviceList[:], ","))
+				break
+			} else {
+				added := b.bleGPSTrafficDeviceList.SetIfAbsent(address.MAC, &discoveredDeviceInfo{Connected: false, MAC: address.MAC, name: address.name})
+				if added {
+					log.Printf("bleGPSDevice: Listen: Adding device : %s", address.name)
+				}	
 			}
+
 		}
 	}
 }

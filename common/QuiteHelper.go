@@ -43,4 +43,3 @@ func (a *QuitHelper) Quit() {
     a.m.Unlock()
 }
  
- 

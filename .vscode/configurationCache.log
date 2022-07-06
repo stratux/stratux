@@ -1,1 +1,1 @@
-{"buildTargets":["all","ble","clean","fancontrol","gen_gdl90","install","ogn/ddb.json","optinstall","test","www","xdump1090","xdump978","xrtlais"],"launchTargets":[],"customConfigurationProvider":{"workspaceBrowse":{"browsePath":[],"compilerArgs":[]},"fileIndex":[]}}
+{"buildTargets":["all","clean","fancontrol","gen_gdl90","install","ogn/ddb.json","optinstall","test","www","xdump1090","xdump978","xrtlais"],"launchTargets":[],"customConfigurationProvider":{"workspaceBrowse":{"browsePath":[],"compilerArgs":[]},"fileIndex":[]}}
