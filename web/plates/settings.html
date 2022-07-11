@@ -399,7 +399,7 @@
 
                     <div class="form-group" ng-show="BleGPSEnabled">
                         <div class="form-group reset-flow">
-                            <label class="control-label col-xs-5">GPS preferred source</label>
+                            <label class="control-label col-xs-5">GPS Location service preferred source</label>
                             <div class="col-xs-7">
                                 
                                 <a ui-turn-on='gpSourceDropDown' class='btn'>
@@ -414,8 +414,8 @@
                                     ui-show="gpSourceDropDown" 
                                     ui-state="gpSourceDropDown"
                                     ui-turn-off="gpSourceDropDown">                                
-                                    <li ng-click="updateGpsPrefSource(0)"><a>{{GPSPreferredSources[0]}}</a></li>
-                                    <li ng-click="updateGpsPrefSource(1)"><a>{{GPSPreferredSources[1]}}</a></li>
+                                    <li ng-click="updateGpsPrefSource(3)"><a>{{GPSPreferredSources[3]}}</a></li>
+                                    <li ng-click="updateGpsPrefSource(4)"><a>{{GPSPreferredSources[4]}}</a></li>
                                   </ul>
 
                             </div>

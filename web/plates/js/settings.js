@@ -4,7 +4,8 @@ SettingsCtrl.$inject = ['$rootScope', '$scope', '$state', '$location', '$window'
 
 // create our controller function with all necessary logic
 function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
-	$scope.GPSPreferredSources = ['Serial', 'BlueTooth']
+	// See GPS_SOURCE_XXXX
+	$scope.GPSPreferredSources = ['-', '-', 'Network', 'Serial', 'BlueTooth']
 
 	$scope.countryCodes = {
 		"":"Unspecified",

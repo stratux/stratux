@@ -22,6 +22,7 @@ const (
 	GPS_TYPE_SOFTRF_DONGLE = 0x0B
 	GPS_TYPE_NETWORK       = 0x0C
 	GPS_PROTOCOL_NMEA      = 0x10
+	GPS_TYPE_BLUETOOTH     = 0x0D
 	// other GPS types to be defined as needed
 )
 
@@ -35,10 +36,10 @@ const (
 )
 
 const (
-	GPS_SOURCE_UNKNOWN		= 0x00
-	GPS_SOURCE_NETWORK		= 0x01
-	GPS_SOURCE_SERIAL   	= 0x02
-	GPS_SOURCE_BLE	        = 0x03
+	GPS_SOURCE_UNKNOWN		= 0x01
+	GPS_SOURCE_NETWORK		= 0x02
+	GPS_SOURCE_SERIAL   	= 0x03
+	GPS_SOURCE_BLE	        = 0x04
 )
 
 const (

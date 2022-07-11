@@ -23,6 +23,7 @@ require (
 	github.com/stratux/serial v0.0.0-19700101022104-87f23b1d3198
 	github.com/takama/daemon v1.0.0
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
+	github.com/tevino/abool/v2 v2.1.0 // indirect
 	github.com/uavionix/serial v0.0.0-19700101022104-87f23b1d3198
 	github.com/ziutek/mymysql v1.5.4 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e

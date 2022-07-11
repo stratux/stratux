@@ -24,42 +24,35 @@ import (
 	"github.com/b3nn0/stratux/v2/common"
 )
 
-type GlobalSettings struct {
-	DEBUG bool
-}
-var globalSettings GlobalSettings
-
-type SerialGPSDevice interface {
-	Listen()
-}
-
-type serialGPSDevice struct {
+type SerialGPSDevice struct {
 	gpsTimeOffsetPpsMs time.Duration
 	
 	serialConfig *serial.Config
-	serialPort *serial.Port
 	
-	readyToInitGPS bool //TODO: replace with channel control to terminate goroutine when complete
-		
 	ognTrackerConfigured bool
 
 	GPS_detected_type uint
-	GPS_connected bool
+	gpsName string
+	
+	DEBUG bool
+
+	qh *common.QuitHelper
 }
 
-func New() SerialGPSDevice {
-	m := serialGPSDevice {
+func NewSerialGPSDevice() SerialGPSDevice {
+	m := SerialGPSDevice {
 		gpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 
 		serialConfig: nil,
-		serialPort: nil,
-
-		readyToInitGPS: false,
 
 		ognTrackerConfigured: false,
 
 		GPS_detected_type: 0x00,
-		GPS_connected: false}
+		gpsName: "",
+
+		DEBUG: false,
+	
+		qh: common.NewQuitHelper()}
 	return m
 }
 
@@ -116,11 +109,9 @@ func makeUBXCFG(class, id byte, msglen uint16, msg []byte) []byte {
 	return ret
 }
 
-func (s serialGPSDevice) initGPSSerial() bool {
+func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 	var device string
-	if (s.GPS_detected_type & 0x0f) == common.GPS_TYPE_NETWORK {
-		return true
-	}
+
 	// Possible baud rates for this device. We will try to auto detect the correct one
 	baudrates := []int{int(9600)}
 	isSirfIV := bool(false)
@@ -129,16 +120,20 @@ func (s serialGPSDevice) initGPSSerial() bool {
 
 	if _, err := os.Stat("/dev/ublox9"); err == nil { // u-blox 8 (RY83xAI over USB).
 		device = "/dev/ublox9"
+		s.gpsName = "ublox9"
 		s.GPS_detected_type = common.GPS_TYPE_UBX9
 	} else if _, err := os.Stat("/dev/ublox8"); err == nil { // u-blox 8 (RY83xAI or GPYes 2.0).
 		device = "/dev/ublox8"
+		s.gpsName = "ublox8"
 		s.GPS_detected_type = common.GPS_TYPE_UBX8
 		s.gpsTimeOffsetPpsMs = 80 * time.Millisecond // Ublox 8 seems to have higher delay
 	} else if _, err := os.Stat("/dev/ublox7"); err == nil { // u-blox 7 (VK-172, VK-162 Rev 2, GPYes, RY725AI over USB).
 		device = "/dev/ublox7"
+		s.gpsName = "ublox7"
 		s.GPS_detected_type = common.GPS_TYPE_UBX7
 	} else if _, err := os.Stat("/dev/ublox6"); err == nil { // u-blox 6 (VK-162 Rev 1).
 		device = "/dev/ublox6"
+		s.gpsName = "ublox6"
 		s.GPS_detected_type = common.GPS_TYPE_UBX6
 	} else if _, err := os.Stat("/dev/prolific0"); err == nil { // Assume it's a BU-353-S4 SIRF IV.
 		//TODO: Check a "serialout" flag and/or deal with multiple prolific devices.
@@ -147,28 +142,32 @@ func (s serialGPSDevice) initGPSSerial() bool {
 		// We also try 9600 just in case this is something else, as this is the most popular value
 		baudrates = []int{4800, 38400, 9600}
 		device = "/dev/prolific0"
+		s.gpsName = "prolific"
 		s.GPS_detected_type = common.GPS_TYPE_PROLIFIC
 	} else if _, err := os.Stat("/dev/serialin"); err == nil {
 		device = "/dev/serialin"
+		s.gpsName = "generic"
 		s.GPS_detected_type = common.GPS_TYPE_SERIAL
 		// OGN Tracker uses 115200, SoftRF 38400
 		baudrates = []int{115200, 38400, 9600}
  	} else if _, err := os.Stat("/dev/softrf_dongle"); err == nil {
 		device = "/dev/softrf_dongle"
+		s.gpsName = "softrf_dongle"
 		s.GPS_detected_type = common.GPS_TYPE_SOFTRF_DONGLE
 		baudrates[0] = 115200
  	} else if _, err := os.Stat("/dev/ttyAMA0"); err == nil { // ttyAMA0 is PL011 UART (GPIO pins 8 and 10) on all RPi.
 		device = "/dev/ttyAMA0"
+		s.gpsName = "ttyAMA0"
 		s.GPS_detected_type = common.GPS_TYPE_UART
 		// UART connected u-blox GPS @ 10Hz update rate need 115200, 38400 and 9600 just as fallback
 		baudrates = []int{115200, 38400, 9600}
 	} else {
-		if globalSettings.DEBUG {
+		if s.DEBUG {
 			log.Printf("No GPS device found.\n")
 		}
-		return false
+		return nil
 	}
-	if globalSettings.DEBUG {
+	if s.DEBUG {
 		log.Printf("Using %s for GPS\n", device)
 	}
 
@@ -177,7 +176,7 @@ func (s serialGPSDevice) initGPSSerial() bool {
 	p, err := serial.OpenPort(s.serialConfig)
 	if err != nil {
 		log.Printf("serial port err: %s\n", err.Error())
-		return false
+		return nil
 	}
 
 	if isSirfIV {
@@ -198,7 +197,7 @@ func (s serialGPSDevice) initGPSSerial() bool {
 		// Enable 38400 baud.
 		p.Write(common.MakeNMEACmd("PSRF100,1,38400,8,1,0"))
 
-		if globalSettings.DEBUG {
+		if s.DEBUG {
 			log.Printf("Finished writing SiRF GPS config to %s. Opening port to test connection.\n", device)
 		}
 	} else if s.GPS_detected_type == common.GPS_TYPE_UART {
@@ -230,19 +229,19 @@ func (s serialGPSDevice) initGPSSerial() bool {
 		time.Sleep(100* time.Millisecond)
 
 		if s.GPS_detected_type == common.GPS_TYPE_UBX9 {
-			if globalSettings.DEBUG {
+			if s.DEBUG {
 				log.Printf("ublox 9 detected\n")
 			}
 			// ublox 9
 			writeUblox9ConfigCommands(p)		
 		} else if s.GPS_detected_type == common.GPS_TYPE_UBX8 {
-			if globalSettings.DEBUG {
+			if s.DEBUG {
 				log.Printf("ublox 8 detected\n")
 			}
 			// ublox 8
 			writeUblox8ConfigCommands(p)
 		} else if (s.GPS_detected_type == common.GPS_TYPE_UBX7) || (s.GPS_detected_type == common.GPS_TYPE_UBX6) {
-			if globalSettings.DEBUG {
+			if s.DEBUG {
 				log.Printf("ublox 6 or 7 detected\n")
 			}
 			// ublox 6,7
@@ -304,7 +303,7 @@ func (s serialGPSDevice) initGPSSerial() bool {
 		//	time.Sleep(100* time.Millisecond) // pause and wait for the GPS to finish configuring itself before closing / reopening the port
 		baudrates[0] = int(bdrt)
 
-		if globalSettings.DEBUG {
+		if s.DEBUG {
 			log.Printf("Finished writing u-blox GPS config to %s. Opening port to test connection.\n", device)
 		}
 	} else if s.GPS_detected_type == common.GPS_TYPE_SOFTRF_DONGLE {
@@ -321,17 +320,16 @@ func (s serialGPSDevice) initGPSSerial() bool {
 	// Re-open port at newly configured baud so we can read messages. ReadTimeout is set to keep from blocking the gpsSerialReader() on misconfigures or ttyAMA disconnects
 	// serialConfig = &serial.Config{Name: device, Baud: baudrate, ReadTimeout: time.Millisecond * 2500}
 	// serial.OpenPort(serialConfig)
-	p, err = s.detectOpenSerialPort(device, baudrates)
+	p, err = detectOpenSerialPort(device, baudrates)
 	if err != nil {
 		log.Printf("serial port err: %s\n", err.Error())
-		return false
+		return nil
 	}
 
-	s.serialPort = p
-	return true
+	return p
 }
 
-func (s serialGPSDevice) detectOpenSerialPort(device string, baudrates []int) (*(serial.Port), error) {
+func detectOpenSerialPort(device string, baudrates []int) (*(serial.Port), error) {
 	if len(baudrates) == 1 {
 		serialConfig := &serial.Config{Name: device, Baud: baudrates[0], ReadTimeout: time.Millisecond * 2500}
 		return serial.OpenPort(serialConfig)
@@ -350,13 +348,7 @@ func (s serialGPSDevice) detectOpenSerialPort(device string, baudrates []int) (*
 			for _, line := range splitted {
 				_, validNMEAcs := common.ValidateNMEAChecksum(line)
 				if validNMEAcs {
-					// looks a lot like common.. use it
 					log.Printf("Detected serial port %s with baud %d", device, baud)
-					// Make sure the NMEA is immediately parsed once, so updateStatus() doesn't see the GPS as disconnected before
-					// first msg arrives
-					
-					// TODO: RVT 
-					//processNMEALine(line)
 					return p, nil
 				}
 			}
@@ -461,27 +453,27 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 }
 
 
-func (s serialGPSDevice) configureOgnTracker() {
-	if s.serialPort == nil {
-		return
-	}
+// func (s *SerialGPSDevice) configureOgnTracker() {
+// 	if s.serialPort == nil {
+// 		return
+// 	}
 
-	s.gpsTimeOffsetPpsMs = 200 * time.Millisecond
-	s.serialPort.Write([]byte(common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n")) // Also force NavRate directly, just to make sure it's always set
+// 	s.gpsTimeOffsetPpsMs = 200 * time.Millisecond
+// 	s.serialPort.Write([]byte(common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n")) // Also force NavRate directly, just to make sure it's always set
 
-	s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // query current configuration
+// 	s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // query current configuration
 
-	// Configuration for OGN Tracker T-Beam is similar to normal Ublox config
-	writeUblox8ConfigCommands(s.serialPort)
-	writeUbloxGenericCommands(5, s.serialPort)
+// 	// Configuration for OGN Tracker T-Beam is similar to normal Ublox config
+// 	writeUblox8ConfigCommands(s.serialPort)
+// 	writeUbloxGenericCommands(5, s.serialPort)
 
-	s.serialPort.Flush()
+// 	s.serialPort.Flush()
 
-	s.GPS_detected_type = common.GPS_TYPE_OGNTRACKER
-}
+// 	s.GPS_detected_type = common.GPS_TYPE_OGNTRACKER
+// }
 
 
-func (s serialGPSDevice) getOgnTrackerConfigString() string {
+func (s *SerialGPSDevice) getOgnTrackerConfigString() string {
 	/* TODO: RVT
 	msg := fmt.Sprintf("$POGNS,Address=0x%s,AddrType=%d,AcftType=%d,Pilot=%s,Reg=%s,TxPower=%d,Hard=STX,Soft=%s",
 		globalSettings.OGNAddr, globalSettings.OGNAddrType, globalSettings.OGNAcftType, globalSettings.OGNPilot, globalSettings.OGNReg, globalSettings.OGNTxPower, stratuxVersion[1:])
@@ -495,73 +487,77 @@ func getOgnTrackerConfigQueryString() string {
 	return common.AppendNmeaChecksum("$POGNS") + "\r\n"
 }
 
-func (s serialGPSDevice) configureOgnTrackerFromSettings() {
-	if s.serialPort == nil {
-		return
+// func (s *SerialGPSDevice) configureOgnTrackerFromSettings() {
+// 	if s.serialPort == nil {
+// 		return
+// 	}
+
+// 	cfg := s.getOgnTrackerConfigString()
+// 	log.Printf("Configuring OGN Tracker: %s ", cfg)
+
+// 	// RVT: TODO s.serialPort.Write([]byte(cfg))
+// 	s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // re-read settings from tracker
+// 	s.serialPort.Flush()
+// }
+
+
+func (s *SerialGPSDevice) gpsSerialReader(gpsNMEALineChannel chan common.GpsNmeaLine) {
+
+	serialPort := s.initGPSSerial();
+	if serialPort!=nil {
+		defer serialPort.Close()
 	}
 
-	cfg := s.getOgnTrackerConfigString()
-	log.Printf("Configuring OGN Tracker: %s ", cfg)
-
-	// RVT: TODO s.serialPort.Write([]byte(cfg))
-	s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // re-read settings from tracker
-	s.serialPort.Flush()
-}
-
-
-func (s serialGPSDevice) gpsSerialReader() {
-	defer s.serialPort.Close()
-	s.readyToInitGPS = false //TODO: replace with channel control to terminate goroutine when complete
-
 	i := 0 //debug monitor
-	scanner := bufio.NewScanner(s.serialPort)
-	for scanner.Scan() && s.GPS_connected /* && globalSettings.GPS_Enabled */ {
+	scanner := bufio.NewScanner(serialPort)
+	for scanner.Scan() && !s.qh.IsQuit() {
 		i++
-		if globalSettings.DEBUG && i%100 == 0 {
+		if s.DEBUG && i%100 == 0 {
 			log.Printf("gpsSerialReader() scanner loop iteration i=%d\n", i) // debug monitor
 		}
 
-		s := scanner.Text()
-		startIdx := strings.Index(s, "$")
+		nmeaLine := scanner.Text()
+		startIdx := strings.Index(nmeaLine, "$")
 		if startIdx < 0 {
 			continue
 		}
-		s = s[startIdx:]
 
-		// TODO: RVT HERE IS WHERE THE NMEA STRINGS COME IN
-		// if !processNMEALine(s) {
-		// 	if globalSettings.DEBUG {
-		// 		fmt.Printf("processNMEALine() exited early -- %s\n", s)
-		// 	}
-		// }
+		gpsNMEALineChannel <- common.GpsNmeaLine{
+			Name:               s.gpsName,
+			NmeaLine:           nmeaLine[startIdx:],
+			GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
+			GpsDetectedType:    s.GPS_detected_type,
+			GpsSource:          common.GPS_SOURCE_SERIAL}
+
 	}
 	if err := scanner.Err(); err != nil {
 		log.Printf("reading standard input: %s\n", err.Error())
 	}
 
-	if globalSettings.DEBUG {
+	if s.DEBUG {
 		log.Printf("Exiting gpsSerialReader() after i=%d loops\n", i) // debug monitor
 	}
-	s.GPS_connected = false
-	s.readyToInitGPS = true //TODO: replace with channel control to terminate goroutine when complete
-	return
+
 }
 
-func  (s serialGPSDevice) pollGPS() {
-	s.readyToInitGPS = true //TODO: Implement more robust method (channel control) to kill zombie serial readers
-	timer := time.NewTicker(4 * time.Second)
+func (s *SerialGPSDevice) pollGPS(gpsNMEALineChannel chan common.GpsNmeaLine) {
+	s.qh.Add()
+	defer s.qh.Done()
 	for {
-		<-timer.C
-		// GPS enabled, was not connected previously?
-		if !s.GPS_connected && s.readyToInitGPS { //TODO: Implement more robust method (channel control) to kill zombie serial readers
-			s.GPS_connected = s.initGPSSerial()
-			if s.GPS_connected && (s.GPS_detected_type & 0x0f) != common.GPS_TYPE_NETWORK {
-				go s.gpsSerialReader()
-			}
+		if s.qh.IsQuit()  {
+			return 
 		}
+		s.gpsSerialReader(gpsNMEALineChannel)
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
 
-func (s serialGPSDevice) Listen() {
-	go s.pollGPS()
+func (s *SerialGPSDevice) Stop() {
+	s.qh.Quit()
+}
+
+func (s *SerialGPSDevice) Listen(gpsNMEALineChannel chan common.GpsNmeaLine, debug bool) {
+	s.DEBUG = debug
+
+	go s.pollGPS(gpsNMEALineChannel)
 }

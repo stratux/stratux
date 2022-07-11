@@ -2,44 +2,48 @@ package common
  
 import (
     "sync"
+    "github.com/tevino/abool/v2"
 )
  
 type QuitHelper struct {
-    C []chan struct{}
+    c chan struct{}
     w *sync.WaitGroup
-    m *sync.Mutex
+    m sync.Mutex
+    b *abool.AtomicBool
 }
  
 func NewQuitHelper() *QuitHelper {
     return &QuitHelper{
+        c: make(chan struct{}),
         w: new(sync.WaitGroup),
-        m: new(sync.Mutex),
+        m: sync.Mutex{},
+        b: abool.New(),
     }
 }
  
 func (a *QuitHelper) Add() <- chan struct{} {
     a.m.Lock()
     a.w.Add(1)
-    ch := make(chan struct{})
-    a.C = append(a.C, ch)
     a.m.Unlock()
-    return ch
+    return a.c
 }
  
 func (a *QuitHelper) Done() {
     a.w.Done()
 }
- 
+
+func (a *QuitHelper) IsQuit() bool {
+    return a.b.IsSet()
+}
+
 func (a *QuitHelper) Quit() {
     a.m.Lock()
-    for i := range a.C {
-        go func(ii int) {
-            a.C[ii] <- struct{}{}
-        }(i)
-    }
+    a.b.Set()
+    close(a.c)
     a.w.Wait()
-    a.C = a.C[:0]
+    a.c = make(chan struct{})
     a.w = new(sync.WaitGroup)
+    a.b.UnSet()
     a.m.Unlock()
 }
  

@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Wed Jul  6 20:44:20 2022
+# Make data base, printed on Sun Jul 10 19:51:53 2022
 
 # Variables
 
@@ -40,8 +40,6 @@ PWD = /home/pi/stratux
 %D = $(patsubst %/,%,$(dir $%))
 # automatic
 ^D = $(patsubst %/,%,$(dir $^))
-# environment
-VSCODE_LOG_STACK = false
 # automatic
 %F = $(notdir $%)
 # environment
@@ -54,8 +52,6 @@ LANG = C
 MAKEFLAGS = pqrR
 # makefile
 CURDIR := /home/pi/stratux
-# environment
-VSCODE_PIPE_LOGGING = true
 # environment
 APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = 1
 # automatic
@@ -72,8 +68,6 @@ MFLAGS = -pqrR
 MAKEFILE_LIST := Makefile
 # automatic
 @F = $(notdir $@)
-# environment
-VSCODE_VERBOSE_LOGGING = true
 # environment
 XDG_SESSION_TYPE = tty
 # automatic
@@ -99,7 +93,7 @@ MAKELEVEL := 0
 # default
 MAKE = $(MAKE_COMMAND)
 # environment
-PATH = /home/pi/go/bin:/home/pi/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/remote-cli:/home/pi/.local/bin:/opt/stratux/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games
+PATH = /home/pi/go/bin:/home/pi/.vscode-server/bin/92d25e35d9bf1a6b16f7d0758f25d48ace11e5b9/bin/remote-cli:/home/pi/.local/bin:/opt/stratux/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games
 # default
 MAKEFILES := 
 # environment
@@ -109,9 +103,7 @@ MOTD_SHOWN = pam
 # environment
 GOROOT = /home/pi/go
 # environment
-SSH_CLIENT = 192.168.178.106 50951 22
-# environment
-VSCODE_LOG_NATIVE = false
+SSH_CLIENT = 192.168.178.106 58931 22
 # automatic
 ?F = $(notdir $?)
 # environment
@@ -121,7 +113,7 @@ LS_COLORS =
 # 'override' directive
 GNUMAKEFLAGS := 
 # environment
-BROWSER = /home/pi/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/helpers/browser.sh
+BROWSER = /home/pi/.vscode-server/bin/92d25e35d9bf1a6b16f7d0758f25d48ace11e5b9/bin/helpers/browser.sh
 # environment
 LOGNAME = pi
 # makefile
@@ -137,15 +129,13 @@ MAKE_VERSION := 4.3
 # makefile (from 'Makefile', line 7)
 LDFLAGS = -ldflags="-s -w"
 # environment
-VSCODE_EXTHOST_WILL_SEND_SOCKET = true
-# environment
 VSCODE_AGENT_FOLDER = /home/pi/.vscode-server
 # environment
-_ = /home/pi/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/node
+_ = /home/pi/.vscode-server/bin/92d25e35d9bf1a6b16f7d0758f25d48ace11e5b9/node
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-6b230004-40e9-4a8a-b6c1-3d2339ee0764.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-fb3dd7f0-81e0-4eac-8d37-b51bb3e0d76c.sock
 # environment
 GOMODCACHE = /home/pi/go_path/pkg/mod
 # makefile (from 'Makefile', line 11)
@@ -157,7 +147,9 @@ VSCODE_AMD_ENTRYPOINT = vs/workbench/api/node/extensionHostProcess
 # environment
 HOME = /home/pi
 # environment
-XDG_SESSION_ID = 3
+ELECTRON_RUN_AS_NODE = 1
+# environment
+XDG_SESSION_ID = 1
 # environment
 GOPROXY = https://proxy.golang.org,direct
 # default
@@ -173,9 +165,9 @@ LFLAGS = -X main.stratuxVersion="v1.6r1-eu028-vp" -X main.stratuxBuild=`git log 
 # makefile (from 'Makefile', line 22)
 OGN_RX_BINARY = ogn/ogn-rx-eu_aarch64
 # environment
-SSH_CONNECTION = 192.168.178.106 50951 192.168.178.192 22
+SSH_CONNECTION = 192.168.178.106 58931 192.168.178.192 22
 # variable set hash-table stats:
-# Load=82/1024=8%, Rehash=0, Collisions=2/125=2%
+# Load=78/1024=8%, Rehash=0, Collisions=1/121=1%
 
 # Pattern-specific Variable Values
 
@@ -307,8 +299,8 @@ clean:
 	cd dump978 && make clean
 	cd rtl-ais && make clean
 
- 
 # Not a target:
+ 
 main/uibroadcast.go:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
@@ -582,6 +574,6 @@ main/gen_gdl90.go:
 # strcache performance: lookups = 167 / hit rate = 26%
 # hash-table stats:
 # Load=122/8192=1%, Rehash=0, Collisions=3/167=2%
-# Finished Make data base on Wed Jul  6 20:44:20 2022
+# Finished Make data base on Sun Jul 10 19:51:53 2022
 
  

@@ -12,7 +12,7 @@ package main
 
 import (
 	"bufio"
-	"compress/gzip"
+	"compress/gzip" 
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -1224,6 +1224,7 @@ type status struct {
 	ES_traffic_targets_tracking                uint16
 	Ping_connected                             bool
 	UATRadio_connected                         bool
+	GPS_source_name                            string
 	GPS_satellites_locked                      uint16
 	GPS_satellites_seen                        uint16
 	GPS_satellites_tracked                     uint16
@@ -1307,7 +1308,7 @@ func defaultSettings() {
 	globalSettings.OGNI2CTXEnabled = true
 
 	globalSettings.BleGPSEnabled = false
-	globalSettings.GPSPreferredSource = 0
+	globalSettings.GPSPreferredSource = common.GPS_SOURCE_SERIAL
 	globalSettings.BleEnabledDevices = ""
 }
 

@@ -85,23 +85,20 @@ var (
 // WATCHDOG for the blue device, if we do not receive data at least once a second we will diconnect and re-connect
 const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 
-// advertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
-// It's possible to get scan rounds for some time without seeing an advertisement so we should not connect to an device
-// after we see it's advertisement. We rather should remember we have seen it and then connect to it at some point.
-func (b BleGPSDevice) advertisementListener(scanInfoResultChan chan scanInfoResult) {
+// AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
+func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan <- scanInfoResult) {
 	qh := b.qh.Add()
 	defer b.qh.Done()
 
 	go func() {
 		err := b.adapter.Scan(
-			// Note: within func we are within a interrupt service route
+			// Note: within func we are within a interrupt service route, no big processing allowed
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-				// CHeck for Nordic serial service
+				// Check for Nordic serial service
 				if !result.AdvertisementPayload.HasServiceUUID(serviceUARTUUID) {
 					return
-				}
 				// Address must exist otherwhise we cannot connect to it
-				if result.Address != nil {
+				} else if result.Address != nil {
 					scanInfoResultChan <- scanInfoResult{result.Address.String(), result.LocalName()}
 				}
 			})
@@ -118,7 +115,7 @@ func (b BleGPSDevice) advertisementListener(scanInfoResultChan chan scanInfoResu
 /**
 Coonect to our bluetooth device and listen on the RX channel for NMEA sentences
 **/
-func (b BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan nmeaNewLine) error {
+func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan <- nmeaNewLine) error {
 	qh := b.qh.Add()
 	defer b.qh.Done()
 
@@ -187,7 +184,6 @@ func (b BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sent
 					if c == 0x0d && sentenceStarted && charPosition < MAX_NMEA_LENGTH {
 						sentenceStarted = false
 						thisOne := string(byteArray[0:charPosition])
-						//fmt.Printf("%s\r\n", thisOne)
 						sentenceChannel <- nmeaNewLine{thisOne, discoveredDeviceInfo}
 					}
 
@@ -235,13 +231,8 @@ func (b BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sent
 		return enaNotifyErr
 	}
 
-	defer func() {
-		//tx.StopNotify()
-	}()
-
 	select {
 	case <-qh:
-		//tx.StopNotify()
 		return nil
 	case <-notificationCalledca:
 		return nil
@@ -251,11 +242,11 @@ func (b BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sent
 /**
 connectionMonitor monitors the list bleGPSTrafficDeviceList for disconnected devices and reconnects them again
 */
-func (b BleGPSDevice) connectionMonitor(sentenceChannel chan nmeaNewLine) {
+func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
 	qh := b.qh.Add()
 	defer b.qh.Done()
 
-	ticker := time.NewTicker(250 * time.Millisecond)
+	ticker := time.NewTicker(1000 * time.Millisecond)
 	for {
 		select {
 		case <-qh:
@@ -282,7 +273,7 @@ func (b BleGPSDevice) connectionMonitor(sentenceChannel chan nmeaNewLine) {
 	}
 }
 
-func (b BleGPSDevice) switchBoard(nmeaSentenceChannel chan nmeaNewLine, gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <- chan nmeaNewLine, gpsNMEALineChannel chan common.GpsNmeaLine) {
 	qh := b.qh.Add()
 	defer b.qh.Done()
 
@@ -296,21 +287,20 @@ func (b BleGPSDevice) switchBoard(nmeaSentenceChannel chan nmeaNewLine, gpsNMEAL
 				Name:               nmeaSentence.device.name,
 				NmeaLine:           nmeaSentence.nmeaLine,
 				GpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
-				GpsDetectedType:    common.GPS_PROTOCOL_NMEA,
+				GpsDetectedType:    common.GPS_TYPE_BLUETOOTH,
 				GpsSource:          common.GPS_SOURCE_BLE}:
 			default:
 				log.Printf("BleGPSDevice: gpsNMEALineChannel Full, skipping lines")
 			}
 		}
-
 	}
 }
 
-func (b BleGPSDevice) Stop() {
+func (b *BleGPSDevice) Stop() {
 	b.qh.Quit()
 }
 
-func (b BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (b *BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel chan common.GpsNmeaLine) {
 	qh := b.qh.Add() //
 	defer b.qh.Done()
 
@@ -319,7 +309,7 @@ func (b BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel chan
 		return
 	}
 
-	scanInfoResultChannel := make(chan scanInfoResult)
+	scanInfoResultChannel := make(chan scanInfoResult, 1)
 	nmeaSentenceChannel := make(chan nmeaNewLine, 0)
 
 	go b.connectionMonitor(nmeaSentenceChannel)

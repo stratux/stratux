@@ -9,6 +9,8 @@ import (
 	"github.com/b3nn0/stratux/v2/common"
 )
 
+var EMPTY_SITUATION  = SituationData{}
+
 func calculateNACp(accuracy float32) uint8 {
 	ret := uint8(0)
 
@@ -65,23 +67,27 @@ func getsvTypesvStr(s string) (sv int, svType uint8, svStr string, err error) {
 }
 
 /** Process GNVTG & GPVTG into a SituationData
-  function will not have side effects!
+  function will not have side effects!x
 */
-func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation SituationData) (*SituationData, error) {
+func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation *SituationData) (SituationData, error) {
+	if (!(x[0] == "GNVTG") || (x[0] == "GPVTG")) {
+		return *tmpSituation, errors.New("Not GNVTG GPVTG")
+	}
+
 	if len(x) < 9 { // Reduce from 10 to 9 to allow parsing by devices pre-NMEA v2.3
-		return nil, errors.New("Length < 9")
+		return EMPTY_SITUATION, errors.New("Length < 9")
 	}
 
 	groundspeed, err := strconv.ParseFloat(x[5], 32) // Knots.
 	if err != nil {
-		return nil, errors.New("Ground speed not found")
+		return EMPTY_SITUATION, errors.New("Ground speed not found")
 	}
 	tmpSituation.GPSGroundSpeed = groundspeed
 
 	trueCourse := float32(0)
 	tc, err := strconv.ParseFloat(x[1], 32)
 	if err != nil {
-		return nil, errors.New("True Course not found")
+		return EMPTY_SITUATION, errors.New("True Course not found")
 	}
 	if groundspeed > 3 { //TODO: use average groundspeed over last n seconds to avoid random "jumps"
 		trueCourse = float32(tc)
@@ -94,43 +100,47 @@ func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation SituationData) (*Situati
 	tmpSituation.GPSLastGroundTrackTime = stratuxClock.Time
 
 	// We've made it this far, so that means we've processed "everything" and can now make the change to mySituation.
-	return &tmpSituation, nil
+	return *tmpSituation, nil
 }
 
-func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation SituationData) (*SituationData, error) {
+func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation *SituationData) (SituationData, error) {
+	if (!(x[0] == "GNGGA") || (x[0] == "GPGGA")) {
+		return *tmpSituation, errors.New("Not GNGGA GPGGA")
+	}
+	
 	if len(x) < 15 {
-		return nil, errors.New("Length < 15")
+		return EMPTY_SITUATION, errors.New("Length < 15")
 	}
 
 	// GPSFixQuality indicator.
 	q, err1 := strconv.Atoi(x[6])
 	if err1 != nil {
-		return nil, errors.New("GPSFixQuality not found")
+		return EMPTY_SITUATION, errors.New("GPSFixQuality not found")
 	}
 	tmpSituation.GPSFixQuality = uint8(q) // 1 = 3D GPS; 2 = DGPS (SBAS /WAAS)
 
 	// Timestamp.
 	if len(x[1]) < 7 {
-		return nil, errors.New("Timestamp not found")
+		return EMPTY_SITUATION, errors.New("Timestamp not found")
 	}
 	hr, err1 := strconv.Atoi(x[1][0:2])
 	min, err2 := strconv.Atoi(x[1][2:4])
 	sec, err3 := strconv.ParseFloat(x[1][4:], 32)
 	if err1 != nil || err2 != nil || err3 != nil {
-		return nil, errors.New("Timestamp not found")
+		return EMPTY_SITUATION, errors.New("Timestamp not found")
 	}
 
 	tmpSituation.GPSLastFixSinceMidnightUTC = float32(3600*hr+60*min) + float32(sec)
 
 	// Latitude.
 	if len(x[2]) < 4 {
-		return nil, errors.New("Latitude not found")
+		return EMPTY_SITUATION, errors.New("Latitude not found")
 	}
 
 	hr, err1 = strconv.Atoi(x[2][0:2])
 	minf, err2 := strconv.ParseFloat(x[2][2:], 32)
 	if err1 != nil || err2 != nil {
-		return nil, errors.New("Latitude format incorrect")
+		return EMPTY_SITUATION, errors.New("Latitude format incorrect")
 	}
 
 	tmpSituation.GPSLatitude = float32(hr) + float32(minf/60.0)
@@ -140,12 +150,12 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation SituationData) (*Situati
 
 	// Longitude.
 	if len(x[4]) < 5 {
-		return nil, errors.New("Longitude not found")
+		return EMPTY_SITUATION, errors.New("Longitude not found")
 	}
 	hr, err1 = strconv.Atoi(x[4][0:3])
 	minf, err2 = strconv.ParseFloat(x[4][3:], 32)
 	if err1 != nil || err2 != nil {
-		return nil, errors.New("Longitude format incorrect")
+		return EMPTY_SITUATION, errors.New("Longitude format incorrect")
 	}
 
 	tmpSituation.GPSLongitude = float32(hr) + float32(minf/60.0)
@@ -156,14 +166,14 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation SituationData) (*Situati
 	// Altitude.
 	alt, err1 := strconv.ParseFloat(x[9], 32)
 	if err1 != nil {
-		return nil, errors.New("Altitude not found")
+		return EMPTY_SITUATION, errors.New("Altitude not found")
 	}
 	tmpSituation.GPSAltitudeMSL = float32(alt * 3.28084) // Convert to feet.
 
 	// Geoid separation (Sep = HAE - MSL)
 	geoidSep, err1 := strconv.ParseFloat(x[11], 32)
 	if err1 != nil {
-		return nil, errors.New("Geoid separation not found")
+		return EMPTY_SITUATION, errors.New("Geoid separation not found")
 	}
 	tmpSituation.GPSGeoidSep = float32(geoidSep * 3.28084) // Convert to feet.
 	tmpSituation.GPSHeightAboveEllipsoid = tmpSituation.GPSGeoidSep + tmpSituation.GPSAltitudeMSL
@@ -171,10 +181,13 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation SituationData) (*Situati
 	// Timestamp.
 	tmpSituation.GPSLastFixLocalTime = stratuxClock.Time
 
-	return &tmpSituation, nil
+	return *tmpSituation, nil
 }
 
-func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation SituationData) (*SituationData, error) {
+func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData) (SituationData, error) {
+	if (!(x[0] == "GNRMC") || (x[0] == "GPRMC")) {
+		return *tmpSituation, errors.New("Not GNRMC GPRMC")
+	}
 
 	//$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A
 	/*						check RY835 man for NMEA version, if >2.2, add mode field
@@ -192,23 +205,23 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation SituationData) (*Situati
 	 *6A          The checksum data, always begins with *
 	*/
 	if len(x) < 11 {
-		return nil, errors.New("Length < 11")
+		return EMPTY_SITUATION, errors.New("Length < 11")
 	}
 
 	if x[2] != "A" { // invalid fix
 		tmpSituation.GPSFixQuality = 0 // Just a note.
-		return &tmpSituation, nil
+		return *tmpSituation, nil
 	}
 
 	// Timestamp. (note: GPZDA is not send by some devices)
 	if len(x[1]) < 7 {
-		return nil, errors.New("Timestamp not found")
+		return EMPTY_SITUATION, errors.New("Timestamp not found")
 	}
 	hr, err1 := strconv.Atoi(x[1][0:2])
 	min, err2 := strconv.Atoi(x[1][2:4])
 	sec, err3 := strconv.ParseFloat(x[1][4:], 32)
 	if err1 != nil || err2 != nil || err3 != nil {
-		return nil, errors.New("Timestamp format incorrect")
+		return EMPTY_SITUATION, errors.New("Timestamp format incorrect")
 	}
 	tmpSituation.GPSLastFixSinceMidnightUTC = float32(3600*hr+60*min) + float32(sec)
 
@@ -225,12 +238,12 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation SituationData) (*Situati
 
 	// Latitude.
 	if len(x[3]) < 4 {
-		return nil, errors.New("Latitude not found")
+		return EMPTY_SITUATION, errors.New("Latitude not found")
 	}
 	hr, err1 = strconv.Atoi(x[3][0:2])
 	minf, err2 := strconv.ParseFloat(x[3][2:], 32)
 	if err1 != nil || err2 != nil {
-		return nil, errors.New("Latitude format incorrect")
+		return EMPTY_SITUATION, errors.New("Latitude format incorrect")
 	}
 	tmpSituation.GPSLatitude = float32(hr) + float32(minf/60.0)
 	if x[4] == "S" { // South = negative.
@@ -238,12 +251,12 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation SituationData) (*Situati
 	}
 	// Longitude.
 	if len(x[5]) < 5 {
-		return nil, errors.New("Longitude not found")
+		return EMPTY_SITUATION, errors.New("Longitude not found")
 	}
 	hr, err1 = strconv.Atoi(x[5][0:3])
 	minf, err2 = strconv.ParseFloat(x[5][3:], 32)
 	if err1 != nil || err2 != nil {
-		return nil, errors.New("Longitude format incorrect")
+		return EMPTY_SITUATION, errors.New("Longitude format incorrect")
 	}
 	tmpSituation.GPSLongitude = float32(hr) + float32(minf/60.0)
 	if x[6] == "W" { // West = negative.
@@ -255,25 +268,28 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation SituationData) (*Situati
 	// ground speed in kts (field 7)
 	groundspeed, err := strconv.ParseFloat(x[7], 32)
 	if err != nil {
-		return nil, errors.New("Groundspeed not found")
+		return EMPTY_SITUATION, errors.New("Groundspeed not found")
 	}
 	tmpSituation.GPSGroundSpeed = groundspeed
 
 	// ground track "True" (field 8)
 	tc, err := strconv.ParseFloat(x[8], 32)
 	if err != nil && groundspeed > 3 { // some receivers return null COG at low speeds. Need to ignore this condition.
-		return nil, errors.New("Truecourse not found")
+		return EMPTY_SITUATION, errors.New("Truecourse not found")
 	}
 	tmpSituation.GPSTrueCourse = float32(tc)
 	tmpSituation.GPSLastGroundTrackTime = stratuxClock.Time
 
-	return &tmpSituation, nil
+	return *tmpSituation, nil
 }
 
-func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation SituationData) (*SituationData, error) {
+func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation *SituationData) (SituationData, error) {
+	if (!(x[0] == "GNGSA") || (x[0] == "GPGSA") || (x[0] == "GLGSA") || (x[0] == "GAGSA") || (x[0] == "GBGSA")) {
+		return *tmpSituation, errors.New("Not GNGSA GPGSA GLGSA GAGSA GBGSA")
+	}
 
 	if len(x) < 18 {
-		return nil, errors.New("Length < 18")
+		return EMPTY_SITUATION, errors.New("Length < 18")
 	}
 
 	// field 1: operation mode
@@ -291,14 +307,14 @@ func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation Situat
 	// 1 = no solution; 2 = 2D fix, 3 = 3D fix. WAAS status is parsed from GGA message, so no need to get here
 	if (x[2] == "") || (x[2] == "1") { // missing or no solution
 		tmpSituation.GPSFixQuality = 0 // Just a note.
-		return &tmpSituation, nil
+		return *tmpSituation, nil
 	}
 
 	// field 16: HDOP
 	// Accuracy estimate
 	hdop, err1 := strconv.ParseFloat(x[16], 32)
 	if err1 != nil {
-		return nil, errors.New("HDOP not found")
+		return EMPTY_SITUATION, errors.New("HDOP not found")
 	}
 	// We store hdop in GPSHorizontalAccuracy, but we need to process that latr with the multiplication factor
 	// This is due to the factor depends on the GPS type (ublox etc..)
@@ -311,60 +327,67 @@ func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation Situat
 	// accuracy estimate
 	vdop, err1 := strconv.ParseFloat(x[17], 32)
 	if err1 != nil {
-		return nil, errors.New("VDOP not found")
+		return EMPTY_SITUATION, errors.New("VDOP not found")
 	}
 	tmpSituation.GPSVerticalAccuracy = float32(vdop * 5) // rough estimate for 95% confidence
 
-	return &tmpSituation, nil
+	return *tmpSituation, nil
 }
 
 // note: parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV is only validating the first part of the message
-func parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x []string, tmpSituation SituationData) (*SituationData, error) {
+func parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x []string, tmpSituation *SituationData) (SituationData, error) {
+	if (!(x[0] == "GPGSV") || (x[0] == "GLGSV") || (x[0] == "GAGSV") || (x[0] == "GBGSV")) {
+		return *tmpSituation, errors.New("Not GPGSV GLGSV GAGSV GBGSV")
+	}
+	
 	if len(x) < 4 {
-		return nil, errors.New("Length < 4")
+		return EMPTY_SITUATION, errors.New("Length < 4")
 	}
 
 	// field 1 = number of GSV messages of this type
 	_, err := strconv.Atoi(x[2]) // TODO: RVT is this not x[1] ??
 	if err != nil {
-		return nil, errors.New("GSV field not found")
+		return EMPTY_SITUATION, errors.New("GSV field not found")
 	}
 
 	// field 2 = index of this GSV message
 
 	_, err = strconv.Atoi(x[2])
 	if err != nil {
-		return nil, errors.New("GSV field not found")
+		return EMPTY_SITUATION, errors.New("GSV field not found")
 	}
 
-	return &tmpSituation, nil
+	return *tmpSituation, nil
 }
 
-func parseNMEALine_POGNB(x []string, tmpSituation SituationData) (*SituationData, error) {
+func parseNMEALine_POGNB(x []string, tmpSituation *SituationData) (SituationData, error) {
+	if (!(x[0] == "POGNB")) {
+		return *tmpSituation, errors.New("Not POGNB")
+	}
 
 	// OGN Tracker pressure data:
 	// $POGNB,22.0,+29.1,100972.3,3.8,+29.4,+87.2,-0.04,+32.6,*6B
 	if len(x) < 5 {
-		return nil, errors.New("Length < 5")
+		return EMPTY_SITUATION, errors.New("Length < 5")
 	}
 	var vspeed float64
 
 	pressureAlt, err := strconv.ParseFloat(x[5], 32)
 	if err != nil {
-		return nil, errors.New("Pressure Altitude not found")
+		return EMPTY_SITUATION, errors.New("Pressure Altitude not found")
 	}
 
 	vspeed, err = strconv.ParseFloat(x[7], 32)
 	if err != nil {
-		return nil, errors.New("Vertical Speed not found")
+		return EMPTY_SITUATION, errors.New("Vertical Speed not found")
 	}
 
-	if !isTempPressValid2(tmpSituation) || tmpSituation.BaroSourceType != common.BARO_TYPE_BMP280 {
+	if !isTempPressValid2(*tmpSituation) || tmpSituation.BaroSourceType != common.BARO_TYPE_BMP280 {
 		tmpSituation.BaroPressureAltitude = float32(pressureAlt * 3.28084) // meters to feet
 		tmpSituation.BaroVerticalSpeed = float32(vspeed * 196.85)          // m/s in ft/min
 		tmpSituation.BaroLastMeasurementTime = stratuxClock.Time
 		tmpSituation.BaroSourceType = common.BARO_TYPE_OGNTRACKER
 	}
 
-	return &tmpSituation, nil
+	return *tmpSituation, nil
 }

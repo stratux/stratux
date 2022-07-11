@@ -27,6 +27,12 @@ import (
 	//	"github.com/b3nn0/stratux/v2/serialGPSDevice"
 )
 
+//const AFFECTS_GPS_FIX_QUALITY := []string{"GNRMC", "GPRMC", "GNGSA", "GPGSA", "GAGSA", "GBGSA"}
+var AFFECTS_FLARM_TRAFFIC  = []string{"PFLAU", "PFLAA"}
+const GPS_FIX_TIME          = 5000		// Time we expect a GPS satelite to have a valid fix TODO: RVT is there already a variable or time used for something like this?
+const GPS_TIME_SOURCE       = 2000		// Time we expect the GPS to be a valid source before we reconsider other GPS location sources
+const FIX_QUALITY_3DGPS     = 1        // 3DGPS
+const FIX_QUALITY_AGPS      = 2        // SBAS?WAAS
 type SatelliteInfo struct {
 	SatelliteNMEA    uint8     // NMEA ID of the satellite. 1-32 is GPS, 33-54 is SBAS, 65-88 is Glonass.
 	SatelliteID      string    // Formatted code indicating source and PRN code. e.g. S138==WAAS satellite 138, G2==GPS satellites 2
@@ -124,6 +130,7 @@ var Satellites map[string]SatelliteInfo
 
 var ognTrackerConfigured = false;
 
+<<<<<<< HEAD
 /*
 u-blox5_Referenzmanual.pdf
 Platform settings
@@ -585,6 +592,33 @@ func validateNMEAChecksum(s string) (string, bool) {
 	}
 
 	return s_out, true
+=======
+type GPSDeviceConfig struct {
+	gpsTimeOffsetPpsMs time.Duration
+	gpsSource      	   int
+	gpsFixQuality      uint8
+	gpsLastSeen        uint64
+	gpsLastGoodFix     uint64
+	gpsCRCErrors       uint64
+
+}
+
+type GPSDeviceManager struct {
+	gpsDeviceConfig       map[string]GPSDeviceConfig
+	settingsCopy          settings
+	currentGPSDevice      string
+	qh                    *common.QuitHelper
+	m					  sync.Mutex
+}
+
+func NewGPSDeviceManager() GPSDeviceManager {
+	return GPSDeviceManager{
+		gpsDeviceConfig:  make(map[string]GPSDeviceConfig),
+		settingsCopy:     globalSettings,
+		currentGPSDevice: "",
+		qh:               common.NewQuitHelper(),
+		m:				  sync.Mutex{}}
+>>>>>>> ec07ba4 (Allow switching between serial/BLUE using the frontend)
 }
 
 //  Only count this heading if a "sustained" >7 kts is obtained. This filters out a lot of heading
@@ -1170,7 +1204,7 @@ func updateSatellites(x []string) {
 		// hack workaround for GSA 12-sv limitation... if this is a SBAS satellite, we have a SBAS solution, and signal is greater than some arbitrary threshold, set InSolution
 		// drawback is this will show all tracked SBAS satellites as being in solution.
 		if thisSatellite.Type == common.SAT_TYPE_SBAS {
-			if mySituation.GPSFixQuality == 2 {
+			if mySituation.GPSFixQuality == FIX_QUALITY_AGPS {
 				if thisSatellite.Signal > 16 {
 					thisSatellite.InSolution = true
 					thisSatellite.TimeLastSolution = stratuxClock.Time
@@ -1238,16 +1272,16 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 
 	// ############################################# GNVTG GNVTG #############################################
 	if (x[0] == "GNVTG") || (x[0] == "GPVTG") { // Ground track information.
-		data, err := parseNMEALine_GNVTG_GPVTG(x, mySituation)
+		data, err := parseNMEALine_GNVTG_GPVTG(x, &mySituation)
 		if err == nil {
-			mySituation = *data
+			mySituation = data
 		}
 		return err == nil
 		// ############################################# GNGGA GPGGA #############################################
 	} else if (x[0] == "GNGGA") || (x[0] == "GPGGA") { // Position fix.
-		data, err := parseNMEALine_GNGGA_GPGGA(x, mySituation)
+		data, err := parseNMEALine_GNGGA_GPGGA(x, &mySituation)
 		if err == nil {
-			mySituation = *data
+			mySituation = data
 			// use RMC / GGA message detection to sense "NMEA" type.
 			// TODO: RVT Note this is changed from previous, now we set it only if parsing succeded
 			if (globalStatus.GPS_detected_type & 0xf0) == 0 {
@@ -1262,10 +1296,10 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 		return err == nil
 		// ############################################# GNRMC GPRMC #############################################
 	} else if (x[0] == "GNRMC") || (x[0] == "GPRMC") { // Recommended Minimum data.
-		data, err := parseNMEALine_GNRMC_GPRMC(x, mySituation)
+		data, err := parseNMEALine_GNRMC_GPRMC(x, &mySituation)
 		if err == nil {
 			previousSituation := mySituation
-			mySituation = *data
+			mySituation = data
 			// use RMC / GGA message detection to sense "NMEA" type.
 			if (globalStatus.GPS_detected_type & 0xf0) == 0 {
 				globalStatus.GPS_detected_type |= common.GPS_PROTOCOL_NMEA
@@ -1287,7 +1321,9 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 					select {
 					case systemTimeSetter <- mySituation.GPSTime:
 					default:
-						log.Println("WARNING: Time setting in progress, disregarding value")
+						if globalSettings.DEBUG {
+							log.Println("WARNING: Time setting in progress, disregarding value")
+						}
 					}
 				}
 			}
@@ -1299,11 +1335,11 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 		return err == nil
 		// ############################################# GNGSA GPGSA GLGSA GAGSA GBGSA #############################################
 	} else if (x[0] == "GNGSA") || (x[0] == "GPGSA") || (x[0] == "GLGSA") || (x[0] == "GAGSA") || (x[0] == "GBGSA") { // Satellite data.
-		data, err := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x, mySituation)
+		data, err := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x, &mySituation)
 		if err == nil {
-			mySituation = *data
+			mySituation = data
 			hdop := mySituation.GPSHorizontalAccuracy
-			if mySituation.GPSFixQuality == 2 { // Rough 95% confidence estimate for SBAS solution
+			if mySituation.GPSFixQuality == FIX_QUALITY_AGPS { // Rough 95% confidence estimate for SBAS solution
 				if globalStatus.GPS_detected_type == common.GPS_TYPE_UBX9 {
 					mySituation.GPSHorizontalAccuracy = float32(hdop * 3.0) // ublox 9
 				} else {
@@ -1324,9 +1360,9 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 		return err == nil
 		// ############################################# GPGSV GLGSV GAGSV GBGSV #############################################
 	} else if (x[0] == "GPGSV") || (x[0] == "GLGSV") || (x[0] == "GAGSV") || (x[0] == "GBGSV") { // GPS + SBAS or GLONASS or Galileo or Beidou satellites in view message.
-		data, err := parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x, mySituation)
+		data, err := parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x, &mySituation)
 		if err == nil {
-			mySituation = *data
+			mySituation = data
 			mySituation.muSatellite.Lock()
 			updateConstellation()
 			updateSatellitesInView(x)
@@ -1336,10 +1372,10 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 		return err == nil
 		// ############################################# POGNB #############################################
 	} else if x[0] == "POGNB" {
-		data, err := parseNMEALine_POGNB(x, mySituation)
+		data, err := parseNMEALine_POGNB(x, &mySituation)
 		if err == nil {
 			mySituation.muBaro.Lock()
-			mySituation = *data
+			mySituation = data
 			mySituation.muBaro.Unlock()
 		}
 		return err == nil
@@ -1441,16 +1477,46 @@ and if the GPS subsystem has recently detected a GPS device.
 If false, 'GPSFixQuality` is set to 0 ("No fix"), as is the number of satellites in solution.
 */
 
+func setGPSNotValidMySituation() {
+	mySituation.GPSFixQuality = 0
+	mySituation.GPSSatellites = 0
+	mySituation.GPSHorizontalAccuracy = 999999
+	mySituation.GPSVerticalAccuracy = 999999
+	mySituation.GPSNACp = 0
+}
+
+// Use this to reset the GPS status when we switch sources or by other means GPS is not available
+// DO not user this when GPS does not have a prper fix!
+func resetGPSStatus() {
+	// Reset global status
+	globalStatus.GPS_satellites_locked = 0x00
+	globalStatus.GPS_satellites_seen = 0x00
+	globalStatus.GPS_satellites_tracked = 0x00
+	globalStatus.GPS_position_accuracy = 99999
+	globalStatus.GPS_connected = false
+	globalStatus.GPS_source = 0x00
+	globalStatus.GPS_solution = ""
+	globalStatus.GPS_detected_type = 0x00
+	globalStatus.GPS_NetworkRemoteIp = ""
+
+	mySituation.GPSSatellitesSeen = 0x00
+	mySituation.GPSSatellitesTracked = 0x00
+	
+	// reset my situation
+	setGPSNotValidMySituation()
+	updateStatus()
+
+	// Remove all satellites
+	Satellites = make(map[string]SatelliteInfo)
+}
+
+
 func isGPSValid() bool {
 	isValid := false
 	if (stratuxClock.Since(mySituation.GPSLastFixLocalTime) < 3*time.Second) && globalStatus.GPS_connected && mySituation.GPSFixQuality > 0 {
 		isValid = true
 	} else {
-		mySituation.GPSFixQuality = 0
-		mySituation.GPSSatellites = 0
-		mySituation.GPSHorizontalAccuracy = 999999
-		mySituation.GPSVerticalAccuracy = 999999
-		mySituation.GPSNACp = 0
+		setGPSNotValidMySituation()
 	}
 	return isValid
 }
@@ -1483,83 +1549,179 @@ func isTempPressValid2(mySitu SituationData) bool {
 	return stratuxClock.Since(mySitu.BaroLastMeasurementTime).Seconds() < 15
 }
 
-/**
-Algorithm
-- When the NMEALine affects FLARM Traffic we will alwayscall processFlarmNmeaMessage(...)
-- When no GPS has a fix we will check with affectsGPSFixQuality(..) if the current GPS has a possible fix and if so we call processNMEALine
-- When we have a specific GPS_TYPE_XXX in use and it's our preference, we call processNMEALine(..)
-- When we have a specific GPS_TYPE_XXX is use and it's not our preference, but the current GPS is preference we will check if it has a good fix, if so we use it.. else we ignore it
-- When we have a specific GPS_TYPE_XXX is use and it's not our preference, and the current GPS is also not our preference we ignore it
-*/
 
-func (s GPSDeviceManager) listenToGPSMessages(gpsNMEALineChannel chan common.GpsNmeaLine) {
+/**
+Returns true when a device has a valid fix
+*/
+func (d *GPSDeviceConfig) hasValidFix() bool {
+	return d.gpsFixQuality > 0 && 
+			d.gpsLastSeen > stratuxClock.Milliseconds-GPS_TIME_SOURCE && 
+			d.gpsLastGoodFix > stratuxClock.Milliseconds-GPS_FIX_TIME
+}
+
+// Find a gps Source with a fix
+// Not thread safe, only call from within a lock
+func (s *GPSDeviceManager) gpsDeviceWithFix(GpsSource int) (string, GPSDeviceConfig)  {
+	// TODO: RVT: We should sort on a GPS devices with the best fix ??
+	for k, v := range s.gpsDeviceConfig {
+		if v.gpsSource == GpsSource && v.hasValidFix() {
+			return k, v
+		}
+	}
+	return "", GPSDeviceConfig{}
+}
+
+// Find any GPS with a fix with preference to gpsSource
+// Not thread safe, only call from within a lock
+func (s *GPSDeviceManager) anyGpsDeviceWithFix(gpsSource int) (string, GPSDeviceConfig) {
+	k, v := s.gpsDeviceWithFix(gpsSource)
+	if !v.hasValidFix() {
+		k, v = s.gpsDeviceWithFix(0)		
+	}
+	return k, v
+}
+
+/**
+Maintain and decide on what gps source to use
+**/
+func (s *GPSDeviceManager) maintenance() {
+	maintenance := func() {
+		s.m.Lock()
+		defer s.m.Unlock()
+	
+		// If no GPS was selected, we just pick a GPS source
+		if s.currentGPSDevice=="" {
+			k, _ := s.anyGpsDeviceWithFix(globalSettings.GPSPreferredSource)
+			if k=="" {
+				for arbitaryItem := range s.gpsDeviceConfig {
+					s.currentGPSDevice = arbitaryItem
+					break
+				}
+			} else {
+				s.currentGPSDevice = k
+			}
+		}
+
+		// Find the device and run some tests on it
+		currentGPSSource, hasDeviceConfig := s.gpsDeviceConfig[s.currentGPSDevice]	
+		if hasDeviceConfig {			
+			// Verify of we still have a good fix from the current GPS device, if not we find a other
+			// GPS with a good fix, if not found then we keep current GPS
+			if !currentGPSSource.hasValidFix() {
+				anyGpsName, _ := s.anyGpsDeviceWithFix(globalSettings.GPSPreferredSource)
+				if (anyGpsName != "") {
+					s.currentGPSDevice = anyGpsName
+				}
+			}
+
+			// Verify if the current GPS source might not be preferred, if so then lookup a GPS
+			// source that is preferrred and has a fix, if found use the preferred source if not leave it as is
+			if currentGPSSource.gpsSource != globalSettings.GPSPreferredSource {
+				possiblePreferredSource, _ := s.gpsDeviceWithFix(globalSettings.GPSPreferredSource)
+				if possiblePreferredSource!="" {
+					s.currentGPSDevice = possiblePreferredSource
+				}
+			}
+		}
+	}
+
+	// Run maintenance tasks every 1 second
+	timer := time.NewTicker(1000 * time.Millisecond)
+	for {
+		select {
+		case <-timer.C:
+			maintenance()
+		}
+	}
+}
+
+func (s *GPSDeviceManager) listenToGPSMessages(gpsNMEALineChannel chan common.GpsNmeaLine) {
 	log.Printf("GPS: listenToGPSMessages: Started")
 	for {
+		//start := time.Now()
 		line := <-gpsNMEALineChannel
 
-		//start := time.Now()
+		s.m.Lock()
+
+		// Load what we currently have seen about this GPS, create a new record if it was never seen
+		thisGPS, hasDeviceConfig := s.gpsDeviceConfig[line.Name]
+
+		if !hasDeviceConfig {
+			thisGPS = GPSDeviceConfig{
+				gpsTimeOffsetPpsMs: line.GpsTimeOffsetPpsMs,
+				gpsFixQuality: 0,
+				gpsLastGoodFix: 0,
+				gpsCRCErrors: 0,
+				gpsSource: int(line.GpsSource),
+			}
+		}
+		thisGPS.gpsLastSeen =  stratuxClock.Milliseconds
+	
+		// Validate NMEA sentence, and ignore if the CRC was wrong
 		l_valid, validNMEAcs := common.ValidateNMEAChecksum(line.NmeaLine)
 		if !validNMEAcs {
 			if len(l_valid) > 0 {
 				log.Printf("GPS error. Invalid NMEA string: %s %s\n", l_valid, line.NmeaLine) // remove log message once validation complete
 			}
-			continue
-		}
-		x := strings.Split(l_valid, ",")
-
-		affectsGPSFixQuality := []string{"GNRMC", "GPRMC", "GNGSA", "GPGSA", "GAGSA", "GBGSA"}
-		affectsFLARMTraffic := []string{"PFLAU", "PFLAA"}
-
-		var thisGPS gpsDeviceConfig
-
-		if val, ok := s.gpsDeviceConfig[line.Name]; ok { // if we've already seen this satellite identifier, copy it in to do updates
-			thisGPS = gpsDeviceConfig{}
-			thisGPS.GpsFixQuality = 0
-			thisGPS.GpsTimeOffsetPpsMs = line.GpsTimeOffsetPpsMs
-			s.gpsDeviceConfig[line.Name] = thisGPS
+			thisGPS.gpsCRCErrors++
 		} else {
-			thisGPS = val
-		}
 
-		// Flarm NMEA traffic data
-		if common.StringInSlice(x[0], affectsFLARMTraffic) {
-			processFlarmNmeaMessage(x)
-		} else {
-			// Possible GPS data, run algo
-		}
+			nmeaSlice := strings.Split(l_valid, ",")
 
-		// Affects GPS Fix Quality
-		if common.StringInSlice(x[0], affectsGPSFixQuality) {
-			// Check ffor a Fix Quality
-			situ, err1 := parseNMEALine_GNRMC_GPRMC(x, SituationData{})
-			_, err2 := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x, *situ)
-			if err1 == nil || err2 == nil {
-				//log.Printf("%s", endSitu)
-				//currentFixQuality := endSitu.GPSFixQuality
+			// Flarm NMEA traffic data will be used from all sources
+			if common.StringInSlice(nmeaSlice[0], AFFECTS_FLARM_TRAFFIC) {
+				processFlarmNmeaMessage(nmeaSlice)		
+			} else {
+				globalStatus.GPS_connected = true
+
+				// Check and remmeber this GPS fix quality
+				fq:=SituationData{}
+				fq.GPSFixQuality = 255 // We would not expect a fq of 255, so we use it as a marker to see if it was changed
+				situ, _ := parseNMEALine_GNGGA_GPGGA(nmeaSlice, &fq)
+				possibleFixQuality, _ := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(nmeaSlice, &situ)
+				if possibleFixQuality.GPSFixQuality != 255 {
+					thisGPS.gpsFixQuality = possibleFixQuality.GPSFixQuality
+					if thisGPS.gpsFixQuality > 0 {
+						thisGPS.gpsLastGoodFix = stratuxClock.Milliseconds
+					}
+				}
+
+				// If this GPS is the GPS we decided to work with, we parse and process
+				if s.currentGPSDevice == line.Name {
+					processNMEALine(line.NmeaLine)
+					globalStatus.GPS_source_name = line.Name
+					globalStatus.GPS_source = uint(line.GpsSource)
+					globalStatus.GPS_detected_type = (globalStatus.GPS_detected_type & 0XF0) | uint(line.GpsDetectedType)
+				}
 			}
-
-			globalStatus.GPS_connected = true
-			globalStatus.GPS_source = uint(line.GpsSource)
-			globalStatus.GPS_detected_type = uint(line.GpsDetectedType)
-			// TODO: RVT Decide if we really want to process this GPS data set for mySituation
 		}
-		processNMEALine(line.NmeaLine)
+
+		s.gpsDeviceConfig[line.Name] = thisGPS
+		s.m.Unlock()
 		//log.Printf("Took %s", time.Since(start))
 	}
 }
 
-func (s GPSDeviceManager) configChangeWatcher(forceInit bool) {
+func (s *GPSDeviceManager) configChangeWatcher(forceInit bool) {
 	log.Printf("GPS: configChangeWatcher: Started")
+
 	checkAndReInit := func(b bool) {
 		x := s.settingsCopy.BleGPSEnabled != globalSettings.BleGPSEnabled
 		y := s.settingsCopy.GPSPreferredSource != globalSettings.GPSPreferredSource
 		z := s.settingsCopy.BleEnabledDevices != globalSettings.BleEnabledDevices
+		d := s.settingsCopy.DEBUG != globalSettings.DEBUG
+		g := s.settingsCopy.GPS_Enabled != globalSettings.GPS_Enabled		
 
-		reInit := b || x || y || z
+		reInit := b || x || y || z || d || g
 
 		if reInit {
 			s.settingsCopy = globalSettings
+
 			s.qh.Quit()
+			// At this point new threads can start all adapters, but we assume here
+			// that we will be faster resetting the GPS device
+			s.gpsDeviceConfig = make(map[string]GPSDeviceConfig)
+			resetGPSStatus()
 		}
 	}
 
@@ -1571,32 +1733,38 @@ func (s GPSDeviceManager) configChangeWatcher(forceInit bool) {
 	}
 }
 
-func (s GPSDeviceManager) listenInternal(gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (s *GPSDeviceManager) enableGPSDevices(gpsNMEALineChannel chan common.GpsNmeaLine) {
 	log.Printf("GPS: listenInternal: Started")
 	qh := s.qh.Add()
 	defer s.qh.Done()
 	bleGPSDevice := gps.NewBleGPSDevice()
-
-	Satellites = make(map[string]SatelliteInfo)
+	serialGPSDevice := gps.NewSerialGPSDevice()
 
 	if globalSettings.BleGPSEnabled {
 		log.Printf("GPS: Enable Bluetooth devices")
 		go bleGPSDevice.Listen(strings.Split(globalSettings.BleEnabledDevices, ","), gpsNMEALineChannel)
 	}
 
-	//serialGPSDevice := serialGPSDevice.New()
+	if globalSettings.GPS_Enabled {
+		log.Printf("GPS: Enable serial GPS devices")
+		go serialGPSDevice.Listen(gpsNMEALineChannel, globalSettings.DEBUG)	
+	}
 
 	<-qh
 	bleGPSDevice.Stop()
+	serialGPSDevice.Stop()
+	log.Printf("GPS: Stopped")
 }
 
-func (s GPSDeviceManager) Listen() {
+func (s *GPSDeviceManager) Listen() {
+	Satellites = make(map[string]SatelliteInfo)
 	log.Printf("GPS: Listen: Started")
 	gpsNMEALineChannel := make(chan common.GpsNmeaLine, 20)
 	go s.configChangeWatcher(true)
 	go s.listenToGPSMessages(gpsNMEALineChannel)
+	go s.maintenance()
 	for {
-		s.listenInternal(gpsNMEALineChannel)
+		s.enableGPSDevices(gpsNMEALineChannel)
 		time.Sleep(1 * time.Second)
 	}
 }

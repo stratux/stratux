@@ -86,35 +86,38 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 			var gpsHardwareCode = (status.GPS_detected_type & 0x0f);
 			var tempGpsHardwareString = "Not installed";
 			switch(gpsHardwareCode) {
-				case 1:
+				case 0x01:
 					tempGpsHardwareString = "Serial port";
 					break;
-				case 2:
+				case 0x02:
 					tempGpsHardwareString = "Prolific USB-serial bridge";
 					break;
-				case 3:
+				case 0x03:
 					tempGpsHardwareString = "OGN Tracker";
 					break;
-				case 6:
+				case 0x06:
 					tempGpsHardwareString = "USB u-blox 6 GPS receiver";
 					break;
-				case 7:
+				case 0x07:
 					tempGpsHardwareString = "USB u-blox 7 GNSS receiver";
 					break;
-				case 8:
+				case 0x08:
 					tempGpsHardwareString = "USB u-blox 8 GNSS receiver";
 					break;
-				case 9:
+				case 0x09:
 					tempGpsHardwareString = "USB u-blox 9 GNSS receiver";
 					break;
-				case 10:
+				case 0x0A:
 					tempGpsHardwareString = "USB Serial IN";
 					break;
-				case 11:
+				case 0x0B:
 					tempGpsHardwareString = "SoftRF Dongle";
 					break;
-				case 12:
+				case 0x0C:
 					tempGpsHardwareString = "Network";
+					break;
+				case 0x0D:
+					tempGpsHardwareString = "BlueTooth LE";
 					break;
 				default:
 					tempGpsHardwareString = "Not installed";
@@ -131,6 +134,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 					tempGpsProtocolString = "Not communicating";
 			}
 			$scope.GPS_protocol = tempGpsProtocolString;
+			$scope.GPS_source_name = status.GPS_source_name;
 
 			var MiBFree = status.DiskBytesFree/1048576;
 			$scope.DiskSpace = MiBFree.toFixed(1);
