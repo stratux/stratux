@@ -1729,7 +1729,7 @@ func main() {
 
 	go gpsDeviceManager.Listen()
 
-	// 
+	// Send attitudes
 	go gpsAttitudeSender()
 
 	// Send AHRS message in FF format every 200ms.

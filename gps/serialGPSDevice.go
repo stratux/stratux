@@ -355,7 +355,7 @@ func detectOpenSerialPort(device string, baudrates []int) (*(serial.Port), error
 			p.Close()
 			time.Sleep(250 * time.Millisecond)
 		}
-		return nil, errors.New("Failed to detect GPS serial baud rate")
+		return nil, errors.New("Failed to detect GPS at baud rate")
 	}
 }
 
@@ -506,38 +506,37 @@ func (s *SerialGPSDevice) gpsSerialReader(gpsNMEALineChannel chan common.GpsNmea
 	serialPort := s.initGPSSerial();
 	if serialPort!=nil {
 		defer serialPort.Close()
-	}
 
-	i := 0 //debug monitor
-	scanner := bufio.NewScanner(serialPort)
-	for scanner.Scan() && !s.qh.IsQuit() {
-		i++
-		if s.DEBUG && i%100 == 0 {
-			log.Printf("gpsSerialReader() scanner loop iteration i=%d\n", i) // debug monitor
+		i := 0 //debug monitor
+		scanner := bufio.NewScanner(serialPort)
+		for scanner.Scan() && !s.qh.IsQuit() {
+			i++
+			if s.DEBUG && i%100 == 0 {
+				log.Printf("serialGPSReader() scanner loop iteration i=%d\n", i) // debug monitor
+			}
+	
+			nmeaLine := scanner.Text()
+			startIdx := strings.Index(nmeaLine, "$")
+			if startIdx < 0 {
+				continue
+			}
+	
+			gpsNMEALineChannel <- common.GpsNmeaLine{
+				Name:               s.gpsName,
+				NmeaLine:           nmeaLine[startIdx:],
+				GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
+				GpsDetectedType:    s.GPS_detected_type,
+				GpsSource:          common.GPS_SOURCE_SERIAL}
+	
 		}
-
-		nmeaLine := scanner.Text()
-		startIdx := strings.Index(nmeaLine, "$")
-		if startIdx < 0 {
-			continue
+		if err := scanner.Err(); err != nil {
+			log.Printf("reading standard input: %s\n", err.Error())
 		}
-
-		gpsNMEALineChannel <- common.GpsNmeaLine{
-			Name:               s.gpsName,
-			NmeaLine:           nmeaLine[startIdx:],
-			GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
-			GpsDetectedType:    s.GPS_detected_type,
-			GpsSource:          common.GPS_SOURCE_SERIAL}
-
+	
+		if s.DEBUG {
+			log.Printf("Exiting serialGPSReader() after i=%d loops\n", i) // debug monitor
+		}
 	}
-	if err := scanner.Err(); err != nil {
-		log.Printf("reading standard input: %s\n", err.Error())
-	}
-
-	if s.DEBUG {
-		log.Printf("Exiting gpsSerialReader() after i=%d loops\n", i) // debug monitor
-	}
-
 }
 
 func (s *SerialGPSDevice) pollGPS(gpsNMEALineChannel chan common.GpsNmeaLine) {

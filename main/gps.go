@@ -1746,7 +1746,7 @@ func (s *GPSDeviceManager) enableGPSDevices(gpsNMEALineChannel chan common.GpsNm
 	}
 
 	if globalSettings.GPS_Enabled {
-		log.Printf("GPS: Enable serial GPS devices")
+		log.Printf("GPS: Enable serial connected devices")
 		go serialGPSDevice.Listen(gpsNMEALineChannel, globalSettings.DEBUG)	
 	}
 
