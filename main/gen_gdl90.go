@@ -12,7 +12,7 @@ package main
 
 import (
 	"bufio"
-	"compress/gzip" 
+	"compress/gzip"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -35,6 +35,7 @@ import (
 
 	"github.com/b3nn0/stratux/uatparse"
 	"github.com/b3nn0/stratux/v2/common"
+	"github.com/b3nn0/stratux/v2/gps"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/ricochet2200/go-disk-usage/du"
 )
@@ -1234,7 +1235,7 @@ type status struct {
 	GPS_solution                               string
 	GPS_detected_type                          uint
 	GPS_NetworkRemoteIp                        string // for NMEA via TCP from OGN tracker: display remote IP to configure the OGN tracker
-	GPS_Discovery                              []common.DiscoveredDevice
+	GPS_Discovery                              []gps.DiscoveredDeviceDTO
 	Uptime                                     int64
 	UptimeClock                                time.Time
 	CPUTemp                                    float32

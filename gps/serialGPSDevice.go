@@ -36,10 +36,13 @@ type SerialGPSDevice struct {
 	
 	DEBUG bool
 
+	rxMessageCh chan <- RXMessage
+	discoveredDevicesCh chan <- DiscoveredDevice
+
 	qh *common.QuitHelper
 }
 
-func NewSerialGPSDevice() SerialGPSDevice {
+func NewSerialGPSDevice(rxMessageCh chan <- RXMessage, discoveredDevicesCh chan <- DiscoveredDevice, debug bool) SerialGPSDevice {
 	m := SerialGPSDevice {
 		gpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 
@@ -50,7 +53,9 @@ func NewSerialGPSDevice() SerialGPSDevice {
 		GPS_detected_type: 0x00,
 		gpsName: "",
 
-		DEBUG: false,
+		DEBUG: debug,
+		rxMessageCh: rxMessageCh,
+		discoveredDevicesCh: discoveredDevicesCh,
 	
 		qh: common.NewQuitHelper()}
 	return m
@@ -75,7 +80,7 @@ Poll Navigation Engine Settings
 /*
 	chksumUBX()
 		returns the two-byte Fletcher algorithm checksum of byte array msg.
-		This is used in configuration messages for the u-blox GPS. See p. 97 of the
+		This is used in configuration messages for the u-blox  See p. 97 of the
 		u-blox M8 Receiver Description.
 */
 
@@ -415,7 +420,7 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 	p.Write(makeUBXCFG(0x06, 0x16, 8, []byte{0x01, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00}))
 
 	// UBX-CFG-MSG (NMEA Standard Messages)  msg   msg   Ports 1-6 (every 10th message over UART1, every message over USB)
-	//                                       Class ID    DDC   UART1 UART2 USB   I2C   Res
+	//                                       Class ID    I2C   UART1 UART2 USB   SPI   Res
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00})) // GGA - Global positioning system fix data
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // GLL - Latitude and longitude, with time of position fix and status
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x02, 0x00, 0x05, 0x00, 0x05, 0x00, 0x00})) // GSA - GNSS DOP and Active Satellites
@@ -432,7 +437,7 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF0, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // VLW - Dual ground/water distance
 
 	// UBX-CFG-MSG (NMEA PUBX Messages)      msg   msg   Ports 1-6
-	//                                       Class ID    DDC   UART1 UART2 USB   I2C   Res
+	//                                       Class ID    I2C   UART1 UART2 USB   SPI   Res
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // Ublox - Lat/Long Position Data
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF1, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // Ublox - Satellite Status
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF1, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // Ublox - Time of Day and Clock Information
@@ -452,60 +457,29 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 
 }
 
-
-// func (s *SerialGPSDevice) configureOgnTracker() {
-// 	if s.serialPort == nil {
-// 		return
-// 	}
-
-// 	s.gpsTimeOffsetPpsMs = 200 * time.Millisecond
-// 	s.serialPort.Write([]byte(common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n")) // Also force NavRate directly, just to make sure it's always set
-
-// 	s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // query current configuration
-
-// 	// Configuration for OGN Tracker T-Beam is similar to normal Ublox config
-// 	writeUblox8ConfigCommands(s.serialPort)
-// 	writeUbloxGenericCommands(5, s.serialPort)
-
-// 	s.serialPort.Flush()
-
-// 	s.GPS_detected_type = common.GPS_TYPE_OGNTRACKER
-// }
-
-
-func (s *SerialGPSDevice) getOgnTrackerConfigString() string {
-	/* TODO: RVT
-	msg := fmt.Sprintf("$POGNS,Address=0x%s,AddrType=%d,AcftType=%d,Pilot=%s,Reg=%s,TxPower=%d,Hard=STX,Soft=%s",
-		globalSettings.OGNAddr, globalSettings.OGNAddrType, globalSettings.OGNAcftType, globalSettings.OGNPilot, globalSettings.OGNReg, globalSettings.OGNTxPower, stratuxVersion[1:])
-	msg = common.AppendNmeaChecksum(msg)
-	return msg + "\r\n"
-	RVT: TODO */
-	return ""
-}
-
-func getOgnTrackerConfigQueryString() string {
-	return common.AppendNmeaChecksum("$POGNS") + "\r\n"
-}
-
-// func (s *SerialGPSDevice) configureOgnTrackerFromSettings() {
-// 	if s.serialPort == nil {
-// 		return
-// 	}
-
-// 	cfg := s.getOgnTrackerConfigString()
-// 	log.Printf("Configuring OGN Tracker: %s ", cfg)
-
-// 	// RVT: TODO s.serialPort.Write([]byte(cfg))
-// 	s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // re-read settings from tracker
-// 	s.serialPort.Flush()
-// }
-
-
-func (s *SerialGPSDevice) gpsSerialReader(gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (s *SerialGPSDevice) gpsSerialReader() {
 
 	serialPort := s.initGPSSerial();
 	if serialPort!=nil {
-		defer serialPort.Close()
+		TXChannel := make(chan string, 1)
+		defer func() {
+			serialPort.Close()
+			s.discoveredDevicesCh <- DiscoveredDevice {
+				Name: s.gpsName,
+				Connected: false,
+				GpsDetectedType: s.GPS_detected_type, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+				GpsSource: common.GPS_SOURCE_SERIAL,
+			}
+		}()
+
+		s.discoveredDevicesCh <- DiscoveredDevice {
+			Name: s.gpsName,
+			Connected: true,
+			TXChannel: TXChannel,
+			HasTXChannel: true,	
+			GpsDetectedType: s.GPS_detected_type, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+			GpsSource: common.GPS_SOURCE_SERIAL,
+		}
 
 		i := 0 //debug monitor
 		scanner := bufio.NewScanner(serialPort)
@@ -521,13 +495,13 @@ func (s *SerialGPSDevice) gpsSerialReader(gpsNMEALineChannel chan common.GpsNmea
 				continue
 			}
 	
-			gpsNMEALineChannel <- common.GpsNmeaLine{
+			s.rxMessageCh <- RXMessage{
 				Name:               s.gpsName,
 				NmeaLine:           nmeaLine[startIdx:],
 				GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
 				GpsDetectedType:    s.GPS_detected_type,
-				GpsSource:          common.GPS_SOURCE_SERIAL}
-	
+				GpsSource:          common.GPS_SOURCE_SERIAL,
+			}	
 		}
 		if err := scanner.Err(); err != nil {
 			log.Printf("reading standard input: %s\n", err.Error())
@@ -539,14 +513,14 @@ func (s *SerialGPSDevice) gpsSerialReader(gpsNMEALineChannel chan common.GpsNmea
 	}
 }
 
-func (s *SerialGPSDevice) pollGPS(gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (s *SerialGPSDevice) pollGPS() {
 	s.qh.Add()
 	defer s.qh.Done()
 	for {
 		if s.qh.IsQuit()  {
 			return 
 		}
-		s.gpsSerialReader(gpsNMEALineChannel)
+		s.gpsSerialReader()
 		time.Sleep(1000 * time.Millisecond)
 	}
 }
@@ -555,8 +529,7 @@ func (s *SerialGPSDevice) Stop() {
 	s.qh.Quit()
 }
 
-func (s *SerialGPSDevice) Listen(gpsNMEALineChannel chan common.GpsNmeaLine, debug bool) {
-	s.DEBUG = debug
+func (s *SerialGPSDevice) Listen() {
 
-	go s.pollGPS(gpsNMEALineChannel)
+	go s.pollGPS()
 }

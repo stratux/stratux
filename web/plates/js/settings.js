@@ -272,40 +272,46 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	}
 	$scope.update_files = '';
 
-	if (($scope.socket === undefined) || ($scope.socket === null)) {
-		socket = new WebSocket(URL_STATUS_WS);
-		$scope.socket = socket; // store socket in scope for enter/exit usage
+	function connect($scope) {
+		if (($scope === undefined) || ($scope === null))
+			return; // we are getting called once after clicking away from the status page
+			
+		if (($scope.socket === undefined) || ($scope.socket === null)) {
+			socket = new WebSocket(URL_STATUS_WS);
+			$scope.socket = socket; // store socket in scope for enter/exit usage
+		}
+		
+		socket.onopen = function (msg) {
+			// $scope.ConnectStyle = "label-success";
+			$scope.ConnectState = "Connected";
+		};
+
+		socket.onclose = function (msg) {
+			// $scope.ConnectStyle = "label-danger";
+			$scope.ConnectState = "Disconnected";
+			$scope.$apply();
+			delete $scope.socket;
+			setTimeout(function() {connect($scope);}, 1000);
+		};
+
+		socket.onerror = function (msg) {
+			// $scope.ConnectStyle = "label-danger";
+			$scope.ConnectState = "Error";
+			$scope.$apply();
+		};
+
+		socket.onmessage = function (msg) {
+			var status = JSON.parse(msg.data)
+			$scope.GPS_Discovery = status.GPS_Discovery
+			var gpsHardwareCode = (status.GPS_detected_type & 0x0f);
+			if (gpsHardwareCode == 3 || status.OGN_tx_enabled)
+				$scope.hasOgnTracker = true;
+			else
+				$scope.hasOgnTracker = false;
+			$scope.$apply()
+		};
 	}
-	
-	socket.onopen = function (msg) {
-		// $scope.ConnectStyle = "label-success";
-		$scope.ConnectState = "Connected";
-	};
-
-	socket.onclose = function (msg) {
-		// $scope.ConnectStyle = "label-danger";
-		$scope.ConnectState = "Disconnected";
-		$scope.$apply();
-		delete $scope.socket;
-		setTimeout(function() {connect($scope);}, 1000);
-	};
-
-	socket.onerror = function (msg) {
-		// $scope.ConnectStyle = "label-danger";
-		$scope.ConnectState = "Error";
-		$scope.$apply();
-	};
-
-	socket.onmessage = function (msg) {
-		var status = JSON.parse(msg.data)
-		$scope.GPS_Discovery = status.GPS_Discovery
-		var gpsHardwareCode = (status.GPS_detected_type & 0x0f);
-		if (gpsHardwareCode == 3 || status.OGN_tx_enabled)
-			$scope.hasOgnTracker = true;
-		else
-			$scope.hasOgnTracker = false;
-		$scope.$apply()
-	};
+	connect($scope); // connect - opens a socket and listens for messages
 
 	function loadSettings(data) {
 		settings = angular.fromJson(data);
@@ -381,6 +387,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 		$scope.CountryCodeList = $scope.countryCodes;
 	}
+
 
 	function getSettings() {
 		// Simple GET request example (note: response is asynchronous)

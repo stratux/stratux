@@ -99,7 +99,7 @@ func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation *SituationData) (Situati
 	}
 	tmpSituation.GPSLastGroundTrackTime = stratuxClock.Time
 
-	// We've made it this far, so that means we've processed "everything" and can now make the change to mySituation.
+	// We've made it this far, so that means we've processed "everything" and can now make the change to tmpSituation.
 	return *tmpSituation, nil
 }
 
@@ -184,7 +184,7 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation *SituationData) (Situati
 	return *tmpSituation, nil
 }
 
-func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData, gpsTimeOffsetPpsMs time.Duration) (SituationData, error) {
 	if (!(x[0] == "GNRMC") || (x[0] == "GPRMC")) {
 		return *tmpSituation, errors.New("Not GNRMC GPRMC")
 	}
@@ -284,7 +284,7 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData) (Situati
 }
 
 func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation *SituationData) (SituationData, error) {
-	if (!(x[0] == "GNGSA") || (x[0] == "GPGSA") || (x[0] == "GLGSA") || (x[0] == "GAGSA") || (x[0] == "GBGSA")) {
+	if (!(x[0] == "GNGSA") || (x[0] == "GPGSA") /* || (x[0] == "GLGSA") || (x[0] == "GAGSA") || (x[0] == "GBGSA") */) {
 		return *tmpSituation, errors.New("Not GNGSA GPGSA GLGSA GAGSA GBGSA")
 	}
 
@@ -382,6 +382,7 @@ func parseNMEALine_POGNB(x []string, tmpSituation *SituationData) (SituationData
 		return EMPTY_SITUATION, errors.New("Vertical Speed not found")
 	}
 
+	// Prever internal baro over OGN baro
 	if !isTempPressValid2(*tmpSituation) || tmpSituation.BaroSourceType != common.BARO_TYPE_BMP280 {
 		tmpSituation.BaroPressureAltitude = float32(pressureAlt * 3.28084) // meters to feet
 		tmpSituation.BaroVerticalSpeed = float32(vspeed * 196.85)          // m/s in ft/min
@@ -389,5 +390,33 @@ func parseNMEALine_POGNB(x []string, tmpSituation *SituationData) (SituationData
 		tmpSituation.BaroSourceType = common.BARO_TYPE_OGNTRACKER
 	}
 
+	return *tmpSituation, nil
+}
+
+func parseNMEALine_PGRMZ(x []string, tmpSituation *SituationData) (SituationData, error) {
+	if (!(x[0] == "PGRMZ")) {
+		return *tmpSituation, errors.New("Not PGRMZ")
+	}
+
+	// Only evaluate PGRMZ for SoftRF/Flarm, where we know that it is standard barometric pressure.
+	// might want to add more types if applicable.
+	// $PGRMZ,1089,f,3*2B
+	if len(x) < 3 {
+		return EMPTY_SITUATION, errors.New("Length < 5")
+	}
+	// Assume pressure altitude in PGRMZ if we don't have any other baro (SoftRF style)
+	pressureAlt, err := strconv.ParseFloat(x[1], 32)
+	if err != nil {
+		return EMPTY_SITUATION, errors.New("No pressure altitude found")
+	}
+	unit := x[2]
+	if unit == "m" {
+		pressureAlt *= 3.28084
+	}
+	// Prefer internal sensor and OGN tracker over this...
+	mySituation.BaroPressureAltitude = float32(pressureAlt) // meters to feet
+	mySituation.BaroLastMeasurementTime = stratuxClock.Time
+	mySituation.BaroSourceType = common.BARO_TYPE_NMEA
+	
 	return *tmpSituation, nil
 }

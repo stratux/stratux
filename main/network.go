@@ -264,7 +264,7 @@ func handleNmeaInConnection(c net.Conn) {
 		if err != nil {
 			break
 		}
-		processNMEALine(line)
+		processNMEALine(line, 100.0 * time.Millisecond) // TODO: RVT: It the gpsTimeOffsetPpsMs correct for GPS data from network?
 	}
 	globalStatus.GPS_connected = false
 	globalStatus.GPS_detected_type = 0
