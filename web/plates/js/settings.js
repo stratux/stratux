@@ -272,14 +272,40 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	}
 	$scope.update_files = '';
 
-	$http.get(URL_STATUS_GET).then(function(response) {
-		var status = angular.fromJson(response.data);
+	if (($scope.socket === undefined) || ($scope.socket === null)) {
+		socket = new WebSocket(URL_STATUS_WS);
+		$scope.socket = socket; // store socket in scope for enter/exit usage
+	}
+	
+	socket.onopen = function (msg) {
+		// $scope.ConnectStyle = "label-success";
+		$scope.ConnectState = "Connected";
+	};
+
+	socket.onclose = function (msg) {
+		// $scope.ConnectStyle = "label-danger";
+		$scope.ConnectState = "Disconnected";
+		$scope.$apply();
+		delete $scope.socket;
+		setTimeout(function() {connect($scope);}, 1000);
+	};
+
+	socket.onerror = function (msg) {
+		// $scope.ConnectStyle = "label-danger";
+		$scope.ConnectState = "Error";
+		$scope.$apply();
+	};
+
+	socket.onmessage = function (msg) {
+		var status = JSON.parse(msg.data)
+		$scope.GPS_Discovery = status.GPS_Discovery
 		var gpsHardwareCode = (status.GPS_detected_type & 0x0f);
 		if (gpsHardwareCode == 3 || status.OGN_tx_enabled)
 			$scope.hasOgnTracker = true;
 		else
 			$scope.hasOgnTracker = false;
-	});
+		$scope.$apply()
+	};
 
 	function loadSettings(data) {
 		settings = angular.fromJson(data);
@@ -458,6 +484,29 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			setSettings(angular.toJson(newsettings));
 		}
 	};
+
+	$scope.addToBle = function (device) {
+		currentDeviceList = $scope.BleEnabledDevices.split(',')
+		currentDeviceList.push(device.Name)
+		newList = currentDeviceList
+			.filter( (value) => {
+				return value.trim().length > 0
+			})
+			.filter((value, index, self) => {
+			return self.indexOf(value) === index;
+		  })
+		$scope.BleEnabledDevices = newList.join(',')
+		$scope.updateBle()
+	}
+
+	$scope.canAddBle = function (device) {
+		currentDeviceList = $scope.BleEnabledDevices.split(',')
+
+		isNotInList = currentDeviceList.filter((value) => {
+			return value === device.Name
+		  }).length == 0 
+		return isNotInList
+	}
 
 	$scope.updateBle = function () {
 		if ($scope.BleEnabledDevices !== settings["BleEnabledDevices"]) {

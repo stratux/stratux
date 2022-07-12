@@ -1584,7 +1584,7 @@ func (s *GPSDeviceManager) anyGpsDeviceWithFix(gpsSource int) (string, GPSDevice
 /**
 Maintain and decide on what gps source to use
 **/
-func (s *GPSDeviceManager) maintenance() {
+func (s *GPSDeviceManager) maintainAndDecideGPSConnections() {
 	maintenance := func() {
 		s.m.Lock()
 		defer s.m.Unlock()
@@ -1726,14 +1726,14 @@ func (s *GPSDeviceManager) configChangeWatcher(forceInit bool) {
 	}
 
 	checkAndReInit(forceInit)
-	timer := time.NewTicker(2500 * time.Millisecond)
+	timer := time.NewTicker(1000 * time.Millisecond)
 	for {
 		<-timer.C
 		checkAndReInit(false)
 	}
 }
 
-func (s *GPSDeviceManager) enableGPSDevices(gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (s *GPSDeviceManager) enableGPSDevices(gpsNMEALineChannel chan common.GpsNmeaLine, discoveredDevices chan <- common.DiscoveredDevice) {
 	log.Printf("GPS: listenInternal: Started")
 	qh := s.qh.Add()
 	defer s.qh.Done()
@@ -1742,7 +1742,7 @@ func (s *GPSDeviceManager) enableGPSDevices(gpsNMEALineChannel chan common.GpsNm
 
 	if globalSettings.BleGPSEnabled {
 		log.Printf("GPS: Enable Bluetooth devices")
-		go bleGPSDevice.Listen(strings.Split(globalSettings.BleEnabledDevices, ","), gpsNMEALineChannel)
+		go bleGPSDevice.Listen(strings.Split(globalSettings.BleEnabledDevices, ","), gpsNMEALineChannel, discoveredDevices)
 	}
 
 	if globalSettings.GPS_Enabled {
@@ -1756,15 +1756,38 @@ func (s *GPSDeviceManager) enableGPSDevices(gpsNMEALineChannel chan common.GpsNm
 	log.Printf("GPS: Stopped")
 }
 
+func (s *GPSDeviceManager) maintainConnectedDeviceList(discoveredDevices <- chan common.DiscoveredDevice) {
+
+	devices := make(map[string]common.DiscoveredDevice)
+	for {
+		discoveredDevice := <-discoveredDevices
+		discoveredDevice.LastSeen = stratuxClock.Milliseconds
+		devices[discoveredDevice.Name] = discoveredDevice
+
+		deviceList := []common.DiscoveredDevice{}
+		for _, v := range devices {
+			if v.LastSeen > stratuxClock.Milliseconds - 5000 {
+				deviceList = append(deviceList, v)
+			}
+		}
+
+		globalStatus.GPS_Discovery = deviceList
+	}
+
+}
+
 func (s *GPSDeviceManager) Listen() {
 	Satellites = make(map[string]SatelliteInfo)
 	log.Printf("GPS: Listen: Started")
 	gpsNMEALineChannel := make(chan common.GpsNmeaLine, 20)
+	discoveredDevices := make(chan common.DiscoveredDevice, 20)
+
 	go s.configChangeWatcher(true)
 	go s.listenToGPSMessages(gpsNMEALineChannel)
-	go s.maintenance()
+	go s.maintainAndDecideGPSConnections()
+	go s.maintainConnectedDeviceList(discoveredDevices)
 	for {
-		s.enableGPSDevices(gpsNMEALineChannel)
+		s.enableGPSDevices(gpsNMEALineChannel, discoveredDevices)
 		time.Sleep(1 * time.Second)
 	}
 }

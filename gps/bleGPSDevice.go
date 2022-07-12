@@ -242,7 +242,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 /**
 connectionMonitor monitors the list bleGPSTrafficDeviceList for disconnected devices and reconnects them again
 */
-func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
+func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine, discoveredDevices chan <- common.DiscoveredDevice) {
 	qh := b.qh.Add()
 	defer b.qh.Done()
 
@@ -255,6 +255,14 @@ func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
 			for entry := range b.bleGPSTrafficDeviceList.IterBuffered() {
 				info := entry.Val.(*discoveredDeviceInfo)
 
+				// Send a message back about if the device is connected and the name of the discovered device
+				discoveredDevices <- common.DiscoveredDevice {
+					Name: info.name,
+					Connected: info.Connected,
+					GpsDetectedType: common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+					GpsSource: common.GPS_SOURCE_BLE,
+				}
+				
 				if !info.Connected {
 					info.Connected = true
 					go func() {
@@ -268,12 +276,13 @@ func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
 						info.Connected = false
 					}()
 				}
+				
 			}
 		}
 	}
 }
 
-func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <- chan nmeaNewLine, gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <- chan nmeaNewLine, gpsNMEALineChannel chan <- common.GpsNmeaLine) {
 	qh := b.qh.Add()
 	defer b.qh.Done()
 
@@ -300,7 +309,7 @@ func (b *BleGPSDevice) Stop() {
 	b.qh.Quit()
 }
 
-func (b *BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel chan common.GpsNmeaLine) {
+func (b *BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel chan <- common.GpsNmeaLine, discoveredDevices chan <- common.DiscoveredDevice) {
 	qh := b.qh.Add() //
 	defer b.qh.Done()
 
@@ -312,7 +321,7 @@ func (b *BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel cha
 	scanInfoResultChannel := make(chan scanInfoResult, 1)
 	nmeaSentenceChannel := make(chan nmeaNewLine, 0)
 
-	go b.connectionMonitor(nmeaSentenceChannel)
+	go b.connectionMonitor(nmeaSentenceChannel, discoveredDevices)
 	go b.switchBoard(nmeaSentenceChannel, gpsNMEALineChannel)
 	go b.advertisementListener(scanInfoResultChannel)
 
@@ -324,7 +333,6 @@ func (b *BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel cha
 			// Only allow names we see in our list in our allowed list
 			if !common.StringInSlice(address.name, allowedDeviceList) {
 				log.Printf("Device : %s Not in approved list of %s", address.name, strings.Join(allowedDeviceList[:], ","))
-				break
 			} else {
 				added := b.bleGPSTrafficDeviceList.SetIfAbsent(address.MAC, &discoveredDeviceInfo{Connected: false, MAC: address.MAC, name: address.name})
 				if added {
@@ -332,6 +340,20 @@ func (b *BleGPSDevice) Listen(allowedDeviceList []string, gpsNMEALineChannel cha
 				}	
 			}
 
+			// Update device discovery. I have noticed that some BLE devices do not announce anymore after beeing connected
+			// So we also announce in connectionMonitor
+			isConnected := false
+			if b, ok := b.bleGPSTrafficDeviceList.Get(address.MAC); ok {
+				isConnected = b.(*discoveredDeviceInfo).Connected
+			}
+
+			// Send a message back about if the device is connected and the name of the discovered device
+			discoveredDevices <- common.DiscoveredDevice {
+				Name: address.name,
+				Connected: isConnected,
+				GpsDetectedType: common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+				GpsSource: common.GPS_SOURCE_BLE,
+			}
 		}
 	}
 }

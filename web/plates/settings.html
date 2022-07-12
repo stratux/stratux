@@ -403,7 +403,7 @@
                             <div class="col-xs-7">
                                 
                                 <a ui-turn-on='gpSourceDropDown' class='btn'>
-                                    <button class="btn btn-primary btn-block">{{GPSPreferredSources[GPSPreferredSource]}}</button>
+                                    <button class="btn btn-primary btn-block btn-sm">{{GPSPreferredSources[GPSPreferredSource]}}</button>
                                   </a>
                                   <ul
                                     ng-model="GPSPreferredSource"
@@ -417,10 +417,8 @@
                                     <li ng-click="updateGpsPrefSource(3)"><a>{{GPSPreferredSources[3]}}</a></li>
                                     <li ng-click="updateGpsPrefSource(4)"><a>{{GPSPreferredSources[4]}}</a></li>
                                   </ul>
-
                             </div>
                         </div>
-                        
                         <label class="control-label col-xs-5">BLE Devices names
                             <br /><small>(Name, comma separated for multiple devices)</small>
                         </label>
@@ -431,7 +429,14 @@
                             </form>
                         </div>
                     </div>
-
+                    <div class="form-group reset-flow" ng-show="BleGPSEnabled">
+                        <label class="control-label col-xs-5">Discovered Devices:</label>
+                        <div class="col-xs-7">
+                            <div ng-repeat="d in GPS_Discovery">
+                                <div ng-show="d.GpsSource == 4">{{d.Name}}&nbsp;&nbsp;<button class="btn btn-primary btn-sm" ng-click="addToBle(d)" ng-if="canAddBle(d)">Add</button>&nbsp;<span ng-show="d.Connected">&nbsp;&#x2705;</span> </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

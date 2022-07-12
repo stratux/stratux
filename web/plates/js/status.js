@@ -124,6 +124,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 			}
 			$scope.GPS_hardware = tempGpsHardwareString;
 			$scope.GPS_NetworkRemoteIp = status.GPS_NetworkRemoteIp;
+			$scope.GPS_Discovery = status.GPS_Discovery
 			var gpsProtocol = (status.GPS_detected_type >> 4);
 			var tempGpsProtocolString = "Not communicating";
 			switch(gpsProtocol) {
