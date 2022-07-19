@@ -90,7 +90,7 @@ const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 
 // AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
 func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan <- scanInfoResult) {
-	qh := b.qh.Add()
+	b.qh.Add()
 	defer b.qh.Done()
 
 	go func() {
@@ -111,7 +111,7 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan <- scanInfo
 		}
 	}()
 
-	<-qh
+	<-b.qh.C
 	b.adapter.StopScan()
 }
 
@@ -119,7 +119,7 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan <- scanInfo
 Coonect to our bluetooth device and listen on the RX channel for NMEA sentences
 **/
 func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan <- nmeaNewLine, TXChannel <- chan string) error {
-	qh := b.qh.Add()
+	b.qh.Add()
 	defer b.qh.Done()
 
 	address, _ := bluetooth.ParseMAC(discoveredDeviceInfo.MAC)
@@ -236,7 +236,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 	}
 
 	select {
-	case <-qh:
+	case <-b.qh.C:
 		return nil
 	case <-notificationCalledca:
 		return nil
@@ -247,13 +247,13 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 connectionMonitor monitors the list bleGPSTrafficDeviceList for disconnected devices and reconnects them again
 */
 func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
-	qh := b.qh.Add()
+	b.qh.Add()
 	defer b.qh.Done()
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 	for {
 		select {
-		case <-qh:
+		case <-b.qh.C:
 			return
 		case <-ticker.C:
 			for entry := range b.bleGPSTrafficDeviceList.IterBuffered() {
@@ -302,12 +302,12 @@ func (b *BleGPSDevice) updateDeviceDiscoveryWithChannel(name string, TXChannel c
 }
 
 func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <- chan nmeaNewLine) {
-	qh := b.qh.Add()
+	b.qh.Add()
 	defer b.qh.Done()
 
 	for {
 		select {
-		case <-qh:
+		case <-b.qh.C:
 			return
 		case nmeaSentence := <-nmeaSentenceChannel:
 			select {
@@ -329,7 +329,7 @@ func (b *BleGPSDevice) Stop() {
 }
 
 func (b *BleGPSDevice) Listen(allowedDeviceList []string) {
-	qh := b.qh.Add() //
+	b.qh.Add()
 	defer b.qh.Done()
 
 	if err := b.adapter.Enable(); err != nil {
@@ -346,7 +346,7 @@ func (b *BleGPSDevice) Listen(allowedDeviceList []string) {
 
 	for {
 		select {
-		case <-qh:
+		case <-b.qh.C:
 			return
 		case address := <-scanInfoResultChannel:
 			// Only allow names we see in our list in our allowed list

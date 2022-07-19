@@ -26,24 +26,24 @@ import (
 
 type SerialGPSDevice struct {
 	gpsTimeOffsetPpsMs time.Duration
-	
+
 	serialConfig *serial.Config
-	
+
 	ognTrackerConfigured bool
 
 	GPS_detected_type uint
-	gpsName string
-	
+	gpsName           string
+
 	DEBUG bool
 
-	rxMessageCh chan <- RXMessage
-	discoveredDevicesCh chan <- DiscoveredDevice
+	rxMessageCh         chan<- RXMessage
+	discoveredDevicesCh chan<- DiscoveredDevice
 
 	qh *common.QuitHelper
 }
 
-func NewSerialGPSDevice(rxMessageCh chan <- RXMessage, discoveredDevicesCh chan <- DiscoveredDevice, debug bool) SerialGPSDevice {
-	m := SerialGPSDevice {
+func NewSerialGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- DiscoveredDevice, debug bool) SerialGPSDevice {
+	m := SerialGPSDevice{
 		gpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 
 		serialConfig: nil,
@@ -51,12 +51,12 @@ func NewSerialGPSDevice(rxMessageCh chan <- RXMessage, discoveredDevicesCh chan 
 		ognTrackerConfigured: false,
 
 		GPS_detected_type: 0x00,
-		gpsName: "",
+		gpsName:           "",
 
-		DEBUG: debug,
-		rxMessageCh: rxMessageCh,
+		DEBUG:               debug,
+		rxMessageCh:         rxMessageCh,
 		discoveredDevicesCh: discoveredDevicesCh,
-	
+
 		qh: common.NewQuitHelper()}
 	return m
 }
@@ -151,16 +151,16 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		s.GPS_detected_type = common.GPS_TYPE_PROLIFIC
 	} else if _, err := os.Stat("/dev/serialin"); err == nil {
 		device = "/dev/serialin"
-		s.gpsName = "generic"
+		s.gpsName = "serialIn"
 		s.GPS_detected_type = common.GPS_TYPE_SERIAL
 		// OGN Tracker uses 115200, SoftRF 38400
 		baudrates = []int{115200, 38400, 9600}
- 	} else if _, err := os.Stat("/dev/softrf_dongle"); err == nil {
+	} else if _, err := os.Stat("/dev/softrf_dongle"); err == nil {
 		device = "/dev/softrf_dongle"
 		s.gpsName = "softrf_dongle"
 		s.GPS_detected_type = common.GPS_TYPE_SOFTRF_DONGLE
 		baudrates[0] = 115200
- 	} else if _, err := os.Stat("/dev/ttyAMA0"); err == nil { // ttyAMA0 is PL011 UART (GPIO pins 8 and 10) on all RPi.
+	} else if _, err := os.Stat("/dev/ttyAMA0"); err == nil { // ttyAMA0 is PL011 UART (GPIO pins 8 and 10) on all RPi.
 		device = "/dev/ttyAMA0"
 		s.gpsName = "ttyAMA0"
 		s.GPS_detected_type = common.GPS_TYPE_UART
@@ -216,7 +216,7 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		payloadBBR := []byte{0xB5, 0x62, 0x06, 0x8A, 0x28, 0x00, 0x01, 0x02, 0x00, 0x00, 0x01, 0x00, 0x23, 0x10, 0x01, 0x21, 0x00, 0x11, 0x20, 0x07, 0x01, 0x00, 0x21, 0x30, 0x64, 0x00, 0x22, 0x00, 0x31, 0x10, 0x01, 0xCA, 0x00, 0x91, 0x20, 0x00, 0x01, 0x00, 0x93, 0x20, 0x28, 0x07, 0x00, 0x93, 0x20, 0x01, 0x75, 0xF5}
 		p.Write(payloadBBR)
 	} else if s.GPS_detected_type == common.GPS_TYPE_UBX6 || s.GPS_detected_type == common.GPS_TYPE_UBX7 ||
-	          s.GPS_detected_type == common.GPS_TYPE_UBX8 || s.GPS_detected_type == common.GPS_TYPE_UBX9 {
+		s.GPS_detected_type == common.GPS_TYPE_UBX8 || s.GPS_detected_type == common.GPS_TYPE_UBX9 {
 
 		// Byte order for UBX configuration is little endian.
 
@@ -231,14 +231,14 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 
 		// load default configuration             |      clearMask     |  |     saveMask       |  |     loadMask       |  deviceMask
 		p.Write(makeUBXCFG(0x06, 0x09, 13, []byte{0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x03}))
-		time.Sleep(100* time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
 		if s.GPS_detected_type == common.GPS_TYPE_UBX9 {
 			if s.DEBUG {
 				log.Printf("ublox 9 detected\n")
 			}
 			// ublox 9
-			writeUblox9ConfigCommands(p)		
+			writeUblox9ConfigCommands(p)
 		} else if s.GPS_detected_type == common.GPS_TYPE_UBX8 {
 			if s.DEBUG {
 				log.Printf("ublox 8 detected\n")
@@ -250,10 +250,10 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 				log.Printf("ublox 6 or 7 detected\n")
 			}
 			// ublox 6,7
-			cfgGnss := []byte{0x00, 0x00, 0xFF, 0x04} // numTrkChUse=0xFF: number of tracking channels to use will be set to number of tracking channels available in hardware
-			gps     := []byte{0x00, 0x04, 0xFF, 0x00, 0x01, 0x00, 0x01, 0x01} // enable GPS with 4-255 channels (ublox default)
-			sbas    := []byte{0x01, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01} // enable SBAS with 1-3 channels (ublox default)
-			qzss    := []byte{0x05, 0x00, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01} // enable QZSS with 0-3 channel (ublox default)
+			cfgGnss := []byte{0x00, 0x00, 0xFF, 0x04}                         // numTrkChUse=0xFF: number of tracking channels to use will be set to number of tracking channels available in hardware
+			gps := []byte{0x00, 0x04, 0xFF, 0x00, 0x01, 0x00, 0x01, 0x01}     // enable GPS with 4-255 channels (ublox default)
+			sbas := []byte{0x01, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01}    // enable SBAS with 1-3 channels (ublox default)
+			qzss := []byte{0x05, 0x00, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01}    // enable QZSS with 0-3 channel (ublox default)
 			glonass := []byte{0x06, 0x08, 0xFF, 0x00, 0x00, 0x00, 0x01, 0x01} // disable GLONASS (ublox default)
 			cfgGnss = append(cfgGnss, gps...)
 			cfgGnss = append(cfgGnss, sbas...)
@@ -271,7 +271,6 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		cfg[2] = 0x00 // res1.
 		cfg[3] = 0x00 // res1.
 
-			
 		//      [   7   ] [   6   ] [   5   ] [   4   ]
 		//	0000 0000 0000 0000 0000 10x0 1100 0000
 		// UART mode. 0 stop bits, no parity, 8 data bits. Little endian order.
@@ -304,7 +303,6 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		// UBX-CFG-PRT (Port Configuration for UART)
 		p.Write(makeUBXCFG(0x06, 0x00, 20, cfg))
 
-
 		//	time.Sleep(100* time.Millisecond) // pause and wait for the GPS to finish configuring itself before closing / reopening the port
 		baudrates[0] = int(bdrt)
 
@@ -314,15 +312,15 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 	} else if s.GPS_detected_type == common.GPS_TYPE_SOFTRF_DONGLE {
 		p.Write([]byte("@GNS 0x7\r\n")) // enable SBAS
 		p.Flush()
-		time.Sleep(250* time.Millisecond) // Otherwise second command doesn't seem to work?
-		p.Write([]byte("@BSSL 0x2D\r\n")) // enable GNGSV
+		time.Sleep(250 * time.Millisecond) // Otherwise second command doesn't seem to work?
+		p.Write([]byte("@BSSL 0x2D\r\n"))  // enable GNGSV
 		p.Flush()
 	}
 	p.Close()
 
 	time.Sleep(250 * time.Millisecond)
 
-	// Re-open port at newly configured baud so we can read messages. ReadTimeout is set to keep from blocking the gpsSerialReader() on misconfigures or ttyAMA disconnects
+	// Re-open port at newly configured baud so we can read messages. ReadTimeout is set to keep from blocking the gpsSerialTXRX() on misconfigures or ttyAMA disconnects
 	// serialConfig = &serial.Config{Name: device, Baud: baudrate, ReadTimeout: time.Millisecond * 2500}
 	// serial.OpenPort(serialConfig)
 	p, err = detectOpenSerialPort(device, baudrates)
@@ -364,16 +362,15 @@ func detectOpenSerialPort(device string, baudrates []int) (*(serial.Port), error
 	}
 }
 
-
 func writeUblox8ConfigCommands(p *serial.Port) {
-	cfgGnss := []byte{0x00, 0x00, 0xFF, 0x05} // numTrkChUse=0xFF: number of tracking channels to use will be set to number of tracking channels available in hardware
-	gps     := []byte{0x00, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01} // enable GPS with 8-16 channels (ublox default)
-	sbas    := []byte{0x01, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01} // enable SBAS with 1-3 channels (ublox default)
+	cfgGnss := []byte{0x00, 0x00, 0xFF, 0x05}                         // numTrkChUse=0xFF: number of tracking channels to use will be set to number of tracking channels available in hardware
+	gps := []byte{0x00, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01}     // enable GPS with 8-16 channels (ublox default)
+	sbas := []byte{0x01, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01}    // enable SBAS with 1-3 channels (ublox default)
 	galileo := []byte{0x02, 0x08, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01} // enable Galileo with 8-8 channels (ublox default: disabled and 4-8 channels)
-	beidou  := []byte{0x03, 0x08, 0x10, 0x00, 0x00, 0x00, 0x01, 0x01} // disable BEIDOU
-	qzss    := []byte{0x05, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01} // enable QZSS 1-3 channels, L1C/A (ublox default: 0-3 channels)
+	beidou := []byte{0x03, 0x08, 0x10, 0x00, 0x00, 0x00, 0x01, 0x01}  // disable BEIDOU
+	qzss := []byte{0x05, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01}    // enable QZSS 1-3 channels, L1C/A (ublox default: 0-3 channels)
 	glonass := []byte{0x06, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01} // enable GLONASS with 8-16 channels (ublox default: 8-14 channels)
-	
+
 	cfgGnss = append(cfgGnss, gps...)
 	cfgGnss = append(cfgGnss, sbas...)
 	cfgGnss = append(cfgGnss, beidou...)
@@ -387,14 +384,14 @@ func writeUblox8ConfigCommands(p *serial.Port) {
 }
 
 func writeUblox9ConfigCommands(p *serial.Port) {
-	cfgGnss := []byte{0x00, 0x00, 0xFF, 0x06} // numTrkChUse=0xFF: number of tracking channels to use will be set to number of tracking channels available in hardware
-	gps     := []byte{0x00, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01} // enable GPS with 8-16 channels (ublox default)
-	sbas    := []byte{0x01, 0x03, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01} // enable SBAS with 3-3 channels (ublox default)
+	cfgGnss := []byte{0x00, 0x00, 0xFF, 0x06}                         // numTrkChUse=0xFF: number of tracking channels to use will be set to number of tracking channels available in hardware
+	gps := []byte{0x00, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01}     // enable GPS with 8-16 channels (ublox default)
+	sbas := []byte{0x01, 0x03, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01}    // enable SBAS with 3-3 channels (ublox default)
 	galileo := []byte{0x02, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01} // enable Galileo with 8-16 channels (ublox default: 8-12 channels)
-	beidou  := []byte{0x03, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01} // enable BEIDOU with 8-16 channels (ublox default: 2-5 channels)
-	qzss    := []byte{0x05, 0x03, 0x04, 0x00, 0x01, 0x00, 0x05, 0x01} // enable QZSS 3-4 channels, L1C/A & L1S (ublox default)
+	beidou := []byte{0x03, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01}  // enable BEIDOU with 8-16 channels (ublox default: 2-5 channels)
+	qzss := []byte{0x05, 0x03, 0x04, 0x00, 0x01, 0x00, 0x05, 0x01}    // enable QZSS 3-4 channels, L1C/A & L1S (ublox default)
 	glonass := []byte{0x06, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01} // enable GLONASS with 8-16 tracking channels (ublox default: 8-12 channels)
-	
+
 	cfgGnss = append(cfgGnss, gps...)
 	cfgGnss = append(cfgGnss, sbas...)
 	cfgGnss = append(cfgGnss, beidou...)
@@ -442,8 +439,6 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF1, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // Ublox - Satellite Status
 	p.Write(makeUBXCFG(0x06, 0x01, 8, []byte{0xF1, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})) // Ublox - Time of Day and Clock Information
 
-
-
 	if navrate == 10 {
 		p.Write(makeUBXCFG(0x06, 0x08, 6, []byte{0x64, 0x00, 0x01, 0x00, 0x01, 0x00})) // 100ms & 1 cycle -> 10Hz (UBX-CFG-RATE payload bytes: little endian!)
 	} else if navrate == 5 {
@@ -454,62 +449,98 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 		p.Write(makeUBXCFG(0x06, 0x08, 6, []byte{0xE8, 0x03, 0x01, 0x00, 0x01, 0x00})) // 1000ms & 1 cycle -> 1Hz (UBX-CFG-RATE payload bytes: little endian!)
 	}
 
-
 }
 
-func (s *SerialGPSDevice) gpsSerialReader() {
+func (s *SerialGPSDevice) gpsSerialTXRX() {
 
-	serialPort := s.initGPSSerial();
-	if serialPort!=nil {
+	serialPort := s.initGPSSerial()
+	if serialPort != nil {
 		TXChannel := make(chan string, 1)
 		defer func() {
 			serialPort.Close()
-			s.discoveredDevicesCh <- DiscoveredDevice {
-				Name: s.gpsName,
-				Connected: false,
+			s.discoveredDevicesCh <- DiscoveredDevice{
+				Name:            s.gpsName,
+				Connected:       false,
 				GpsDetectedType: s.GPS_detected_type, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-				GpsSource: common.GPS_SOURCE_SERIAL,
+				GpsSource:       common.GPS_SOURCE_SERIAL,
 			}
 		}()
 
-		s.discoveredDevicesCh <- DiscoveredDevice {
-			Name: s.gpsName,
-			Connected: true,
-			TXChannel: TXChannel,
-			HasTXChannel: true,	
+		s.discoveredDevicesCh <- DiscoveredDevice{
+			Name:            s.gpsName,
+			Connected:       true,
+			TXChannel:       TXChannel,
+			HasTXChannel:    true,
 			GpsDetectedType: s.GPS_detected_type, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-			GpsSource: common.GPS_SOURCE_SERIAL,
+			GpsSource:       common.GPS_SOURCE_SERIAL,
 		}
 
-		i := 0 //debug monitor
-		scanner := bufio.NewScanner(serialPort)
-		for scanner.Scan() && !s.qh.IsQuit() {
-			i++
-			if s.DEBUG && i%100 == 0 {
-				log.Printf("serialGPSReader() scanner loop iteration i=%d\n", i) // debug monitor
+		// Blocking function that reads serial data
+		serialReader := func() {
+			i := 0 //debug monitor
+			scanner := bufio.NewScanner(serialPort)
+			for scanner.Scan() && !s.qh.IsQuit() {
+				i++
+				if s.DEBUG && i%100 == 0 {
+					log.Printf("serialGPSReader() scanner loop iteration i=%d\n", i) // debug monitor
+				}
+
+				nmeaLine := scanner.Text()
+				startIdx := strings.Index(nmeaLine, "$")
+				if startIdx < 0 {
+					continue
+				}
+
+				thisNmeaLine := nmeaLine[startIdx:]
+
+				// We peek into the NMEA string, if we detect OGN for the first time we configure it as a OGN device
+				if !s.ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
+					s.ognTrackerConfigured = true
+					s.GPS_detected_type = common.GPS_TYPE_OGNTRACKER
+					log.Printf("serialGPSReader() OGN detected, configuring as Ublox8\n")
+					writeUblox8ConfigCommands(serialPort)
+					writeUbloxGenericCommands(5, serialPort)				
+					serialPort.Flush()
+				}
+
+				s.rxMessageCh <- RXMessage{
+					Name:               s.gpsName,
+					NmeaLine:           thisNmeaLine,
+					GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
+					GpsDetectedType:    s.GPS_detected_type,
+					GpsSource:          common.GPS_SOURCE_SERIAL,
+				}
+
 			}
-	
-			nmeaLine := scanner.Text()
-			startIdx := strings.Index(nmeaLine, "$")
-			if startIdx < 0 {
-				continue
+			if err := scanner.Err(); err != nil {
+				log.Printf("reading standard input: %s\n", err.Error())
 			}
-	
-			s.rxMessageCh <- RXMessage{
-				Name:               s.gpsName,
-				NmeaLine:           nmeaLine[startIdx:],
-				GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
-				GpsDetectedType:    s.GPS_detected_type,
-				GpsSource:          common.GPS_SOURCE_SERIAL,
-			}	
+
+			if s.DEBUG {
+				log.Printf("Exiting serialGPSReader() after i=%d loops\n", i) // debug monitor
+			}
 		}
-		if err := scanner.Err(); err != nil {
-			log.Printf("reading standard input: %s\n", err.Error())
+
+		// We use a private QuitHelper because if the scanner stops we also want this serialWriter to stop
+		qh := common.NewQuitHelper()
+
+		serialWriter := func() {
+			qh.Add()
+			defer qh.Done()
+			for {
+				select {
+				case <-qh.C:
+					return
+				case txChannel := <-TXChannel:
+					serialPort.Write(common.MakeNMEACmd(txChannel))
+				}
+			}
 		}
-	
-		if s.DEBUG {
-			log.Printf("Exiting serialGPSReader() after i=%d loops\n", i) // debug monitor
-		}
+
+		go serialWriter()
+		serialReader()
+		qh.Quit()
+
 	}
 }
 
@@ -517,10 +548,10 @@ func (s *SerialGPSDevice) pollGPS() {
 	s.qh.Add()
 	defer s.qh.Done()
 	for {
-		if s.qh.IsQuit()  {
-			return 
+		if s.qh.IsQuit() {
+			return
 		}
-		s.gpsSerialReader()
+		s.gpsSerialTXRX()
 		time.Sleep(1000 * time.Millisecond)
 	}
 }

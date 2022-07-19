@@ -19,10 +19,12 @@ type RXMessage struct {
 /** 
 Structure to be use to send a message to a GPS device, for example to configure it
 */
-type GPSTXMessage struct {
+type TXMessage struct {
 	Message string				      // Message to send
-	GpsDetectedType uint              // This is the type, like OGN, ubloc or SOFTRF
-	GpsSource uint                    // This is the source, network, Blue Tooth or serial
+	Name string                       // Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
+// TODO: RVT: Not sure yet if we should do this on exact name, or that we are ok with detected type and source, for example any SoftRF connected over bluetooth..
+//	GpsDetectedType uint              // This is the type, like OGN, ubloc or SOFTRF
+//	GpsSource uint                    // This is the source, network, Blue Tooth or serial
 }
 
 /**

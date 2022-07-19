@@ -260,11 +260,11 @@ func handleNmeaInConnection(c net.Conn) {
 		globalStatus.GPS_connected = true
 		// Keep detected protocol, only ensure type=network
 		globalStatus.GPS_detected_type = common.GPS_TYPE_NETWORK | (globalStatus.GPS_detected_type & 0xf0)
-		line, err := reader.ReadString('\n')
+		_, err := reader.ReadString('\n')
 		if err != nil {
 			break
 		}
-		processNMEALine(line, 100.0 * time.Millisecond) // TODO: RVT: It the gpsTimeOffsetPpsMs correct for GPS data from network?
+		// processNMEALine(line, 100.0 * time.Millisecond) // TODO: RVT: It the gpsTimeOffsetPpsMs correct for GPS data from network?
 	}
 	globalStatus.GPS_connected = false
 	globalStatus.GPS_detected_type = 0

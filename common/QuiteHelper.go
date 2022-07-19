@@ -6,7 +6,7 @@ import (
 )
  
 type QuitHelper struct {
-    c chan struct{}
+    C chan struct{}
     w *sync.WaitGroup
     m sync.Mutex
     b *abool.AtomicBool
@@ -14,18 +14,17 @@ type QuitHelper struct {
  
 func NewQuitHelper() *QuitHelper {
     return &QuitHelper{
-        c: make(chan struct{}),
+        C: make(chan struct{}),
         w: new(sync.WaitGroup),
         m: sync.Mutex{},
         b: abool.New(),
     }
 }
  
-func (a *QuitHelper) Add() <- chan struct{} {
+func (a *QuitHelper) Add() {
     a.m.Lock()
     a.w.Add(1)
     a.m.Unlock()
-    return a.c
 }
  
 func (a *QuitHelper) Done() {
@@ -39,9 +38,9 @@ func (a *QuitHelper) IsQuit() bool {
 func (a *QuitHelper) Quit() {
     a.m.Lock()
     a.b.Set()
-    close(a.c)
+    close(a.C)
     a.w.Wait()
-    a.c = make(chan struct{})
+    a.C = make(chan struct{})
     a.w = new(sync.WaitGroup)
     a.b.UnSet()
     a.m.Unlock()
