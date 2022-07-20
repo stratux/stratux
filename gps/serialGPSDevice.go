@@ -501,14 +501,17 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 				if !s.ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
 					s.ognTrackerConfigured = true
 					s.GPS_detected_type = common.GPS_TYPE_OGNTRACKER
-					log.Printf("serialGPSReader() OGN detected, configuringwith Ublox8 config\n")
-					writeUblox8ConfigCommands(serialPort)
-					writeUbloxGenericCommands(5, serialPort)				
-					serialPort.Flush()
-
+					s.gpsTimeOffsetPpsMs = 200 * time.Millisecond
 					go func() {
-						// Wait 10 seconds for the device to configure
+						log.Printf("serialGPSReader() OGN detected, configuring with Ublox8 config\n")
+						writeUblox8ConfigCommands(serialPort)
+						serialPort.Flush()
 						time.Sleep(time.Second * 10)
+						// Generic commands always seems to return in a invalid NMEA string, hope that is fine?
+						writeUbloxGenericCommands(5, serialPort)				
+						serialPort.Flush()
+						time.Sleep(time.Second * 10)
+						// Notify of this device type
 						s.discoveredDevicesCh <- DiscoveredDevice{
 							Name:            s.gpsName,
 							Connected:       true,
@@ -524,7 +527,6 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 					Name:               s.gpsName,
 					NmeaLine:           thisNmeaLine,
 				}
-
 			}
 			if err := scanner.Err(); err != nil {
 				log.Printf("reading standard input: %s\n", err.Error())

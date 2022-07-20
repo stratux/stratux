@@ -26,7 +26,7 @@ import (
 
 )
 
-//const AFFECTS_GPS_FIX_QUALITY := []string{"GNRMC", "GPRMC", "GNGSA", "GPGSA", "GAGSA", "GBGSA"}
+// THis should never contain any NMEA codes for GPS Location data
 var ALWAYS_PROCESS_NMEAS = []string{"PFLAU", "PFLAA", "POGNS", "POGNR", "POGNB"}
 
 const GPS_FIX_TIME = 5000    // Time we expect a GPS satelite to have a valid fix TODO: RVT is there already a variable or time used for something like this?
@@ -127,7 +127,6 @@ var Satellites map[string]SatelliteInfo
 var ognTrackerConfigured = false
 
 type GPSDeviceStatus struct {
-	gpsTimeOffsetPpsMs time.Duration
 	gpsSource          uint16
 	gpsFixQuality      uint8
 	gpsLastSeen        uint64
@@ -1067,7 +1066,6 @@ func (s *GPSDeviceManager) configureOgnTracker(name string) {
 	})
 
 	device,_ := s.gpsDeviceStatus[name]
-	device.gpsTimeOffsetPpsMs = 200 * time.Millisecond
 	s.gpsDeviceStatus[name] = device
 }
 
@@ -1222,7 +1220,6 @@ func (s *GPSDeviceManager) listenToGPSMessages() {
 
 		if !hasDeviceConfig {
 			thisGPS = GPSDeviceStatus{
-				gpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 				gpsFixQuality:      0,
 				gpsLastGoodFix:     0,
 				gpsCRCErrors:       0,
@@ -1240,22 +1237,25 @@ func (s *GPSDeviceManager) listenToGPSMessages() {
 		} else {
 			nmeaSlice := strings.Split(l_valid, ",")
 
-			// Some commands that do not affect GPS locaiton services can always be processed
-			if common.StringInSlice(nmeaSlice[0], ALWAYS_PROCESS_NMEAS) {
-				processFlarmNmeaMessage(nmeaSlice)
-				s.processNMEALine(line.NmeaLine, line.Name, thisGPS.gpsTimeOffsetPpsMs)
-			} else {
+			var discoveredDevice gps.DiscoveredDevice
+			// We always assume  discovered devices will send data
+			if deviceRaw, ok := s.discoveredDevices.Get(line.Name); ok {
+				discoveredDevice = deviceRaw.(gps.DiscoveredDevice)
+			}
 
-				if s.currentGPSName == line.Name { // If this GPS is the GPS we decided to work with, we parse and process
-					s.processNMEALine(line.NmeaLine, line.Name, thisGPS.gpsTimeOffsetPpsMs)
-					if deviceRaw, ok := s.discoveredDevices.Get(line.Name); ok {
-						device := deviceRaw.(gps.DiscoveredDevice)
-						globalStatus.GPS_detected_type = (globalStatus.GPS_detected_type & 0xF0) | device.GpsDetectedType
-						globalStatus.GPS_source = uint(device.GpsSource)
-						thisGPS.gpsSource = device.GpsSource // TODO: RVT: We need to gpsSource in the gpsDevice status for sorting, we could also just use the map?
-					}
+			if common.StringInSlice(nmeaSlice[0], ALWAYS_PROCESS_NMEAS) {
+				// Some commands that do not affect GPS location services can always be processed
+				processFlarmNmeaMessage(nmeaSlice)
+				s.processNMEALine(line.NmeaLine, line.Name, discoveredDevice.GpsTimeOffsetPpsMs)
+			} else {
+				// Process all NMEA for the current GPS
+				if s.currentGPSName == line.Name { 
+					s.processNMEALine(line.NmeaLine, line.Name, discoveredDevice.GpsTimeOffsetPpsMs)
 					globalStatus.GPS_source_name = line.Name
 					globalStatus.GPS_connected = true
+					globalStatus.GPS_detected_type = (globalStatus.GPS_detected_type & 0xF0) | discoveredDevice.GpsDetectedType
+					globalStatus.GPS_source = uint(discoveredDevice.GpsSource)
+					thisGPS.gpsSource = discoveredDevice.GpsSource // TODO: RVT: We need to gpsSource in the gpsDevice status for sorting, we could also just use the map?
 				}
 
 				// Check and remmeber this GPS fix quality
@@ -1312,11 +1312,11 @@ func (s *GPSDeviceManager) configChangeWatcher(forceInit bool) {
 	}
 }
 
-/**
+/** 
 Configure and enable GPS system
 */
 func (s *GPSDeviceManager) configureGPSSubsystem() {
-	log.Printf("GPS: listenInternal: Started")
+	log.Printf("GPS: GPSSubsystem: Started")
 	s.qh.Add()
 	defer s.qh.Done()
 
@@ -1324,11 +1324,10 @@ func (s *GPSDeviceManager) configureGPSSubsystem() {
 	serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, s.discoveredDevicesCh, globalSettings.DEBUG)
 
 	defer func() {
-		log.Printf("GPS: Stopping bleGPSDevice")
+		log.Printf("GPS: Stopping GPSSubsystem")
 		bleGPSDevice.Stop()
-		log.Printf("GPS: Stopping serialGPSDevice")
 		serialGPSDevice.Stop()
-		log.Printf("GPS: Stopped")
+		log.Printf("GPS: GPSSubsystem Stopped")
 	}()
 
 	if globalSettings.BleGPSEnabled {
