@@ -38,7 +38,7 @@ var gnssBaroAltDiffs = make(map[int]int)
 // 4. Use a weighted linear regression with a higher weight around our own altitude to determine a smoothed-out GnssBaroDiff for our current altitude
 // 5. Use GPS Alt +- GnssBaroDiff to determine our own baro alt
 
-func baroAltGuesser() {
+func BaroAltGuesser() {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		<-ticker.C
@@ -132,7 +132,7 @@ func baroAltGuesser() {
 	 Send AHRS message in FF format every 200ms.
 */
 
-func ffAttitudeSender() {
+func FFAttitudeSender() {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	for {
 		<-ticker.C
@@ -192,7 +192,7 @@ func makeFFAHRSMessage() {
 	sendMsg(prepareMessage(msg), NETWORK_AHRS_GDL90, 200*time.Millisecond, 3)
 }
 
-func gpsAttitudeSender() {
+func GPSAttitudeSender() {
 	timer := time.NewTicker(100 * time.Millisecond) // ~10Hz update.
 	for {
 		<-timer.C

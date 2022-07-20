@@ -1730,14 +1730,13 @@ func main() {
 	// Start the GPS external sensor monitoring.
 	gpsDeviceManager = NewGPSDeviceManager()
 
-	go gpsDeviceManager.Listen()
+	go gpsDeviceManager.Run()
 
 	// Send attitudes
-	go gpsAttitudeSender()
+	go GPSAttitudeSender()
 
 	// Send AHRS message in FF format every 200ms.
-	go ffAttitudeSender()
-
+	go FFAttitudeSender()
 
 	// Start the heartbeat message loop in the background, once per second.
 	go heartBeatSender()
@@ -1752,7 +1751,7 @@ func main() {
 	go trafficInfoExtrapolator()
 
 	// Guesses barometric altitude if we don't have our own baro source by using GnssBaroDiff from other traffic at similar altitude
-	go baroAltGuesser()
+	go BaroAltGuesser()
 
 	// Monitor RPi CPU temp.
 	globalStatus.CPUTempMin = common.InvalidCpuTemp

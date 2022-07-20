@@ -213,7 +213,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 	// Listen to bluetooth messages
 	enaNotifyErr := tx.EnableNotifications(func(value []byte) {
 		// Reset the watchdig timer
-		watchdogTimer.Take()
+		watchdogTimer.Poke()
 
 		// Copy received data
 		mutex.Lock()
@@ -321,7 +321,7 @@ func (b *BleGPSDevice) Stop() {
 	b.qh.Quit()
 }
 
-func (b *BleGPSDevice) Listen(allowedDeviceList []string) {
+func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 	b.qh.Add()
 	defer b.qh.Done()
 

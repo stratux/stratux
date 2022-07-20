@@ -63,7 +63,7 @@ const (
 
 	/* Maximum duty for PWM controller */
 	pwmDutyMax        = 100   // Must be kept at 100
-	defaultPwmFrequency   = 64000
+	defaultPwmFrequency   = 500
 
 	// how often to update
 	updateDelayMS = 5000
@@ -145,8 +145,8 @@ func fanControl() {
 	pin := rpio.Pin(myFanControl.PWMPin)
 	pin.Mode(rpio.Pwm)
 	setFanFrequency := func(frequency uint32) {
-		if (frequency < 250000) {
-			frequency = 250000
+		if (frequency < 50000) {
+			frequency = 50000
 		} else if (frequency > 100000000) {
 			frequency = 100000000
 		}

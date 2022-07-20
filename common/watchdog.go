@@ -7,22 +7,24 @@ import (
  
 
 type watchDog struct {
-	w *time.Timer
-	t time.Duration
+	t *time.Timer
+	d time.Duration
 	i uint32
+	tr bool
 	C chan struct{}
 }
  
 func NewWatchDog(wdTime time.Duration) *watchDog {
 
 	wd := watchDog{
-		t: wdTime,
+		d: wdTime,
 		i: 0,
 		C: make(chan struct{}),
     }
 
-	wd.w = time.AfterFunc(wdTime, func() {
+	wd.t = time.AfterFunc(wdTime, func() {
 		if atomic.LoadUint32(&wd.i) != 0 {
+			wd.tr = true
 			wd.C <- struct{}{}
 		}
 	})
@@ -30,14 +32,18 @@ func NewWatchDog(wdTime time.Duration) *watchDog {
     return &wd
 }
 
-func (w *watchDog) Take() {
+func (w *watchDog) IsTriggered() bool {
+	return w.tr
+}
+
+func (w *watchDog) Poke() {
 	atomic.StoreUint32(&w.i, uint32(0))
-	w.w.Stop()
-	w.w.Reset(w.t)
+	w.t.Stop()
+	w.t.Reset(w.d)
 	atomic.StoreUint32(&w.i, uint32(1))
 }
 
 func (w *watchDog) Stop() {
 	atomic.StoreUint32(&w.i, uint32(0))
-	w.w.Stop()
+	w.t.Stop()
 }

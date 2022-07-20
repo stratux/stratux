@@ -27,39 +27,28 @@ import (
 )
 
 type SerialGPSDevice struct {
-	gpsTimeOffsetPpsMs time.Duration
-
-	serialConfig *serial.Config
-
+	gpsTimeOffsetPpsMs   time.Duration
+	serialConfig         *serial.Config
 	ognTrackerConfigured bool
-
-	GPS_detected_type uint
-	gpsName           string
-
-	DEBUG bool
-
-	rxMessageCh         chan<- RXMessage
-	discoveredDevicesCh chan<- DiscoveredDevice
-
-	qh *common.QuitHelper
+	GPSDetectedType    uint
+	gpsName              string
+	DEBUG                bool
+	rxMessageCh          chan<- RXMessage
+	discoveredDevicesCh  chan<- DiscoveredDevice
+	qh                   *common.QuitHelper
 }
 
 func NewSerialGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- DiscoveredDevice, debug bool) SerialGPSDevice {
 	m := SerialGPSDevice{
-		gpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
-
-		serialConfig: nil,
-
+		gpsTimeOffsetPpsMs:   100.0 * time.Millisecond,
+		serialConfig:         nil,
 		ognTrackerConfigured: false,
-
-		GPS_detected_type: 0x00,
-		gpsName:           "",
-
-		DEBUG:               debug,
-		rxMessageCh:         rxMessageCh,
-		discoveredDevicesCh: discoveredDevicesCh,
-
-		qh: common.NewQuitHelper()}
+		GPSDetectedType:    0x00,
+		gpsName:              "",
+		DEBUG:                debug,
+		rxMessageCh:          rxMessageCh,
+		discoveredDevicesCh:  discoveredDevicesCh,
+		qh:                   common.NewQuitHelper()}
 	return m
 }
 
@@ -116,6 +105,9 @@ func makeUBXCFG(class, id byte, msglen uint16, msg []byte) []byte {
 	return ret
 }
 
+/**
+Detect and open a serial GPS device.
+*/
 func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 	var device string
 
@@ -123,25 +115,25 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 	baudrates := []int{int(9600)}
 	isSirfIV := bool(false)
 	s.ognTrackerConfigured = false
-	s.GPS_detected_type = 0 // reset detected type on each initialization
+	s.GPSDetectedType = 0 // reset detected type on each initialization
 
 	if _, err := os.Stat("/dev/ublox9"); err == nil { // u-blox 8 (RY83xAI over USB).
 		device = "/dev/ublox9"
 		s.gpsName = "ublox9"
-		s.GPS_detected_type = common.GPS_TYPE_UBX9
+		s.GPSDetectedType = common.GPS_TYPE_UBX9
 	} else if _, err := os.Stat("/dev/ublox8"); err == nil { // u-blox 8 (RY83xAI or GPYes 2.0).
 		device = "/dev/ublox8"
 		s.gpsName = "ublox8"
-		s.GPS_detected_type = common.GPS_TYPE_UBX8
+		s.GPSDetectedType = common.GPS_TYPE_UBX8
 		s.gpsTimeOffsetPpsMs = 80 * time.Millisecond // Ublox 8 seems to have higher delay
 	} else if _, err := os.Stat("/dev/ublox7"); err == nil { // u-blox 7 (VK-172, VK-162 Rev 2, GPYes, RY725AI over USB).
 		device = "/dev/ublox7"
 		s.gpsName = "ublox7"
-		s.GPS_detected_type = common.GPS_TYPE_UBX7
+		s.GPSDetectedType = common.GPS_TYPE_UBX7
 	} else if _, err := os.Stat("/dev/ublox6"); err == nil { // u-blox 6 (VK-162 Rev 1).
 		device = "/dev/ublox6"
 		s.gpsName = "ublox6"
-		s.GPS_detected_type = common.GPS_TYPE_UBX6
+		s.GPSDetectedType = common.GPS_TYPE_UBX6
 	} else if _, err := os.Stat("/dev/prolific0"); err == nil { // Assume it's a BU-353-S4 SIRF IV.
 		//TODO: Check a "serialout" flag and/or deal with multiple prolific devices.
 		isSirfIV = true
@@ -150,22 +142,22 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		baudrates = []int{4800, 38400, 9600}
 		device = "/dev/prolific0"
 		s.gpsName = "prolific"
-		s.GPS_detected_type = common.GPS_TYPE_PROLIFIC
+		s.GPSDetectedType = common.GPS_TYPE_PROLIFIC
 	} else if _, err := os.Stat("/dev/serialin"); err == nil {
 		device = "/dev/serialin"
 		s.gpsName = "serialIn"
-		s.GPS_detected_type = common.GPS_TYPE_SERIAL
+		s.GPSDetectedType = common.GPS_TYPE_SERIAL
 		// OGN Tracker uses 115200, SoftRF 38400
 		baudrates = []int{115200, 38400, 9600}
 	} else if _, err := os.Stat("/dev/softrf_dongle"); err == nil {
 		device = "/dev/softrf_dongle"
 		s.gpsName = "softrf_dongle"
-		s.GPS_detected_type = common.GPS_TYPE_SOFTRF_DONGLE
+		s.GPSDetectedType = common.GPS_TYPE_SOFTRF_DONGLE
 		baudrates[0] = 115200
 	} else if _, err := os.Stat("/dev/ttyAMA0"); err == nil { // ttyAMA0 is PL011 UART (GPIO pins 8 and 10) on all RPi.
 		device = "/dev/ttyAMA0"
 		s.gpsName = "ttyAMA0"
-		s.GPS_detected_type = common.GPS_TYPE_UART
+		s.GPSDetectedType = common.GPS_TYPE_UART
 		// UART connected u-blox GPS @ 10Hz update rate need 115200, 38400 and 9600 just as fallback
 		baudrates = []int{115200, 38400, 9600}
 	} else {
@@ -207,7 +199,7 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		if s.DEBUG {
 			log.Printf("Finished writing SiRF GPS config to %s. Opening port to test connection.\n", device)
 		}
-	} else if s.GPS_detected_type == common.GPS_TYPE_UART {
+	} else if s.GPSDetectedType == common.GPS_TYPE_UART {
 		// UBX-CFG-VALSET for u-blox M10S
 		// RAM Layer configuration message
 		// NMEA 4.0, NMEA extended svnumbering, dynamic model 7, AssistNow Autonomous, GPS+GAL+BDS+SBAS, 10Hz update rate, disable GLL
@@ -217,8 +209,8 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		// NMEA 4.0, NMEA extended svnumbering, dynamic model 7, AssistNow Autonomous, GPS+GAL+BDS+SBAS, 10Hz update rate, disable GLL
 		payloadBBR := []byte{0xB5, 0x62, 0x06, 0x8A, 0x28, 0x00, 0x01, 0x02, 0x00, 0x00, 0x01, 0x00, 0x23, 0x10, 0x01, 0x21, 0x00, 0x11, 0x20, 0x07, 0x01, 0x00, 0x21, 0x30, 0x64, 0x00, 0x22, 0x00, 0x31, 0x10, 0x01, 0xCA, 0x00, 0x91, 0x20, 0x00, 0x01, 0x00, 0x93, 0x20, 0x28, 0x07, 0x00, 0x93, 0x20, 0x01, 0x75, 0xF5}
 		p.Write(payloadBBR)
-	} else if s.GPS_detected_type == common.GPS_TYPE_UBX6 || s.GPS_detected_type == common.GPS_TYPE_UBX7 ||
-		s.GPS_detected_type == common.GPS_TYPE_UBX8 || s.GPS_detected_type == common.GPS_TYPE_UBX9 {
+	} else if s.GPSDetectedType == common.GPS_TYPE_UBX6 || s.GPSDetectedType == common.GPS_TYPE_UBX7 ||
+		s.GPSDetectedType == common.GPS_TYPE_UBX8 || s.GPSDetectedType == common.GPS_TYPE_UBX9 {
 
 		// Byte order for UBX configuration is little endian.
 
@@ -235,19 +227,19 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		p.Write(makeUBXCFG(0x06, 0x09, 13, []byte{0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x03}))
 		time.Sleep(100 * time.Millisecond)
 
-		if s.GPS_detected_type == common.GPS_TYPE_UBX9 {
+		if s.GPSDetectedType == common.GPS_TYPE_UBX9 {
 			if s.DEBUG {
 				log.Printf("ublox 9 detected\n")
 			}
 			// ublox 9
 			writeUblox9ConfigCommands(p)
-		} else if s.GPS_detected_type == common.GPS_TYPE_UBX8 {
+		} else if s.GPSDetectedType == common.GPS_TYPE_UBX8 {
 			if s.DEBUG {
 				log.Printf("ublox 8 detected\n")
 			}
 			// ublox 8
 			writeUblox8ConfigCommands(p)
-		} else if (s.GPS_detected_type == common.GPS_TYPE_UBX7) || (s.GPS_detected_type == common.GPS_TYPE_UBX6) {
+		} else if (s.GPSDetectedType == common.GPS_TYPE_UBX7) || (s.GPSDetectedType == common.GPS_TYPE_UBX6) {
 			if s.DEBUG {
 				log.Printf("ublox 6 or 7 detected\n")
 			}
@@ -311,7 +303,7 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		if s.DEBUG {
 			log.Printf("Finished writing u-blox GPS config to %s. Opening port to test connection.\n", device)
 		}
-	} else if s.GPS_detected_type == common.GPS_TYPE_SOFTRF_DONGLE {
+	} else if s.GPSDetectedType == common.GPS_TYPE_SOFTRF_DONGLE {
 		p.Write([]byte("@GNS 0x7\r\n")) // enable SBAS
 		p.Flush()
 		time.Sleep(250 * time.Millisecond) // Otherwise second command doesn't seem to work?
@@ -453,28 +445,36 @@ func writeUbloxGenericCommands(navrate uint16, p *serial.Port) {
 
 }
 
+/**
+run the main serial reader and writer on one single connected GPS
+It will send RXMessages the rxMessageCh, it will send any gpsMessage on the txChannel back to the attached GPS
+and will send out discovery messages
+When a OGN tracker is detecdted it will configure as ublox8
+*/
 func (s *SerialGPSDevice) gpsSerialTXRX() {
 
 	serialPort := s.initGPSSerial()
 	if serialPort != nil {
-		watchdogTimer := common.NewWatchDog(5000 * time.Millisecond)
-		TXChannel := make(chan []byte, 1)
+		// Watchdog time is user to detect any GPS that is not communicating, When no data was received for 5000ms it will request to stop
+		// this serial port and bail out.
+		readerWatchdog := common.NewWatchDog(5000 * time.Millisecond)
+		TXChannel := make(chan []byte, 10) // Create a unblocking channel to receive XT messages on
 		defer func() {
-			watchdogTimer.Stop()
+			readerWatchdog.Stop()
 			serialPort.Close()
 			s.discoveredDevicesCh <- DiscoveredDevice{
-				Name:            s.gpsName,
-				Connected:       false,
+				Name:      s.gpsName,
+				Connected: false,
 			}
 		}()
 
 		s.discoveredDevicesCh <- DiscoveredDevice{
-			Name:            s.gpsName,
-			Connected:       true,
-			TXChannel:       TXChannel,
-			HasTXChannel:    true,
-			GpsDetectedType: s.GPS_detected_type,
-			GpsSource:       common.GPS_SOURCE_SERIAL,
+			Name:               s.gpsName,
+			Connected:          true,
+			TXChannel:          TXChannel,
+			HasTXChannel:       true,
+			GpsDetectedType:    s.GPSDetectedType,
+			GpsSource:          common.GPS_SOURCE_SERIAL,
 			GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
 		}
 
@@ -482,8 +482,8 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 		serialReader := func() {
 			i := 0 //debug monitor
 			scanner := bufio.NewScanner(serialPort)
-			for scanner.Scan() && !s.qh.IsQuit() {
-				watchdogTimer.Take()
+			for scanner.Scan() && !s.qh.IsQuit() && !readerWatchdog.IsTriggered() {
+				readerWatchdog.Poke()
 				i++
 				if s.DEBUG && i%100 == 0 {
 					log.Printf("serialGPSReader() scanner loop iteration i=%d\n", i) // debug monitor
@@ -500,32 +500,32 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 				// We peek into the NMEA string, if we detect OGN for the first time we configure it as a OGN device
 				if !s.ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
 					s.ognTrackerConfigured = true
-					s.GPS_detected_type = common.GPS_TYPE_OGNTRACKER
+					s.GPSDetectedType = common.GPS_TYPE_OGNTRACKER
 					s.gpsTimeOffsetPpsMs = 200 * time.Millisecond
 					go func() {
 						log.Printf("serialGPSReader() OGN detected, configuring with Ublox8 config\n")
 						writeUblox8ConfigCommands(serialPort)
 						serialPort.Flush()
-						time.Sleep(time.Second * 10)
+						time.Sleep(time.Second * 5)
 						// Generic commands always seems to return in a invalid NMEA string, hope that is fine?
-						writeUbloxGenericCommands(5, serialPort)				
+						writeUbloxGenericCommands(5, serialPort)
 						serialPort.Flush()
-						time.Sleep(time.Second * 10)
+						time.Sleep(time.Second * 5)
 						// Notify of this device type
 						s.discoveredDevicesCh <- DiscoveredDevice{
-							Name:            s.gpsName,
-							Connected:       true,
-							HasTXChannel:    false,
-							GpsDetectedType: s.GPS_detected_type,
-							GpsSource:       common.GPS_SOURCE_SERIAL,
+							Name:               s.gpsName,
+							Connected:          true,
+							HasTXChannel:       false,
+							GpsDetectedType:    s.GPSDetectedType,
+							GpsSource:          common.GPS_SOURCE_SERIAL,
 							GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
-						}	
+						}
 					}()
 				}
 
 				s.rxMessageCh <- RXMessage{
-					Name:               s.gpsName,
-					NmeaLine:           thisNmeaLine,
+					Name:     s.gpsName,
+					NmeaLine: thisNmeaLine,
 				}
 			}
 			if err := scanner.Err(); err != nil {
@@ -537,22 +537,24 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 			}
 		}
 
-		// We use a private QuitHelper because if the scanner stops we also want this serialWriter to stop
-		qh := common.NewQuitHelper()
+		// We use a private QuitHelper for the local Writer because when serialReader stops we also want the serialWriter to quit
+		localQh := common.NewQuitHelper()
+		defer localQh.Quit()
 
 		serialWriter := func() {
-			qh.Add()
-			defer qh.Done()
+			localQh.Add()
+			defer func() {
+				localQh.Done()
+			}()
 			// Rate limited to ensure we only do 2 messages per second over serial port
-			// We currently assume we will never send a lot of commands to any serial device			
-			rl := ratelimit.New(1, ratelimit.Per(2*time.Second)) 
+			// We currently assume we will never send a lot of commands to any serial device
+			rl := ratelimit.New(1, ratelimit.Per(2*time.Second))
 			for {
 				select {
-				case <-watchdogTimer.C:
+				case <-readerWatchdog.C:
 					log.Printf("serialGPSDevice: watchdog activated")
-					serialPort.Close()
 					return
-				case <-qh.C:
+				case <-localQh.C:
 					return
 				case txChannel := <-TXChannel:
 					rl.Take()
@@ -563,12 +565,15 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 		}
 
 		go serialWriter()
-		serialReader()
+		serialReader()	
 		log.Printf("serialGPSDevice: exiting gpsSerialTXRX")
 	}
 }
 
-func (s *SerialGPSDevice) pollGPS() {
+/**
+Keep running and starting GPS systems
+*/
+func (s *SerialGPSDevice) runGPSSerialTXRX() {
 	s.qh.Add()
 	defer s.qh.Done()
 	for {
@@ -580,11 +585,17 @@ func (s *SerialGPSDevice) pollGPS() {
 	}
 }
 
+/**
+Request to stop all goroutines and stop serial/GPS
+*/
 func (s *SerialGPSDevice) Stop() {
 	s.qh.Quit()
 }
 
-func (s *SerialGPSDevice) Listen() {
-
-	go s.pollGPS()
+/**
+Start the serial GPS system and start logging for devices. When found device discovery will send out message and NMEA lines will poor in
+Main tasks is configure the GPS/Location services and maintain a stable serial/USB connection
+*/
+func (s *SerialGPSDevice) Run() {
+	go s.runGPSSerialTXRX()
 }

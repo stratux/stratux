@@ -91,7 +91,6 @@ func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation *SituationData) (Situati
 	}
 	if groundspeed > 3 { //TODO: use average groundspeed over last n seconds to avoid random "jumps"
 		trueCourse = float32(tc)
-		// Not used setTrueCourse(uint16(groundspeed), tc)
 		tmpSituation.GPSTrueCourse = trueCourse
 	} else {
 		// Negligible movement. Don't update course, but do use the slow speed.
