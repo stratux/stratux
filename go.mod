@@ -26,6 +26,7 @@ require (
 	github.com/tevino/abool/v2 v2.1.0 // indirect
 	github.com/uavionix/serial v0.0.0-19700101022104-87f23b1d3198
 	github.com/ziutek/mymysql v1.5.4 // indirect
+	go.uber.org/ratelimit v0.2.0 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 	gonum.org/v1/plot v0.9.0
 	tinygo.org/x/bluetooth v0.5.0 // indirect

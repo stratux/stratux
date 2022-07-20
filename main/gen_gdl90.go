@@ -162,6 +162,8 @@ var Crc16Table [256]uint16
 // Current AHRS, pressure altitude, etc.
 var mySituation SituationData
 
+var gpsDeviceManager GPSDeviceManager
+
 type WriteCloser interface {
 	io.Writer
 	io.Closer
@@ -1726,7 +1728,7 @@ func main() {
 	initI2CSensors()
 
 	// Start the GPS external sensor monitoring.
-	gpsDeviceManager := NewGPSDeviceManager()
+	gpsDeviceManager = NewGPSDeviceManager()
 
 	go gpsDeviceManager.Listen()
 

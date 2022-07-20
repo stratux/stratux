@@ -22,6 +22,8 @@ import (
 	"os"
 
 	"github.com/b3nn0/stratux/v2/common"
+
+	"go.uber.org/ratelimit"
 )
 
 type SerialGPSDevice struct {
@@ -455,14 +457,14 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 
 	serialPort := s.initGPSSerial()
 	if serialPort != nil {
-		TXChannel := make(chan string, 1)
+		watchdogTimer := common.NewWatchDog(5000 * time.Millisecond)
+		TXChannel := make(chan []byte, 1)
 		defer func() {
+			watchdogTimer.Stop()
 			serialPort.Close()
 			s.discoveredDevicesCh <- DiscoveredDevice{
 				Name:            s.gpsName,
 				Connected:       false,
-				GpsDetectedType: s.GPS_detected_type, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-				GpsSource:       common.GPS_SOURCE_SERIAL,
 			}
 		}()
 
@@ -471,8 +473,9 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 			Connected:       true,
 			TXChannel:       TXChannel,
 			HasTXChannel:    true,
-			GpsDetectedType: s.GPS_detected_type, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+			GpsDetectedType: s.GPS_detected_type,
 			GpsSource:       common.GPS_SOURCE_SERIAL,
+			GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
 		}
 
 		// Blocking function that reads serial data
@@ -480,6 +483,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 			i := 0 //debug monitor
 			scanner := bufio.NewScanner(serialPort)
 			for scanner.Scan() && !s.qh.IsQuit() {
+				watchdogTimer.Take()
 				i++
 				if s.DEBUG && i%100 == 0 {
 					log.Printf("serialGPSReader() scanner loop iteration i=%d\n", i) // debug monitor
@@ -497,18 +501,28 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 				if !s.ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
 					s.ognTrackerConfigured = true
 					s.GPS_detected_type = common.GPS_TYPE_OGNTRACKER
-					log.Printf("serialGPSReader() OGN detected, configuring as Ublox8\n")
+					log.Printf("serialGPSReader() OGN detected, configuringwith Ublox8 config\n")
 					writeUblox8ConfigCommands(serialPort)
 					writeUbloxGenericCommands(5, serialPort)				
 					serialPort.Flush()
+
+					go func() {
+						// Wait 10 seconds for the device to configure
+						time.Sleep(time.Second * 10)
+						s.discoveredDevicesCh <- DiscoveredDevice{
+							Name:            s.gpsName,
+							Connected:       true,
+							HasTXChannel:    false,
+							GpsDetectedType: s.GPS_detected_type,
+							GpsSource:       common.GPS_SOURCE_SERIAL,
+							GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
+						}	
+					}()
 				}
 
 				s.rxMessageCh <- RXMessage{
 					Name:               s.gpsName,
 					NmeaLine:           thisNmeaLine,
-					GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
-					GpsDetectedType:    s.GPS_detected_type,
-					GpsSource:          common.GPS_SOURCE_SERIAL,
 				}
 
 			}
@@ -527,20 +541,28 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 		serialWriter := func() {
 			qh.Add()
 			defer qh.Done()
+			// Rate limited to ensure we only do 2 messages per second over serial port
+			// We currently assume we will never send a lot of commands to any serial device			
+			rl := ratelimit.New(1, ratelimit.Per(2*time.Second)) 
 			for {
 				select {
+				case <-watchdogTimer.C:
+					log.Printf("serialGPSDevice: watchdog activated")
+					serialPort.Close()
+					return
 				case <-qh.C:
 					return
 				case txChannel := <-TXChannel:
-					serialPort.Write(common.MakeNMEACmd(txChannel))
+					rl.Take()
+					serialPort.Write(txChannel)
+					serialPort.Flush()
 				}
 			}
 		}
 
 		go serialWriter()
 		serialReader()
-		qh.Quit()
-
+		log.Printf("serialGPSDevice: exiting gpsSerialTXRX")
 	}
 }
 
@@ -552,7 +574,7 @@ func (s *SerialGPSDevice) pollGPS() {
 			return
 		}
 		s.gpsSerialTXRX()
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 	}
 }
 

@@ -22,6 +22,8 @@ import (
 
 	"github.com/b3nn0/stratux/v2/common"
 	"github.com/b3nn0/stratux/v2/gps"
+	cmap "github.com/orcaman/concurrent-map"
+
 )
 
 //const AFFECTS_GPS_FIX_QUALITY := []string{"GNRMC", "GPRMC", "GNGSA", "GPGSA", "GAGSA", "GBGSA"}
@@ -120,21 +122,13 @@ var gpsPerf gpsPerfStats
 var myGPSPerfStats []gpsPerfStats
 var gpsTimeOffsetPpsMs = 100.0 * time.Millisecond
 
-var serialConfig *serial.Config
-var serialPort *serial.Port
-
-var readyToInitGPS bool //TODO: replace with channel control to terminate goroutine when complete
-
-	cs_calc := byte(0)
-	for i := range s_out {
-		cs_calc = cs_calc ^ byte(s_out[i])
-	}
+var Satellites map[string]SatelliteInfo
 
 var ognTrackerConfigured = false
 
 type GPSDeviceStatus struct {
 	gpsTimeOffsetPpsMs time.Duration
-	gpsSource          int
+	gpsSource          uint16
 	gpsFixQuality      uint8
 	gpsLastSeen        uint64
 	gpsLastGoodFix     uint64
@@ -150,6 +144,12 @@ type GPSDeviceManager struct {
 	rxMessageCh         chan gps.RXMessage         // Channel used by all GPS devices to receive NMEA data from
 	discoveredDevicesCh chan gps.DiscoveredDevice  // Channel used to send information about discovered devices
 	txMessageCh         chan gps.TXMessage         // Channel used to send a any device a message
+
+	ognTrackerConfigured bool
+
+	systemTimeSetter    chan time.Time
+	discoveredDevices   cmap.ConcurrentMap
+
 }
 
 func NewGPSDeviceManager() GPSDeviceManager {
@@ -163,6 +163,9 @@ func NewGPSDeviceManager() GPSDeviceManager {
 		rxMessageCh:         make(chan gps.RXMessage, 20),
 		txMessageCh:         make(chan gps.TXMessage, 20),
 		discoveredDevicesCh: make(chan gps.DiscoveredDevice, 20),
+		ognTrackerConfigured: false,
+		systemTimeSetter:    make(chan time.Time, 0),
+		discoveredDevices:   cmap.New(),
 	}
 }
 
@@ -750,21 +753,28 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, gpsTimeOffsetP
 		if strings.Contains(l, "GGA,") || strings.Contains(l, "RMC,") {
 			tmpSituation.GPSLatitude += float32(stratuxClock.Milliseconds) / 1000.0 / 60.0 / 30.0
 		}
-		var vspeed float64
 
-			var err error
-			if common.IsRunningAsRoot() {
-				err = exec.Command("date", "-s", setStr).Run()
-			} else {
-				err = exec.Command("sudo", "date", "-s", setStr).Run()
-			}
-			if err != nil {
-				log.Printf("Set Date failure: %s error\n", err)
-			} else {
-				log.Printf("Time set from GPS. Current time is %v\n", time.Now())
-			}
-		}
-	}()
+		tmpSituation.GPSTrueCourse = 0
+		tmpSituation.GPSGroundSpeed = 110
+		tmpSituation.GPSAltitudeMSL = 5000
+		tmpSituation.GPSHeightAboveEllipsoid = 5000
+		tmpSituation.BaroPressureAltitude = 4800
+		mySituation = tmpSituation
+	}()*/
+
+	// Local variables for GPS attitude estimation
+	thisGpsPerf := gpsPerf                              // write to myGPSPerfStats at end of function IFF
+	thisGpsPerf.coursef = -999.9                        // default value of -999.9 indicates invalid heading to regression calculation
+	thisGpsPerf.stratuxTime = stratuxClock.Milliseconds // used for gross indexing
+
+	ognPublishNmea(l)
+	x := strings.Split(l[1:], ",")
+
+	mySituation.GPSLastValidNMEAMessageTime = stratuxClock.Time
+	mySituation.GPSLastValidNMEAMessage = l
+
+	// Use a unbuffered channel to set the time calling exec,
+	// this span's a new process which can take a long time to return When setting time we ensure we just ensure we only call this once
 
 	// ############################################# GNVTG GNVTG #############################################
 	if (x[0] == "GNVTG") || (x[0] == "GPVTG") { // Ground track information.
@@ -818,7 +828,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, gpsTimeOffsetP
 			if len(x[9]) == 6 {
 				if time.Since(mySituation.GPSTime) > 300*time.Millisecond || time.Since(mySituation.GPSTime) < -300*time.Millisecond {
 					select {
-					case systemTimeSetter <- mySituation.GPSTime:
+					case s.systemTimeSetter <- mySituation.GPSTime:
 					default:
 						if globalSettings.DEBUG {
 							log.Println("WARNING: Time setting in progress, disregarding value")
@@ -885,12 +895,9 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, gpsTimeOffsetP
 		// ############################################# POGNR #############################################
 	} else if x[0] == "POGNR" {
 		// Only sent by OGN tracker. We use this to detect that OGN tracker is connected and configure it as needed
-		if !ognTrackerConfigured {
-			ognTrackerConfigured = true
-			go func() {
-				time.Sleep(10 * time.Second)
-				s.configureOgnTracker(name)
-			}()
+		if !s.ognTrackerConfigured {
+			s.ognTrackerConfigured = true
+			s.configureOgnTracker(name)
 		}
 
 		return true
@@ -898,7 +905,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, gpsTimeOffsetP
 	} else if x[0] == "POGNS" {
 		// Tracker notified us of restart (crashed?) -> ensure we configure it again
 		if len(x) == 2 && x[1] == "SysStart" {
-			ognTrackerConfigured = false
+			s.ognTrackerConfigured = false
 			return true
 		}
 		// OGN tracker sent us its configuration
@@ -1047,45 +1054,60 @@ func isTempPressValid2(mySitu SituationData) bool {
 
 func (s *GPSDeviceManager) configureOgnTracker(name string) {
 
+	// Request navrate of 5Hz
 	s.configureGPS( gps.TXMessage {
-		Message: common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n",
+		Message: []byte(common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n"),
 		Name: name,
 	})
 
+	// Request stored OGN tracker configuration to be send back to us
 	s.configureGPS( gps.TXMessage {
-		Message: getOgnTrackerConfigQueryString(),
+		Message: []byte(s.getOgnTrackerConfigQueryString()),
 		Name: name,
 	})
 
 	device,_ := s.gpsDeviceStatus[name]
 	device.gpsTimeOffsetPpsMs = 200 * time.Millisecond
-
-	// Configuration for OGN Tracker T-Beam is similar to normal Ublox config
-	//writeUblox8ConfigCommands(s.serialPort)
-	//writeUbloxGenericCommands(5, s.serialPort)
+	s.gpsDeviceStatus[name] = device
 }
 
-func getOgnTrackerConfigString() string {
+// Get OGN string to configure OGN connected device with our settings
+func (s *GPSDeviceManager) getOgnTrackerConfigString(name string) string {
 	msg := fmt.Sprintf("$POGNS,Address=0x%s,AddrType=%d,AcftType=%d,Pilot=%s,Reg=%s,TxPower=%d,Hard=STX,Soft=%s",
 		globalSettings.OGNAddr, globalSettings.OGNAddrType, globalSettings.OGNAcftType, globalSettings.OGNPilot, globalSettings.OGNReg, globalSettings.OGNTxPower, stratuxVersion[1:])
 	msg = common.AppendNmeaChecksum(msg)
 	return msg + "\r\n"
 }
 
-func getOgnTrackerConfigQueryString() string {
+// Request reading of the stored settings
+func (s *GPSDeviceManager) getOgnTrackerConfigQueryString() string {
 	return common.AppendNmeaChecksum("$POGNS") + "\r\n"
 }
 
-func configureOgnTrackerFromSettings() {
+// Configure OGN connected device with our settings
+func (s *GPSDeviceManager) configureOgnTrackerFromSettings(name string) {
 
-	cfg := getOgnTrackerConfigString()
-	log.Printf("Configuring OGN Tracker: %s ", cfg)
+	cfg := s.getOgnTrackerConfigString(name)
+	log.Printf("GPS: Configuring OGN Tracker: %s ", cfg)
 
-	//string nmeaString = getOgnTrackerConfigQueryString()
+	s.configureGPS( gps.TXMessage {
+		Message: []byte(cfg),
+		Name: name,
+	})
 
-	// s.serialPort.Write([]byte(cfg))
-	// s.serialPort.Write([]byte(getOgnTrackerConfigQueryString())) // re-read settings from tracker
-	// s.serialPort.Flush()
+	s.configureGPS( gps.TXMessage {
+		Message: []byte(s.getOgnTrackerConfigQueryString()),
+		Name: name,
+	})
+}
+
+func (s *GPSDeviceManager) ConfigureOgnTrackerFromSettings() {
+	for entry := range s.discoveredDevices.IterBuffered() {
+		v := entry.Val.(gps.DiscoveredDevice)
+		if v.GpsDetectedType == common.GPS_TYPE_OGNTRACKER {
+			s.configureOgnTrackerFromSettings(v.Name)
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1107,7 +1129,7 @@ func (d *GPSDeviceStatus) hasValidFix() bool {
 
 // Find a gps Source with a fix
 // Not thread safe, only call from within a lock
-func (s *GPSDeviceManager) gpsDeviceWithFix(GpsSource int) (string, GPSDeviceStatus) {
+func (s *GPSDeviceManager) gpsDeviceWithFix(GpsSource uint16) (string, GPSDeviceStatus) {
 	// TODO: RVT: We should sort on a GPS devices with the best fix ??
 	for k, v := range s.gpsDeviceStatus {
 		if v.gpsSource == GpsSource && v.hasValidFix() {
@@ -1119,7 +1141,7 @@ func (s *GPSDeviceManager) gpsDeviceWithFix(GpsSource int) (string, GPSDeviceSta
 
 // Find any GPS with a fix with preference to gpsSource
 // Not thread safe, only call from within a lock
-func (s *GPSDeviceManager) anyGpsDeviceWithFix(gpsSource int) (string, GPSDeviceStatus) {
+func (s *GPSDeviceManager) anyGpsDeviceWithFix(gpsSource uint16) (string, GPSDeviceStatus) {
 	k, v := s.gpsDeviceWithFix(gpsSource)
 	if !v.hasValidFix() {
 		k, v = s.gpsDeviceWithFix(0)
@@ -1135,9 +1157,11 @@ func (s *GPSDeviceManager) maintainAndDecideGPSConnections() {
 		s.m.Lock()
 		defer s.m.Unlock()
 
+		currentGPSSource, hasDeviceConfig := s.gpsDeviceStatus[s.currentGPSName]
+
 		// If no GPS was selected, we just pick a GPS source
-		if s.currentGPSName == "" {
-			k, _ := s.anyGpsDeviceWithFix(globalSettings.GPSPreferredSource)
+		if s.currentGPSName == "" || !hasDeviceConfig {
+			k, _ := s.anyGpsDeviceWithFix(uint16(globalSettings.GPSPreferredSource))
 			if k == "" {
 				for arbitaryItem := range s.gpsDeviceStatus {
 					s.currentGPSName = arbitaryItem
@@ -1149,12 +1173,12 @@ func (s *GPSDeviceManager) maintainAndDecideGPSConnections() {
 		}
 
 		// Find the current GPS device and validate if it is still valid
-		currentGPSSource, hasDeviceConfig := s.gpsDeviceStatus[s.currentGPSName]
 		if hasDeviceConfig {
 			// Verify of we still have a good fix from the current GPS device, if not we find a other
 			// GPS with a good fix, if not found then we keep current GPS
+			GPSPreferredSource := uint16(globalSettings.GPSPreferredSource)
 			if !currentGPSSource.hasValidFix() {
-				anyGpsName, _ := s.anyGpsDeviceWithFix(globalSettings.GPSPreferredSource)
+				anyGpsName, _ := s.anyGpsDeviceWithFix(GPSPreferredSource)
 				if anyGpsName != "" {
 					s.currentGPSName = anyGpsName
 				}
@@ -1162,8 +1186,8 @@ func (s *GPSDeviceManager) maintainAndDecideGPSConnections() {
 
 			// Verify if the current GPS source might not be preferred, if so then lookup a GPS
 			// source that is preferrred and has a fix, if found use the preferred source if not leave it as is
-			if currentGPSSource.gpsSource != globalSettings.GPSPreferredSource {
-				possiblePreferredSource, _ := s.gpsDeviceWithFix(globalSettings.GPSPreferredSource)
+			if currentGPSSource.gpsSource != GPSPreferredSource {
+				possiblePreferredSource, _ := s.gpsDeviceWithFix(GPSPreferredSource)
 				if possiblePreferredSource != "" {
 					s.currentGPSName = possiblePreferredSource
 				}
@@ -1198,11 +1222,10 @@ func (s *GPSDeviceManager) listenToGPSMessages() {
 
 		if !hasDeviceConfig {
 			thisGPS = GPSDeviceStatus{
-				gpsTimeOffsetPpsMs: line.GpsTimeOffsetPpsMs,
+				gpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 				gpsFixQuality:      0,
 				gpsLastGoodFix:     0,
 				gpsCRCErrors:       0,
-				gpsSource:          int(line.GpsSource),
 			}
 		}
 		thisGPS.gpsLastSeen = stratuxClock.Milliseconds
@@ -1215,10 +1238,9 @@ func (s *GPSDeviceManager) listenToGPSMessages() {
 			}
 			thisGPS.gpsCRCErrors++
 		} else {
-
 			nmeaSlice := strings.Split(l_valid, ",")
 
-			// Flarm NMEA traffic data will be used from all sources
+			// Some commands that do not affect GPS locaiton services can always be processed
 			if common.StringInSlice(nmeaSlice[0], ALWAYS_PROCESS_NMEAS) {
 				processFlarmNmeaMessage(nmeaSlice)
 				s.processNMEALine(line.NmeaLine, line.Name, thisGPS.gpsTimeOffsetPpsMs)
@@ -1226,12 +1248,15 @@ func (s *GPSDeviceManager) listenToGPSMessages() {
 
 				if s.currentGPSName == line.Name { // If this GPS is the GPS we decided to work with, we parse and process
 					s.processNMEALine(line.NmeaLine, line.Name, thisGPS.gpsTimeOffsetPpsMs)
+					if deviceRaw, ok := s.discoveredDevices.Get(line.Name); ok {
+						device := deviceRaw.(gps.DiscoveredDevice)
+						globalStatus.GPS_detected_type = (globalStatus.GPS_detected_type & 0xF0) | device.GpsDetectedType
+						globalStatus.GPS_source = uint(device.GpsSource)
+						thisGPS.gpsSource = device.GpsSource // TODO: RVT: We need to gpsSource in the gpsDevice status for sorting, we could also just use the map?
+					}
 					globalStatus.GPS_source_name = line.Name
-					globalStatus.GPS_source = uint(line.GpsSource)
-					globalStatus.GPS_detected_type = (globalStatus.GPS_detected_type & 0xF0) | uint(line.GpsDetectedType)
 					globalStatus.GPS_connected = true
 				}
-
 
 				// Check and remmeber this GPS fix quality
 				fq := SituationData{}
@@ -1288,7 +1313,7 @@ func (s *GPSDeviceManager) configChangeWatcher(forceInit bool) {
 }
 
 /**
-Congiure and enable GPS system
+Configure and enable GPS system
 */
 func (s *GPSDeviceManager) configureGPSSubsystem() {
 	log.Printf("GPS: listenInternal: Started")
@@ -1299,8 +1324,9 @@ func (s *GPSDeviceManager) configureGPSSubsystem() {
 	serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, s.discoveredDevicesCh, globalSettings.DEBUG)
 
 	defer func() {
-		log.Printf("GPS: Stopping")
+		log.Printf("GPS: Stopping bleGPSDevice")
 		bleGPSDevice.Stop()
+		log.Printf("GPS: Stopping serialGPSDevice")
 		serialGPSDevice.Stop()
 		log.Printf("GPS: Stopped")
 	}()
@@ -1319,45 +1345,40 @@ func (s *GPSDeviceManager) configureGPSSubsystem() {
 }
 
 func (s *GPSDeviceManager) maintainConnectedDeviceList() {
-	devices := make(map[string]gps.DiscoveredDevice)
+	handleDeviceDiscovery := func(discoveredDevice gps.DiscoveredDevice) {
 
-	handleDeviceDiscovery := func(discoveredDevice *gps.DiscoveredDevice) {
-
-		// Copy new variables into existing connections
-		// Note: Might have been better to create a seperate cxhannel for TX channels that can be announced?
-		if previous, ok := devices[discoveredDevice.Name]; ok {
-			if discoveredDevice.HasTXChannel {
-				previous.HasTXChannel = true
-				previous.TXChannel = discoveredDevice.TXChannel
+		// Copy TXChannel if one previously was already known because device discovery might not always have a TXCHannel added
+		if previousRaw, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
+			previous := previousRaw.(gps.DiscoveredDevice)
+			if previous.HasTXChannel && !discoveredDevice.HasTXChannel {
+				discoveredDevice.HasTXChannel = true
+				discoveredDevice.TXChannel = previous.TXChannel
 			}
-			previous.Connected = discoveredDevice.Connected
-			previous.LastSeen = stratuxClock.Milliseconds
-			devices[discoveredDevice.Name] = previous
-		} else {
-			discoveredDevice.LastSeen = stratuxClock.Milliseconds
-			devices[discoveredDevice.Name] = *discoveredDevice
 		}
+		discoveredDevice.LastDiscoveryMessage = stratuxClock.Milliseconds
+		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)
 
 		// Build list of GPS_Discovery source for the UI
 		deviceList := []gps.DiscoveredDeviceDTO{}
-		for _, v := range devices {
-			//	if v.LastSeen > stratuxClock.Milliseconds - 5000 {
+		for entry := range s.discoveredDevices.IterBuffered() {
+			v := entry.Val.(gps.DiscoveredDevice)
+			// Show all devices we have seen since uptime
 			deviceList = append(deviceList, gps.DiscoveredDeviceDTO{
 				Name:            v.Name,
 				Connected:       v.Connected,
-				LastSeen:        v.LastSeen,
+				LastDiscoveryMessage:        v.LastDiscoveryMessage,
 				GpsDetectedType: v.GpsDetectedType,
 				GpsSource:       v.GpsSource,
 			})
-			//	}
 		}
 		globalStatus.GPS_Discovery = deviceList
 	}
 
 	sendGPSMessage := func(message *gps.TXMessage) {
-		if device, ok := devices[message.Name]; ok {
+		if deviceRaw, ok := s.discoveredDevices.Get(message.Name); ok {
+			device := deviceRaw.(gps.DiscoveredDevice)
 			if device.Connected && device.HasTXChannel {
-				device.TXChannel <- message.Message
+				device.TXChannel <- []byte(message.Message)
 			}
 		}
 	}
@@ -1365,11 +1386,31 @@ func (s *GPSDeviceManager) maintainConnectedDeviceList() {
 	for {
 		select {
 		case discoveredDevice := <-s.discoveredDevicesCh:
-			handleDeviceDiscovery(&discoveredDevice)
+			handleDeviceDiscovery(discoveredDevice)
 			break
 		case txConfig := <-s.txMessageCh:
 			sendGPSMessage(&txConfig)
 			break
+		}
+	}
+}
+
+func (s *GPSDeviceManager) systemTimeSetterHandler() {
+	for {
+		newTime := <-s.systemTimeSetter
+		setStr := newTime.Format("20060102 15:04:05.000") + " UTC"
+		log.Printf("setting system time from %s to: '%s'\n", time.Now().Format("20060102 15:04:05.000"), setStr)
+
+		var err error
+		if common.IsRunningAsRoot() {
+			err = exec.Command("date", "-s", setStr).Run()
+		} else {
+			err = exec.Command("sudo", "date", "-s", setStr).Run()
+		}
+		if err != nil {
+			log.Printf("Set Date failure: %s error\n", err)
+		} else {
+			log.Printf("Time set from GPS. Current time is %v\n", time.Now())
 		}
 	}
 }
@@ -1379,6 +1420,7 @@ func (s *GPSDeviceManager) Listen() {
 	log.Printf("GPS: Listen: Started")
 	// message := make(chan DiscoveredDevice, 20)
 
+	go s.systemTimeSetterHandler()
 	go s.configChangeWatcher(true)
 	go s.listenToGPSMessages()
 	go s.maintainAndDecideGPSConnections()

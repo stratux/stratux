@@ -524,7 +524,7 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 				saveSettings()
 				applyNetworkSettings(false, false)
 				if reconfigureOgnTracker {
-					// TODO: RVT configureOgnTrackerFromSettings()
+					gpsDeviceManager.ConfigureOgnTrackerFromSettings()
 				}
 				if reconfigureFancontrol {
 					exec.Command("killall", "-SIGUSR1", "fancontrol").Run();
