@@ -45,20 +45,20 @@ type nmeaNewLine struct {
 //}
 
 type BleGPSDevice struct {
-	adapter                 bluetooth.Adapter
+	adapter              bluetooth.Adapter
 	discoveredDeviceList cmap.ConcurrentMap
-	qh                      *common.QuitHelper
-	rxMessageCh chan <- RXMessage
-	discoveredDevicesCh chan <- DiscoveredDevice
+	qh                   *common.QuitHelper
+	rxMessageCh          chan<- RXMessage
+	discoveredDevicesCh  chan<- DiscoveredDevice
 }
 
-func NewBleGPSDevice(rxMessageCh chan <- RXMessage, discoveredDevicesCh chan <- DiscoveredDevice) BleGPSDevice {
+func NewBleGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- DiscoveredDevice) BleGPSDevice {
 	return BleGPSDevice{
-		adapter:                 *bluetooth.DefaultAdapter,
+		adapter:              *bluetooth.DefaultAdapter,
 		discoveredDeviceList: cmap.New(),
-		qh:                      common.NewQuitHelper(),
-		rxMessageCh: rxMessageCh,
-		discoveredDevicesCh: discoveredDevicesCh,
+		qh:                   common.NewQuitHelper(),
+		rxMessageCh:          rxMessageCh,
+		discoveredDevicesCh:  discoveredDevicesCh,
 	}
 }
 
@@ -78,16 +78,15 @@ change /boot/config.txt and set # dtoverlay=disable-bt
 */
 
 var (
-	serviceUARTUUID = bluetooth.ServiceUUIDNordicUART
-	rxUUID          = bluetooth.CharacteristicUUIDUARTRX
-	txUUID          = bluetooth.CharacteristicUUIDUARTTX
+	serviceUUID, _ = bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
+	characteristicsUUID, _ = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
 )
 
 // WATCHDOG for the blue device, if we do not receive data at least once a second we will diconnect and re-connect
 const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 
 // AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
-func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan <- scanInfoResult) {
+func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoResult) {
 	b.qh.Add()
 	defer b.qh.Done()
 
@@ -96,9 +95,9 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan <- scanInfo
 			// Note: within func we are within a interrupt service route, no big processing allowed
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
 				// Check for Nordic serial service
-				if !result.AdvertisementPayload.HasServiceUUID(serviceUARTUUID) {
+				if !result.AdvertisementPayload.HasServiceUUID(serviceUUID) {
 					return
-				// Address must exist otherwhise we cannot connect to it
+					// Address must exist otherwhise we cannot connect to it
 				} else if result.Address != nil {
 					scanInfoResultChan <- scanInfoResult{result.Address.String(), result.LocalName()}
 				}
@@ -117,7 +116,7 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan <- scanInfo
 /**
 Coonect to our bluetooth device and listen on the RX channel for NMEA sentences
 **/
-func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan <- nmeaNewLine, TXChannel <- chan []byte) error {
+func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan<- nmeaNewLine, TXChannel <-chan []byte) error {
 	b.qh.Add()
 	defer b.qh.Done()
 
@@ -136,18 +135,14 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 		log.Printf("bleGPSDevice: Disconnected from : %s", discoveredDeviceInfo.name)
 	}()
 
-	// Connected. Look up the Nordic UART Service,
-	serviceUuid,_ := bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
-	fpp,_ := bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
-
-	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUuid})
+	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUUID})
 	if err != nil {
 		return err
 	}
 	service := services[0]
 
 	// Get the two characteristics present in this service.
-	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{fpp})
+	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{characteristicsUUID})
 	if err != nil {
 		return err
 	}
@@ -182,7 +177,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 				if c == 0x0d && sentenceStarted && charPosition < MAX_NMEA_LENGTH {
 					sentenceStarted = false
 					thisOne := string(byteArray[0:charPosition])
-				    sentenceChannel <- nmeaNewLine{thisOne, discoveredDeviceInfo}
+					sentenceChannel <- nmeaNewLine{thisOne, discoveredDeviceInfo}
 				}
 
 				// Start of a new NMEA sentence
@@ -232,7 +227,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 /**
 connectionMonitor monitors the list discoveredDeviceList for disconnected devices and reconnects them again
 */
-func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
+func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan<- nmeaNewLine) {
 	b.qh.Add()
 	defer b.qh.Done()
 
@@ -245,7 +240,7 @@ func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
 			for entry := range b.discoveredDeviceList.IterBuffered() {
 				info := entry.Val.(*discoveredDeviceInfo)
 
-				// Send a message back about if the device is connected and the name of the discovered device				
+				// Send a message back about if the device is connected and the name of the discovered device
 				if !info.Connected {
 					info.Connected = true
 					go func() {
@@ -262,35 +257,35 @@ func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
 						info.Connected = false
 						b.updateDeviceDiscovery(info.name, false)
 					}()
-				}				
+				}
 			}
 		}
 	}
 }
 
 func (b *BleGPSDevice) updateDeviceDiscovery(name string, connected bool) {
-	b.discoveredDevicesCh <- DiscoveredDevice {
-		Name: name,
-		Connected: connected,
-		GpsDetectedType: common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-		GpsSource: common.GPS_SOURCE_BLE,
+	b.discoveredDevicesCh <- DiscoveredDevice{
+		Name:               name,
+		Connected:          connected,
+		GpsDetectedType:    common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+		GpsSource:          common.GPS_SOURCE_BLE,
 		GpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 	}
 }
 
 func (b *BleGPSDevice) updateDeviceDiscoveryWithChannel(name string, TXChannel chan []byte) {
-	b.discoveredDevicesCh <- DiscoveredDevice {
-		Name: name,
-		Connected: true,
-		HasTXChannel: true,
-		TXChannel: TXChannel,
-		GpsDetectedType: common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-		GpsSource: common.GPS_SOURCE_BLE,
+	b.discoveredDevicesCh <- DiscoveredDevice{
+		Name:               name,
+		Connected:          true,
+		HasTXChannel:       true,
+		TXChannel:          TXChannel,
+		GpsDetectedType:    common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+		GpsSource:          common.GPS_SOURCE_BLE,
 		GpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 	}
 }
 
-func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <- chan nmeaNewLine) {
+func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <-chan nmeaNewLine) {
 	b.qh.Add()
 	defer b.qh.Done()
 
@@ -300,9 +295,9 @@ func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <- chan nmeaNewLine) {
 			return
 		case nmeaSentence := <-nmeaSentenceChannel:
 			select {
-			case b.rxMessageCh <- RXMessage {
-				Name:               nmeaSentence.device.name,
-				NmeaLine:           nmeaSentence.nmeaLine,
+			case b.rxMessageCh <- RXMessage{
+				Name:     nmeaSentence.device.name,
+				NmeaLine: nmeaSentence.nmeaLine,
 			}:
 			default:
 				log.Printf("BleGPSDevice: rxMessageCh Full, skipping lines")
@@ -331,8 +326,6 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 	go b.switchBoard(nmeaSentenceChannel)
 	go b.advertisementListener(scanInfoResultChannel)
 
-	log.Printf("%s:%s:%s", rxUUID.String(), txUUID.String(), serviceUARTUUID.String())
-
 	for {
 		select {
 		case <-b.qh.C:
@@ -340,8 +333,7 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 		case address := <-scanInfoResultChannel:
 			// Only allow names we see in our list in our allowed list
 			if !common.StringInSlice(address.name, allowedDeviceList) {
-				log.Printf("Device : %s found", address.MAC)
-
+				// log.Printf("Device : %s %s found", address.MAC, address.Name)
 				// Send a message about a discovered device, even if it's not configured for reading
 				b.updateDeviceDiscovery(address.name, false)
 			} else {
@@ -351,7 +343,7 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 
 					// Send a message about that was added to a list
 					b.updateDeviceDiscovery(address.name, false)
-				}	
+				}
 			}
 		}
 	}
