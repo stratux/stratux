@@ -15,8 +15,6 @@ import (
 
 	"time"
 
-	"sync/atomic"
-
 	"github.com/b3nn0/stratux/v2/common"
 	cmap "github.com/orcaman/concurrent-map"
 	"tinygo.org/x/bluetooth"
@@ -129,7 +127,6 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 	// Connect to device
 	device, err := b.adapter.Connect(bluetooth.Address{MACAddress: btAddress}, bluetooth.ConnectionParams{})
 	if err != nil {
-		log.Printf("bleGPSDevice: Failed to connect to : %s : %s", discoveredDeviceInfo.name, err.Error())
 		return err
 	}
 
@@ -140,29 +137,29 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 	}()
 
 	// Connected. Look up the Nordic UART Service,
-	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUARTUUID})
+	serviceUuid,_ := bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
+	fpp,_ := bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
+
+	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUuid})
 	if err != nil {
-		log.Printf("bleGPSDevice: Failed to discover service : %s : %s", discoveredDeviceInfo.name, err.Error())
 		return err
 	}
 	service := services[0]
 
 	// Get the two characteristics present in this service.
-	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{rxUUID, txUUID})
+	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{fpp})
 	if err != nil {
-		log.Printf("bleGPSDevice: Failed RX services : %s : %s", discoveredDeviceInfo.name, err.Error())
 		return err
 	}
 
 	// variables for the NMEA parser
-	var receivedDataSize int32
-	receivedData := make([]byte, 2048)
+	var receivedData []byte
 
 	// Mutex + condition to sync the write/read routines
 	mutex := sync.Mutex{}
 	condition := sync.NewCond(&mutex)
 
-	tx := chars[1]
+	tx := chars[0]
 	go func() {
 		const MAX_NMEA_LENGTH = 79
 		var charPosition int
@@ -171,33 +168,31 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 		for {
 			mutex.Lock()
 			condition.Wait()
-			size := int(atomic.LoadInt32(&receivedDataSize))
-			if size > 0 {
-				for i := 0; i < size; i++ {
-					c := receivedData[i]
-					// Within NMEA sentence?
-					if sentenceStarted &&
-						c >= 0x20 && c <= 0x7e &&
-						charPosition < MAX_NMEA_LENGTH {
-						byteArray[charPosition] = c
-						charPosition++
-					}
+			for i := 0; i < len(receivedData); i++ {
+				c := receivedData[i]
+				// Within NMEA sentence?
+				if sentenceStarted &&
+					c >= 0x20 && c <= 0x7e &&
+					charPosition < MAX_NMEA_LENGTH {
+					byteArray[charPosition] = c
+					charPosition++
+				}
 
-					// End of a NMEA sentence
-					if c == 0x0d && sentenceStarted && charPosition < MAX_NMEA_LENGTH {
-						sentenceStarted = false
-						thisOne := string(byteArray[0:charPosition])
-						sentenceChannel <- nmeaNewLine{thisOne, discoveredDeviceInfo}
-					}
+				// End of a NMEA sentence
+				if c == 0x0d && sentenceStarted && charPosition < MAX_NMEA_LENGTH {
+					sentenceStarted = false
+					thisOne := string(byteArray[0:charPosition])
+				    sentenceChannel <- nmeaNewLine{thisOne, discoveredDeviceInfo}
+				}
 
-					// Start of a new NMEA sentence
-					if c == '$' {
-						sentenceStarted = true
-						byteArray[0] = c
-						charPosition = 1
-					}
+				// Start of a new NMEA sentence
+				if c == '$' {
+					sentenceStarted = true
+					byteArray[0] = c
+					charPosition = 1
 				}
 			}
+			receivedData = receivedData[:0]
 			mutex.Unlock()
 		}
 	}()
@@ -217,8 +212,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 
 		// Copy received data
 		mutex.Lock()
-		atomic.StoreInt32(&receivedDataSize, int32(len(value)))
-		copy(receivedData, value)
+		receivedData = append(receivedData, value...)
 		condition.Signal()
 		mutex.Unlock()
 	})
@@ -242,7 +236,7 @@ func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan <- nmeaNewLine) {
 	b.qh.Add()
 	defer b.qh.Done()
 
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	for {
 		select {
 		case <-b.qh.C:
@@ -331,11 +325,13 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 	}
 
 	scanInfoResultChannel := make(chan scanInfoResult, 1)
-	nmeaSentenceChannel := make(chan nmeaNewLine, 0)
+	nmeaSentenceChannel := make(chan nmeaNewLine, 5)
 
 	go b.connectionMonitor(nmeaSentenceChannel)
 	go b.switchBoard(nmeaSentenceChannel)
 	go b.advertisementListener(scanInfoResultChannel)
+
+	log.Printf("%s:%s:%s", rxUUID.String(), txUUID.String(), serviceUARTUUID.String())
 
 	for {
 		select {
@@ -344,7 +340,7 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 		case address := <-scanInfoResultChannel:
 			// Only allow names we see in our list in our allowed list
 			if !common.StringInSlice(address.name, allowedDeviceList) {
-				// log.Printf("Device : %s Not in approved list of %s", address.name, strings.Join(allowedDeviceList[:], ","))
+				log.Printf("Device : %s found", address.MAC)
 
 				// Send a message about a discovered device, even if it's not configured for reading
 				b.updateDeviceDiscovery(address.name, false)
