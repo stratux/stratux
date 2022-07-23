@@ -10,6 +10,7 @@
 package gps
 
 import (
+	"errors"
 	"log"
 	"sync"
 
@@ -88,29 +89,35 @@ const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 // AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
 func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoResult) {
 	b.qh.Add()
-	defer b.qh.Done()
-
-	go func() {
+	defer func() {
+		b.adapter.StopScan()
+		b.qh.Done()
+	}()
+	executeScan := func() error {
 		err := b.adapter.Scan(
-			// Note: within func we are within a interrupt service route, no big processing allowed
+			// Note: within func we might be within a interrupt service route, no heap allocation allowed
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-				// Check for Nordic serial service
-				if !result.AdvertisementPayload.HasServiceUUID(serviceUUID) {
-					return
-					// Address must exist otherwhise we cannot connect to it
-				} else if result.Address != nil {
+				if result.AdvertisementPayload.HasServiceUUID(serviceUUID) && result.Address != nil {
+					b.adapter.StopScan()
 					scanInfoResultChan <- scanInfoResult{result.Address.String(), result.LocalName()}
 				}
 			})
 		if err != nil {
-			log.Printf("bleGPSDevice: Failed to start scan %s", err.Error())
-			// TODO: RVT: If scan start fails, we should somehow restart the whole bluetooth stack.
-			return
+			return errors.New("Error from adapter.Scan: " + err.Error())
 		}
-	}()
+		return nil
+	}
 
-	<-b.qh.C
-	b.adapter.StopScan()
+	// Scan de ble stack every 5000ms for new devices
+	timer := time.NewTicker(5000 * time.Millisecond)
+	select {
+	case <-b.qh.C:
+		return
+	case <- timer.C:
+		if err :=executeScan(); err!=nil {
+			log.Printf("Error from ble scanner: %s", err.Error())
+		}
+	}
 }
 
 /**
@@ -263,8 +270,8 @@ func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan<- nmeaNewLine) {
 	}
 }
 
-func (b *BleGPSDevice) updateDeviceDiscovery(name string, connected bool) {
-	b.discoveredDevicesCh <- DiscoveredDevice{
+func (b *BleGPSDevice) defaultDeviceDiscoveryData(name string, connected bool) DiscoveredDevice {
+	return DiscoveredDevice{
 		Name:               name,
 		Connected:          connected,
 		GpsDetectedType:    common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
@@ -273,16 +280,15 @@ func (b *BleGPSDevice) updateDeviceDiscovery(name string, connected bool) {
 	}
 }
 
+func (b *BleGPSDevice) updateDeviceDiscovery(name string, connected bool) {
+	b.discoveredDevicesCh <- b.defaultDeviceDiscoveryData(name, connected)
+}
+
 func (b *BleGPSDevice) updateDeviceDiscoveryWithChannel(name string, TXChannel chan []byte) {
-	b.discoveredDevicesCh <- DiscoveredDevice{
-		Name:               name,
-		Connected:          true,
-		HasTXChannel:       true,
-		TXChannel:          TXChannel,
-		GpsDetectedType:    common.GPS_TYPE_BLUETOOTH, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-		GpsSource:          common.GPS_SOURCE_BLE,
-		GpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
-	}
+	device := b.defaultDeviceDiscoveryData(name, true)
+	device.TXChannel = TXChannel
+	device.HasTXChannel = true
+	b.discoveredDevicesCh <- device
 }
 
 func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <-chan nmeaNewLine) {
