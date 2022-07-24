@@ -10,7 +10,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -24,8 +23,6 @@ import (
 	"github.com/tarm/serial"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
-
-	"github.com/b3nn0/stratux/v2/common"
 )
 
 
@@ -229,46 +226,6 @@ func tcpNMEAOutListener() {
 		clientConnections[tcpConn.GetConnectionKey()] = tcpConn
 		go connectionWriter(tcpConn)
 	}
-}
-
-
-/* Server that can be used to feed NMEA data to, e.g. to connect OGN Tracker wirelessly */
-func tcpNMEAInListener() {
-	ln, err := net.Listen("tcp", ":30011")
-	if err != nil {
-		log.Printf(err.Error())
-		return
-	}
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Printf(err.Error())
-			continue
-		}
-		go handleNmeaInConnection(conn)
-	}	
-}
-
-// TODO: THis should become a seperate device that can handle NMEA string such that we can still decide where to get traffic and where to get GPS data from
-func handleNmeaInConnection(c net.Conn) {
-	defer c.Close()
-	reader := bufio.NewReader(c)
-	// Set to fixed GPS_TYPE_NETWORK in the beginning, to override previous detected NMEA types
-	globalStatus.GPS_detected_type = common.GPS_TYPE_NETWORK
-	globalStatus.GPS_NetworkRemoteIp = strings.Split(c.RemoteAddr().String(), ":")[0]
-	for {
-		globalStatus.GPS_connected = true
-		// Keep detected protocol, only ensure type=network
-		globalStatus.GPS_detected_type = common.GPS_TYPE_NETWORK | (globalStatus.GPS_detected_type & 0xf0)
-		_, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-		// processNMEALine(line, 100.0 * time.Millisecond) // TODO: RVT: It the gpsTimeOffsetPpsMs correct for GPS data from network?
-	}
-	globalStatus.GPS_connected = false
-	globalStatus.GPS_detected_type = 0
-	globalStatus.GPS_NetworkRemoteIp = ""
 }
 
 // Returns the number of DHCP leases and prints queue lengths.
@@ -654,6 +611,5 @@ func initNetwork() {
 	go serialOutWatcher() // Check for new Serial connections
 	go networkOutWatcher() // Pushes to websocket
 	go tcpNMEAOutListener()
-	go tcpNMEAInListener()
 	go getNetworkStats()
 }

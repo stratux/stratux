@@ -48,7 +48,8 @@ func NewSerialGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<-
 		DEBUG:                debug,
 		rxMessageCh:          rxMessageCh,
 		discoveredDevicesCh:  discoveredDevicesCh,
-		qh:                   common.NewQuitHelper()}
+		qh:                   common.NewQuitHelper(),
+	}
 	return m
 }
 

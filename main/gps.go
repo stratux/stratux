@@ -1316,11 +1316,13 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 
 	bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh, s.discoveredDevicesCh)
 	serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, s.discoveredDevicesCh, globalSettings.DEBUG)
+	networkGPSDevice := gps.NewNetworkGPSDevice(s.rxMessageCh, s.discoveredDevicesCh)
 
 	defer func() {
 		log.Printf("GPS: configureGPSSubsystems stopping")
 		bleGPSDevice.Stop()
 		serialGPSDevice.Stop()
+		networkGPSDevice.Stop()
 		log.Printf("GPS: configureGPSSubsystems Stopped")
 	}()
 
@@ -1333,6 +1335,9 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 		log.Printf("GPS: configureGPSSubsystems: Enable USB/Serial devices")
 		go serialGPSDevice.Run()
 	}
+
+	log.Printf("GPS: configureGPSSubsystems: Enable Network devices")
+	go networkGPSDevice.Run()
 
 	<-s.qh.C
 }
