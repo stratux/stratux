@@ -136,7 +136,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 		return err
 	}
 
-	log.Printf("bleGPSDevice: Connected to : " + discoveredDeviceInfo.name)
+	log.Printf("bleGPSDevice: Connected to : %s", discoveredDeviceInfo.name)
 	defer func() {
 		device.Disconnect()
 		log.Printf("bleGPSDevice: Disconnected from : %s", discoveredDeviceInfo.name)

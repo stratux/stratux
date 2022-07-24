@@ -790,10 +790,6 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, gpsTimeOffsetP
 			previousSituation := mySituation
 			// TODO: RVT  decide how to correctly lock mySituation for writing
 			mySituation = data
-			// use RMC / GGA message detection to sense "NMEA" type.
-			if (globalStatus.GPS_detected_type & 0xf0) == 0 {
-				globalStatus.GPS_detected_type |= common.GPS_PROTOCOL_NMEA
-			}
 
 			// Unset course if the GS was low
 			if mySituation.GPSGroundSpeed > 3 {
