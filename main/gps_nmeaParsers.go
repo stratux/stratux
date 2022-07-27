@@ -84,14 +84,12 @@ func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation *SituationData) (Situati
 	}
 	tmpSituation.GPSGroundSpeed = groundspeed
 
-	trueCourse := float32(0)
 	tc, err := strconv.ParseFloat(x[1], 32)
 	if err != nil {
 		return EMPTY_SITUATION, errors.New("True Course not found")
 	}
 	if groundspeed > 3 { //TODO: use average groundspeed over last n seconds to avoid random "jumps"
-		trueCourse = float32(tc)
-		tmpSituation.GPSTrueCourse = trueCourse
+		tmpSituation.GPSTrueCourse = float32(tc)
 	} else {
 		// Negligible movement. Don't update course, but do use the slow speed.
 		//TODO: use average course over last n seconds?
@@ -118,31 +116,23 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation *SituationData) (Situati
 	}
 	tmpSituation.GPSFixQuality = uint8(q) // 1 = 3D GPS; 2 = DGPS (SBAS /WAAS)
 
-	// Timestamp.
-	if len(x[1]) < 7 {
-		return EMPTY_SITUATION, errors.New("Timestamp not found")
+	// Time only for GGA/NGGA
+	if err := parse_timeDate(x, 1, 0, tmpSituation, 0 * time.Millisecond); err !=nil {
+		return EMPTY_SITUATION, err
 	}
-	hr, err1 := strconv.Atoi(x[1][0:2])
-	min, err2 := strconv.Atoi(x[1][2:4])
-	sec, err3 := strconv.ParseFloat(x[1][4:], 32)
-	if err1 != nil || err2 != nil || err3 != nil {
-		return EMPTY_SITUATION, errors.New("Timestamp not found")
-	}
-
-	tmpSituation.GPSLastFixSinceMidnightUTC = float32(3600*hr+60*min) + float32(sec)
 
 	// Latitude.
 	if len(x[2]) < 4 {
 		return EMPTY_SITUATION, errors.New("Latitude not found")
 	}
 
-	hr, err1 = strconv.Atoi(x[2][0:2])
-	minf, err2 := strconv.ParseFloat(x[2][2:], 32)
+	lat, err1 := strconv.Atoi(x[2][0:2])
+	latf, err2 := strconv.ParseFloat(x[2][2:], 32)
 	if err1 != nil || err2 != nil {
 		return EMPTY_SITUATION, errors.New("Latitude format incorrect")
 	}
 
-	tmpSituation.GPSLatitude = float32(hr) + float32(minf/60.0)
+	tmpSituation.GPSLatitude = float32(lat) + float32(latf/60.0)
 	if x[3] == "S" { // South = negative.
 		tmpSituation.GPSLatitude = -tmpSituation.GPSLatitude
 	}
@@ -151,13 +141,13 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation *SituationData) (Situati
 	if len(x[4]) < 5 {
 		return EMPTY_SITUATION, errors.New("Longitude not found")
 	}
-	hr, err1 = strconv.Atoi(x[4][0:3])
-	minf, err2 = strconv.ParseFloat(x[4][3:], 32)
+	long, err1 := strconv.Atoi(x[4][0:3])
+	longf, err2 := strconv.ParseFloat(x[4][3:], 32)
 	if err1 != nil || err2 != nil {
 		return EMPTY_SITUATION, errors.New("Longitude format incorrect")
 	}
 
-	tmpSituation.GPSLongitude = float32(hr) + float32(minf/60.0)
+	tmpSituation.GPSLongitude = float32(long) + float32(longf/60.0)
 	if x[5] == "W" { // West = negative.
 		tmpSituation.GPSLongitude = -tmpSituation.GPSLongitude
 	}
@@ -181,6 +171,38 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation *SituationData) (Situati
 	tmpSituation.GPSLastFixLocalTime = stratuxClock.Time
 
 	return *tmpSituation, nil
+}
+
+/**
+Parse a date/time field
+timeLoc is position  of time in slice x hhmmss.mmm
+dateLoc is position of the date in slice x ddmmyy (or <1 if no date)
+*/
+func parse_timeDate(x []string, timeLoc uint8, dateLoc uint8, tmpSituation *SituationData, gpsTimeOffsetPpsMs time.Duration) error {
+
+	// Timestamp. (note: GPZDA is not send by some devices)
+	if len(x[timeLoc]) < 7 {
+		return errors.New("Timestamp not found")
+	}
+	hr, err1 := strconv.Atoi(x[timeLoc][0:2])
+	min, err2 := strconv.Atoi(x[timeLoc][2:4])
+	sec, err3 := strconv.ParseFloat(x[timeLoc][4:], 32)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return errors.New("Timestamp format incorrect")
+	}
+	tmpSituation.GPSLastFixSinceMidnightUTC = float32(3600*hr+60*min) + float32(sec)
+
+	if dateLoc > 0 && len(x[dateLoc]) == 6 {
+		// Date of Fix, i.e 191115 =  19 November 2015 UTC  field 9
+		gpsTimeStr := fmt.Sprintf("%s %02d:%02d:%06.3f", x[dateLoc], hr, min, sec)
+		gpsTime, err := time.Parse("020106 15:04:05.000", gpsTimeStr)
+		gpsTime = gpsTime.Add(gpsTimeOffsetPpsMs)                                                // rough estimate for PPS offset
+		if err == nil && gpsTime.After(time.Date(2016, time.January, 0, 0, 0, 0, 0, time.UTC)) { // Ignore dates before 2016-JAN-01.
+			tmpSituation.GPSLastGPSTimeStratuxTime = stratuxClock.Time
+			tmpSituation.GPSTime = gpsTime
+		}
+	}
+	return nil
 }
 
 func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData, gpsTimeOffsetPpsMs time.Duration) (SituationData, error) {
@@ -212,39 +234,21 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData, gpsTimeO
 		return *tmpSituation, nil
 	}
 
-	// Timestamp. (note: GPZDA is not send by some devices)
-	if len(x[1]) < 7 {
-		return EMPTY_SITUATION, errors.New("Timestamp not found")
-	}
-	hr, err1 := strconv.Atoi(x[1][0:2])
-	min, err2 := strconv.Atoi(x[1][2:4])
-	sec, err3 := strconv.ParseFloat(x[1][4:], 32)
-	if err1 != nil || err2 != nil || err3 != nil {
-		return EMPTY_SITUATION, errors.New("Timestamp format incorrect")
-	}
-	tmpSituation.GPSLastFixSinceMidnightUTC = float32(3600*hr+60*min) + float32(sec)
-
-	if len(x[9]) == 6 {
-		// Date of Fix, i.e 191115 =  19 November 2015 UTC  field 9
-		gpsTimeStr := fmt.Sprintf("%s %02d:%02d:%06.3f", x[9], hr, min, sec)
-		gpsTime, err := time.Parse("020106 15:04:05.000", gpsTimeStr)
-		gpsTime = gpsTime.Add(gpsTimeOffsetPpsMs)                                                // rough estimate for PPS offset
-		if err == nil && gpsTime.After(time.Date(2016, time.January, 0, 0, 0, 0, 0, time.UTC)) { // Ignore dates before 2016-JAN-01.
-			tmpSituation.GPSLastGPSTimeStratuxTime = stratuxClock.Time
-			tmpSituation.GPSTime = gpsTime
-		}
+	// Time only for GGA/NGGA
+	if err := parse_timeDate(x, 1, 9, tmpSituation, gpsTimeOffsetPpsMs); err !=nil {
+		return EMPTY_SITUATION, err
 	}
 
 	// Latitude.
 	if len(x[3]) < 4 {
 		return EMPTY_SITUATION, errors.New("Latitude not found")
 	}
-	hr, err1 = strconv.Atoi(x[3][0:2])
-	minf, err2 := strconv.ParseFloat(x[3][2:], 32)
+	lat, err1 := strconv.Atoi(x[3][0:2])
+	latf, err2 := strconv.ParseFloat(x[3][2:], 32)
 	if err1 != nil || err2 != nil {
 		return EMPTY_SITUATION, errors.New("Latitude format incorrect")
 	}
-	tmpSituation.GPSLatitude = float32(hr) + float32(minf/60.0)
+	tmpSituation.GPSLatitude = float32(lat) + float32(latf/60.0)
 	if x[4] == "S" { // South = negative.
 		tmpSituation.GPSLatitude = -tmpSituation.GPSLatitude
 	}
@@ -252,12 +256,12 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData, gpsTimeO
 	if len(x[5]) < 5 {
 		return EMPTY_SITUATION, errors.New("Longitude not found")
 	}
-	hr, err1 = strconv.Atoi(x[5][0:3])
-	minf, err2 = strconv.ParseFloat(x[5][3:], 32)
+	long, err1 := strconv.Atoi(x[5][0:3])
+	longf, err2 := strconv.ParseFloat(x[5][3:], 32)
 	if err1 != nil || err2 != nil {
 		return EMPTY_SITUATION, errors.New("Longitude format incorrect")
 	}
-	tmpSituation.GPSLongitude = float32(hr) + float32(minf/60.0)
+	tmpSituation.GPSLongitude = float32(long) + float32(longf/60.0)
 	if x[6] == "W" { // West = negative.
 		tmpSituation.GPSLongitude = -tmpSituation.GPSLongitude
 	}
@@ -315,12 +319,12 @@ func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation *Situa
 	if err1 != nil {
 		return EMPTY_SITUATION, errors.New("HDOP not found")
 	}
-	// We store hdop in GPSHorizontalAccuracy, but we need to process that latr with the multiplication factor
-	// This is due to the factor depends on the GPS type (ublox etc..)
+	// We store hdop in GPSHorizontalAccuracy, but we need to process that later with the multiplication factor
+	// This is due to the factor depends on the GPS type (ublox etc..) and the NMEA parser should not have to know about this
 	tmpSituation.GPSHorizontalAccuracy = float32(hdop)
 
-	// NACp estimate.
-	tmpSituation.GPSNACp = calculateNACp(tmpSituation.GPSHorizontalAccuracy)
+	// NACp estimate can only be correctly calcu;ated if we inow the type of GPS
+	// tmpSituation.GPSNACp = calculateNACp(tmpSituation.GPSHorizontalAccuracy)
 
 	// field 17: VDOP
 	// accuracy estimate
@@ -350,10 +354,24 @@ func parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x []string, tmpSituation *SituationDa
 	}
 
 	// field 2 = index of this GSV message
-
 	_, err = strconv.Atoi(x[2])
 	if err != nil {
 		return EMPTY_SITUATION, errors.New("GSV field not found")
+	}
+
+	return *tmpSituation, nil
+}
+
+func parseNMEALine_PSOFT(x []string, tmpSituation *SituationData, gpsTimeOffsetPpsMs time.Duration) (SituationData, error) {
+	if (!(x[0] == "PSOFT")) {
+		return *tmpSituation, errors.New("Not PSOFT")
+	}
+
+	// SOFTRF Tracker time/date 
+	// $POGNB,<time>,<date>,<GPS type>*6B
+	// $POGNB,AT65*6B
+	if len(x) < 2 {
+		return EMPTY_SITUATION, errors.New("Length < 2")
 	}
 
 	return *tmpSituation, nil
@@ -409,13 +427,13 @@ func parseNMEALine_PGRMZ(x []string, tmpSituation *SituationData) (SituationData
 		return EMPTY_SITUATION, errors.New("No pressure altitude found")
 	}
 	unit := x[2]
-	if unit == "m" {
+	if unit == "m" || unit == "M" {
 		pressureAlt *= 3.28084
 	}
 	// Prefer internal sensor and OGN tracker over this...
-	mySituation.BaroPressureAltitude = float32(pressureAlt) // meters to feet
-	mySituation.BaroLastMeasurementTime = stratuxClock.Time
-	mySituation.BaroSourceType = common.BARO_TYPE_NMEA
+	tmpSituation.BaroPressureAltitude = float32(pressureAlt) // meters to feet
+	tmpSituation.BaroLastMeasurementTime = stratuxClock.Time
+	tmpSituation.BaroSourceType = common.BARO_TYPE_NMEA
 	
 	return *tmpSituation, nil
 }

@@ -20,8 +20,9 @@ const (
 	GPS_TYPE_SERIAL        = 0x0A
 	GPS_TYPE_OGNTRACKER    = 0x03
 	GPS_TYPE_SOFTRF_DONGLE = 0x0B
+	GPS_TYPE_SOFTRF_AT65   = 0x0E
 	GPS_TYPE_NETWORK       = 0x0C
-	GPS_PROTOCOL_NMEA      = 0x10 // TODO: RVT: This should really be a seperate variable in globalStatus
+	GPS_PROTOCOL_NMEA      = 0x10 // TODO: RVT: This should really be a seperate variable in globalStatus, is this used externall outside of Stratux?
 	GPS_TYPE_BLUETOOTH     = 0x0D
 	// other GPS types to be defined as needed
 )

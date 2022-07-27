@@ -119,8 +119,11 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 				case 0x0D:
 					tempGpsHardwareString = "BlueTooth LE";
 					break;
-				default:
-					tempGpsHardwareString = "Not installed";
+				case 0x0E:
+					tempGpsHardwareString = "SoftRF with AT65";
+					break;
+					default:
+				tempGpsHardwareString = "Not installed";
 			}
 			$scope.GPS_hardware = tempGpsHardwareString;
 			$scope.GPS_NetworkRemoteIp = status.GPS_NetworkRemoteIp;

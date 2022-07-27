@@ -213,7 +213,7 @@ func removeTarget(id uint32) {
 func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool) {
 	// First, check if this is our own OGN tracker
 	
-	if (globalStatus.GPS_detected_type & 0x0f) == common.GPS_TYPE_OGNTRACKER {
+	if (globalStatus.GPS_detected_type & 0x0F) == common.GPS_TYPE_OGNTRACKER {
 		ognTrackerCodeInt, _ := strconv.ParseUint(globalSettings.OGNAddr, 16, 32)
 		prevTrackerCodeInt, _ := strconv.ParseUint(globalStatus.OGNPrevRandomAddr, 16, 32)
 		if uint32(ognTrackerCodeInt) == ti.Icao_addr || uint32(prevTrackerCodeInt) == ti.Icao_addr {
