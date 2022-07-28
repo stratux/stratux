@@ -16,7 +16,7 @@ For installing `chrony` see below.
 On a seperate terminal run `sudo chronyd -n` and let it run for a while, Yet another terminal run `watch chronyc tracking` to see if it's operational.
 You should beable to see that it's tracking time well.
 
-## Example of tracked time good enough for stratux
+#### Example of tracked time good enough for stratux
 ```
 Every 2.0s: chronyc tracking                                                                                                                                            stratux: Thu Jul 28 20:46:16 2022
 
@@ -39,7 +39,7 @@ For the GPS device you want to find out a correct `GpsTimeOffsetPpsMs` set the v
 Now start running stratux and let it run so stratux will try to set time (but actually won't). Since the time is correctly synced by chrony,
 we should see a small offset in the form of : `2022/07/28 20:42:45 Time not set, difference 76.156638ms`,
 this is the time Stratux the thinks it should be. If the value is around `76` ms, you can set the `GpsTimeOffsetPpsMs`
-to `122 * time.Millisecond`.
+to `76 * time.Millisecond`. It does not have to be super presice for our purpose, just good enough...
 
 The delay is caused by various delays in the chain, serial lines, baudrates and other items that might scew the clock otherwise,
 hence the correction in the form of `GpsTimeOffsetPpsMs`.
