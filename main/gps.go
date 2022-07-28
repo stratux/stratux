@@ -164,7 +164,7 @@ func NewGPSDeviceManager() GPSDeviceManager {
 		txMessageCh:         make(chan gps.TXMessage, 20),
 		discoveredDevicesCh: make(chan gps.DiscoveredDevice, 20),
 		ognTrackerConfigured: false,
-		systemTimeSetter:    make(chan time.Time, 0),
+		systemTimeSetter:    make(chan time.Time, 1),
 		discoveredDevices:   cmap.New(),
 	}
 }
@@ -768,27 +768,25 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			mySituation = data
 
 
-			if len(x[9]) == 6 && (globalStatus.GPS_detected_type & 0xF0) == common.GPS_TYPE_SOFTRF_AT65 { 
-				if time.Since(mySituation.GPSTime) > 300*time.Millisecond || time.Since(mySituation.GPSTime) < -300*time.Millisecond {
-					t := mySituation.GPSLastFixSinceMidnightUTC
+			if (globalStatus.GPS_detected_type & 0x0F) == common.GPS_TYPE_SOFTRF_AT65 { 
+				t := mySituation.GPSLastFixSinceMidnightUTC
 
-					hh := int(t / 3600)
-					mm := int(t - float32(hh)) / 60
-					ss := int(t - float32(hh) - float32(mm)) / 60
-					t1 := time.Date(
-						mySituation.GPSTime.Year(), 
-						mySituation.GPSTime.Month(),
-						mySituation.GPSTime.Day(), 
-						hh, mm, ss, 0, mySituation.GPSTime.Location())
+				hh := int(t / 3600)
+				mm := int(t - float32(hh)*3600) / 60
+				ss := int(t - float32(hh)*3600 - float32(mm)*60)
+				t1 := time.Date(
+					mySituation.GPSTime.Year(), 
+					mySituation.GPSTime.Month(),
+					mySituation.GPSTime.Day(), 
+					hh, mm, ss, 0, mySituation.GPSTime.Location())
 
-					gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPpsMs)                                                // rough estimate for PPS offset
-			
-					select {
-					case s.systemTimeSetter <- gpsTime:
-					default:
-						if globalSettings.DEBUG {
-							log.Println("WARNING: Time setting in progress, disregarding value")
-						}
+				gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPpsMs)                                                // rough estimate for PPS offset
+		
+				select {
+				case s.systemTimeSetter <- gpsTime:
+				default:
+					if globalSettings.DEBUG {
+						log.Println("WARNING: Time setting in progress, disregarding value")
 					}
 				}
 			}
@@ -817,14 +815,12 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			thisGpsPerf.msgType = x[0]
 
 			// We need to set AT65 type GPS in GNGGA because for this GPS that's the start of a real second
-			if len(x[9]) == 6 && (globalStatus.GPS_detected_type & 0xF0) != common.GPS_TYPE_SOFTRF_AT65 { 
-				if time.Since(mySituation.GPSTime) > 300*time.Millisecond || time.Since(mySituation.GPSTime) < -300*time.Millisecond {
-					select {
-					case s.systemTimeSetter <- mySituation.GPSTime:
-					default:
-						if globalSettings.DEBUG {
-							log.Println("WARNING: Time setting in progress, disregarding value")
-						}
+			if len(x[9]) == 6 && (globalStatus.GPS_detected_type & 0x0F) != common.GPS_TYPE_SOFTRF_AT65 { 
+				select {
+				case s.systemTimeSetter <- mySituation.GPSTime:
+				default:
+					if globalSettings.DEBUG {
+						log.Println("WARNING: Time setting, disregarding value")
 					}
 				}
 			}
@@ -1454,19 +1450,24 @@ goroutine that listens to systemTimeSetter channel and set the time accordingly
 func (s *GPSDeviceManager) systemTimeSetterHandler() {
 	for {
 		newTime := <-s.systemTimeSetter
-		setStr := newTime.Format("20060102 15:04:05.000") + " UTC"
-		log.Printf("setting system time from %s to: '%s'\n", time.Now().Format("20060102 15:04:05.000"), setStr)
 
-		var err error
-		if common.IsRunningAsRoot() {
-			err = exec.Command("date", "-s", setStr).Run()
+		if (time.Since(newTime) > 300*time.Millisecond || time.Since(newTime) < -300*time.Millisecond) {
+			setStr := newTime.Format("20060102 15:04:05.000") + " UTC"
+			log.Printf("setting system time from %s to: '%s' difference %s\n", time.Now().Format("20060102 15:04:05.000"), setStr, time.Since(newTime))
+
+			var err error
+			if common.IsRunningAsRoot() {
+				err = exec.Command("date", "-s", setStr).Run()
+			} else {
+				err = exec.Command("sudo", "date", "-s", setStr).Run()
+			}
+			if err != nil {
+				log.Printf("Set Date failure: %s error\n", err)
+			} else {
+				log.Printf("Time set from GPS. Current time is %v\n", time.Now())
+			}
 		} else {
-			err = exec.Command("sudo", "date", "-s", setStr).Run()
-		}
-		if err != nil {
-			log.Printf("Set Date failure: %s error\n", err)
-		} else {
-			log.Printf("Time set from GPS. Current time is %v\n", time.Now())
+			// log.Printf("Time not set, difference %v\n", time.Since(newTime))
 		}
 	}
 }

@@ -184,6 +184,7 @@ func parse_timeDate(x []string, timeLoc uint8, dateLoc uint8, tmpSituation *Situ
 	if len(x[timeLoc]) < 7 {
 		return errors.New("Timestamp not found")
 	}
+	
 	hr, err1 := strconv.Atoi(x[timeLoc][0:2])
 	min, err2 := strconv.Atoi(x[timeLoc][2:4])
 	sec, err3 := strconv.ParseFloat(x[timeLoc][4:], 32)
