@@ -2,19 +2,15 @@
 
 ## How to find GpsTimeOffsetPpsMs for GPS devices
 
-in `main/gps.go` in the function `systemTimeSetterHandler` after the following line add a continue
+in `main/gps.go` above the function `systemTimeSetterHandler` and look for `SHOW_TIME_DIFFERENCE_ONLY`, set it to true
 ```go
-			log.Printf("setting system time from %s to: '%s' difference %s\n", time.Now().Format("20060102 15:04:05.000"), setStr, time.Since(newTime))
-			continue // <== Add this line
-			...
-			...
-			log.Printf("Time not set, difference %v\n", time.Since(newTime)) // <== Enable this line
+			const SHOW_TIME_DIFFERENCE_ONLY = true
 ```
 This will prevent stratux from setting the time based on GPS, but will print time offset.
 
 For installing `chrony` see below.
 On a seperate terminal run `sudo chronyd -n` and let it run for a while, Yet another terminal run `watch chronyc tracking` to see if it's operational.
-You should beable to see that it's tracking time well.
+You should beable to see that it's tracking time well and that the offset is fairly small, look for `Root dispersion`
 
 #### Example of tracked time good enough for stratux
 ```
@@ -36,13 +32,27 @@ Leap status     : Normal
 ```
 
 For the GPS device you want to find out a correct `GpsTimeOffsetPpsMs` set the value to `0 * time.Millisecond`
-Now start running stratux and let it run so stratux will try to set time (but actually won't). Since the time is correctly synced by chrony,
-we should see a small offset in the form of : `2022/07/28 20:42:45 Time not set, difference 76.156638ms`,
+Now start running stratux and let it run for a while so stratux will try to set time (but actually won't). Since the time is correctly synced by chrony,
+we should see a small offset in the form of : `2022/07/29 10:16:35 PPS Calibration mode: difference from Chrony -86.507192ms moving average -76.60ms`,
 this is the time Stratux the thinks it should be. If the value is around `76` ms, you can set the `GpsTimeOffsetPpsMs`
 to `76 * time.Millisecond`. It does not have to be super presice for our purpose, just good enough...
 
 The delay is caused by various delays in the chain, serial lines, baudrates and other items that might scew the clock otherwise,
 hence the correction in the form of `GpsTimeOffsetPpsMs`.
+
+
+## How to verify if stratux set time correctly
+
+Change SHOW_TIME_DIFFERENCE_ONLY so stratux will start setting time again
+```go
+			const SHOW_TIME_DIFFERENCE_ONLY = false
+```
+run `chrony` with like this `sudo chronyd -n -x` and on a seperate terminal run `watch chronyc tracking`
+
+Let stratux run for a few minutes, the chronyc command should show a very Root dispersion, in the order of < 25ms
+
+You can also enable the line `log.Printf("Difference %v moving average %.2fms\n", time.Since(newTime), movingTimeDifference)` to
+get an idea of what stratux things the difference in time is.
 
 ## To install `chronyc`
 

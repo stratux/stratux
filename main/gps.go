@@ -720,9 +720,6 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 	deviceDiscovery.HasTXChannel = false
 	mySituation.muGPS.Lock()
 	defer func() {
-		if sentenceUsed || globalSettings.DEBUG {
-			registerSituationUpdate()
-		}
 		mySituation.muGPS.Unlock()
 	}()
 	// Simulate in-flight moving GPS, useful in combination with demo traffic in gen_gdl90.go
@@ -965,7 +962,8 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		}
 		return true
 		// ############################################# PGRMZ #############################################
-	} else if x[0] == "PGRMZ" && ((globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SERIAL ||
+	} else if x[0] == "PGRMZ" && 
+	   ((globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SERIAL ||
 		(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_DONGLE ||
 		(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_AT65) {
 		// RVT: Verified
@@ -1280,18 +1278,20 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 				if common.StringInSlice(nmeaSlice[0], ALWAYS_PROCESS_NMEAS) {
 					// Some commands that do not affect GPS location services can always and should bebe processed
 					processFlarmNmeaMessage(nmeaSlice)
-					s.processNMEALine(l_valid, rxMessage.Name, discoveredDevice)
+					if ok := s.processNMEALine(l_valid, rxMessage.Name, discoveredDevice); ok {
+						registerSituationUpdate()
+					}
 				} else {
 
 					// Process all NMEA for the current GPS
 					if s.currentGPSName == rxMessage.Name {
-						globalStatus.GPS_detected_type = discoveredDevice.GpsDetectedType
+						globalStatus.GPS_detected_type = discoveredDevice.GpsDetectedType | common.GPS_PROTOCOL_NMEA
 						if ok := s.processNMEALine(l_valid, rxMessage.Name, discoveredDevice); ok {
+							registerSituationUpdate()
 							globalStatus.GPS_source_name = rxMessage.Name
 							globalStatus.GPS_connected = true
-							globalStatus.GPS_detected_type |= common.GPS_PROTOCOL_NMEA
 							globalStatus.GPS_source = uint(discoveredDevice.GpsSource)
-							thisGPS.gpsSource = discoveredDevice.GpsSource // TODO: RVT: We need to gpsSource in the gpsDevice status for sorting, we could also just use the map?
+							thisGPS.gpsSource = discoveredDevice.GpsSource // TODO: RVT: We need to gpsSource in the gpsDevice status for sorting, we could also just use the map?					
 						}
 					}
 
@@ -1444,28 +1444,73 @@ func (s *GPSDeviceManager) maintainConnectedDeviceList() {
 /**
 goroutine that listens to systemTimeSetter channel and set the time accordingly
 */
+
+var movingTimeDifference float64
+var lastMovingAverageTime time.Time
+var lastSetTime time.Time
+const SHOW_TIME_DIFFERENCE_ONLY = false
 func (s *GPSDeviceManager) systemTimeSetterHandler() {
+	const TIME_TO_SPAWN_PROCESS_MS = 40 // Time it takes for golang/OS to spawn the 'date' process 
+	const AVERAGE_OVER = 10.0 // AVerage over 10 seconds
+	const ACCEPTABLE_TIME_OFFSET_MS = 40 // number of ms we still accept as a time offset
+	// Function to calculate a moving average
+	movingExpAvg := func(value, oldValue, fdtime, ftime float64) float64 {
+		alpha := 1.0 - math.Exp(-fdtime/ftime)
+		r := alpha * value + (1.0 - alpha) * oldValue
+		return r
+	}
+
+	// Function to set the time
+	setSystemTime := func(newTime time.Time) {
+		setStr := newTime.Format("20060102 15:04:05.000") + " UTC"
+		log.Printf("setting system time from %s to: '%s' difference %s\n", time.Now().Format("20060102 15:04:05.000"), setStr, time.Since(newTime))
+
+		var err error
+		if common.IsRunningAsRoot() {
+			err = exec.Command("date", "-s", setStr).Run()
+		} else {
+			err = exec.Command("sudo", "date", "-s", setStr).Run()
+		}
+		if err != nil {
+			log.Printf("Set Date failure: %s error\n", err)
+		} else {
+			log.Printf("Time set from GPS. Current time is %v\n", time.Now())
+		}
+	}
+
+	// Function to calculate if given time if off by more than xx ms
+	isOffByMoreThan := func(t time.Time, v int64) bool {
+		m := time.Since(t).Milliseconds()
+		return m > v || m < -v
+	}
+
 	for {
 		newTime := <-s.systemTimeSetter
 
-		if time.Since(newTime) > 300*time.Millisecond || time.Since(newTime) < -300*time.Millisecond {
-			setStr := newTime.Format("20060102 15:04:05.000") + " UTC"
-			log.Printf("setting system time from %s to: '%s' difference %s\n", time.Now().Format("20060102 15:04:05.000"), setStr, time.Since(newTime))
-
-			var err error
-			if common.IsRunningAsRoot() {
-				err = exec.Command("date", "-s", setStr).Run()
-			} else {
-				err = exec.Command("sudo", "date", "-s", setStr).Run()
-			}
-			if err != nil {
-				log.Printf("Set Date failure: %s error\n", err)
-			} else {
-				log.Printf("Time set from GPS. Current time is %v\n", time.Now())
-			}
+		// We only use the moving average time difference if it's not off by some rediculous value
+		if !isOffByMoreThan(newTime, 5000) {
+			movingTimeDifference = movingExpAvg(float64(time.Since(newTime).Milliseconds()), movingTimeDifference, float64(time.Since(lastMovingAverageTime).Milliseconds())/1000.0, AVERAGE_OVER)
+			lastMovingAverageTime = time.Now()
 		} else {
-			// log.Printf("Time not set, difference %v\n", time.Since(newTime))
+			movingTimeDifference = 0
 		}
+
+		if SHOW_TIME_DIFFERENCE_ONLY {
+			log.Printf("PPS Calibration mode: difference from Chrony %v moving average %.2fms\n", time.Since(newTime), movingTimeDifference)
+		} else {
+			// Set new time directly  if it it's more than 300ms off 
+			if isOffByMoreThan(newTime, 300) {
+				setSystemTime(newTime)
+				lastSetTime = time.Now()
+			} else {
+				// log.Printf("Difference %v moving average %.2fms\n", time.Since(newTime), movingTimeDifference)
+				// Only try to set time if it's off by more than ACCEPTABLE_TIME_OFFSET_MS, at most once a minute
+				if isOffByMoreThan(time.Now().Add(time.Duration(movingTimeDifference) * time.Millisecond), ACCEPTABLE_TIME_OFFSET_MS) && time.Since(lastSetTime).Seconds() > 60 {
+					setSystemTime(time.Now().UTC().Add(time.Duration(-movingTimeDifference + TIME_TO_SPAWN_PROCESS_MS) * time.Millisecond))
+					lastSetTime = time.Now()
+				}
+			}
+		}		
 	}
 }
 
