@@ -1188,10 +1188,10 @@ func managementInterface() {
 	http.HandleFunc("/tiles/", handleTile)
 
 	var addr string
-	if !common.IsRunningAsRoot() {
-		addr = ":8000" // Make sure we can run without root priviledges on different port
-	} else {
+	if common.IsRunningAsRoot() {
 		addr = managementAddr
+	} else {
+		addr = ":8000" // Make sure we can run without root priviledges on different port
 	}
 
 	if err :=http.ListenAndServe(addr, nil); err != nil {

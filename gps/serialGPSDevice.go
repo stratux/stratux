@@ -520,6 +520,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 							GpsDetectedType:    s.GPSDetectedType,
 							GpsSource:          common.GPS_SOURCE_SERIAL,
 							GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
+							IsTypeUpgrade:		true,
 						}
 					}()
 				}

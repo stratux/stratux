@@ -1633,6 +1633,8 @@ func main() {
 	globalStatus.Version = stratuxVersion
 	globalStatus.Build = stratuxBuild
 	globalStatus.Errors = make([]string, 0)
+	globalStatus.GPS_Discovery = []gps.DiscoveredDeviceDTO{}
+
 	//FlightBox: detect via presence of /etc/FlightBox file.
 	if _, err := os.Stat("/etc/FlightBox"); !os.IsNotExist(err) {
 		globalStatus.HardwareBuild = "FlightBox"

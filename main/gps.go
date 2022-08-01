@@ -29,10 +29,12 @@ import (
 // This should never contain any NMEA codes for GPS Location data
 var ALWAYS_PROCESS_NMEAS = []string{"PFLAU", "PFLAA", "POGNS", "POGNR", "POGNB", "PSOFT"}
 
-const GPS_FIX_TIME = 5000    // Time we expect a GPS satelite to have a valid fix TODO: RVT is there already a variable or time used for something like this?
-const GPS_TIME_SOURCE = 2000 // Time we expect the GPS to be a valid source before we reconsider other GPS location sources
-const FIX_QUALITY_3DGPS = 1  // 3DGPS
-const FIX_QUALITY_AGPS = 2   // SBAS/WAAS
+const GPS_FIX_TIME = 5000 * time.Millisecond              // Time we expect a GPS satelite to have a valid fix
+const GPS_TIME_SOURCE = 2000 * time.Millisecond           // Time we expect the GPS to be a valid source before we reconsider other GPS location sources
+const GPS_VALID_TIME = 3000 * time.Millisecond            // TIme we consider a GPS data source to be valid
+const GPS_CONSIDERING_CONNECTED = 5000 * time.Millisecond // Time we expect a GPS as beeing connected to stratux
+const FIX_QUALITY_3DGPS = 1                               // 3DGPS
+const FIX_QUALITY_AGPS = 2                                // SBAS/WAAS
 
 type SatelliteInfo struct {
 	SatelliteNMEA    uint8     // NMEA ID of the satellite. 1-32 is GPS, 33-54 is SBAS, 65-88 is Glonass.
@@ -62,6 +64,8 @@ type SituationData struct {
 	GPSSatellitesTracked        uint16  // satellites tracked (almanac data received)
 	GPSSatellitesSeen           uint16  // satellites seen (signal received)
 	GPSHorizontalAccuracy       float32 // 95% confidence for horizontal position, meters.
+	GPSHDop                     float32 // GPS HDOP
+	GPSVDop                     float32 // GPS VDOP
 	GPSNACp                     uint8   // NACp categories are defined in AC 20-165A
 	GPSAltitudeMSL              float32 // Feet MSL
 	GPSVerticalAccuracy         float32 // 95% confidence for vertical position, meters
@@ -129,8 +133,8 @@ var ognTrackerConfigured = false
 type GPSDeviceStatus struct {
 	gpsSource      uint16
 	gpsFixQuality  uint8
-	gpsLastSeen    uint64
-	gpsLastGoodFix uint64
+	gpsLastSeen    time.Time
+	gpsLastGoodFix time.Time
 	gpsCRCErrors   uint64
 }
 
@@ -168,333 +172,6 @@ func NewGPSDeviceManager() GPSDeviceManager {
 }
 
 /*
-calcGPSAttitude estimates turn rate, pitch, and roll based on recent GPS groundspeed, track, and altitude / vertical speed.
-
-Method uses stored performance statistics from myGPSPerfStats[]. Ideally, calculation is based on most recent 1.5 seconds of data,
-assuming 10 Hz sampling frequency. Lower frequency sample rates will increase calculation window for smoother response, at the
-cost of slightly increased lag.
-
-(c) 2016 Keith Tschohl. All rights reserved.
-Distributable under the terms of the "BSD-New" License that can be found in
-the LICENSE file, herein included as part of this header.
-*/
-
-func calcGPSAttitude() bool {
-	// check slice length. Return error if empty set or set zero values
-	mySituation.muGPSPerformance.Lock()
-	defer mySituation.muGPSPerformance.Unlock()
-	length := len(myGPSPerfStats)
-	index := length - 1
-
-	if length == 0 {
-		log.Printf("GPS attitude: No data received yet. Not calculating attitude.\n")
-		return false
-	} else if length == 1 {
-		//log.Printf("myGPSPerfStats has one data point. Setting statistics to zero.\n")
-		myGPSPerfStats[index].gpsTurnRate = 0
-		myGPSPerfStats[index].gpsPitch = 0
-		myGPSPerfStats[index].gpsRoll = 0
-		return false
-	}
-
-	// check if GPS data was put in the structure more than three seconds ago -- this shouldn't happen unless something is wrong.
-	if (stratuxClock.Milliseconds - myGPSPerfStats[index].stratuxTime) > 3000 {
-		myGPSPerfStats[index].gpsTurnRate = 0
-		myGPSPerfStats[index].gpsPitch = 0
-		myGPSPerfStats[index].gpsRoll = 0
-		log.Printf("GPS attitude: GPS data is more than three seconds old. Setting attitude to zero.\n")
-		return false
-	}
-
-	// check time interval between samples
-	t1 := myGPSPerfStats[index].nmeaTime
-	t0 := myGPSPerfStats[index-1].nmeaTime
-	dt := t1 - t0
-
-	// first time error case: index is more than three seconds ahead of index-1
-	if dt > 3 {
-		log.Printf("GPS attitude: Can't calculate GPS attitude. Reference data is old. dt = %v\n", dt)
-		return false
-	}
-
-	// second case: index is behind index-1. This could be result of day rollover. If time is within n seconds of UTC,
-	// we rebase to the previous day, and will re-rebase the entire slice forward to the current day once all values roll over.
-	//TODO: Validate by testing at 0000Z
-	if dt < 0 {
-		log.Printf("GPS attitude: Current GPS time (%.2f) is older than last GPS time (%.2f). Checking for 0000Z rollover.\n", t1, t0)
-		if myGPSPerfStats[index-1].nmeaTime > 86300 && myGPSPerfStats[index].nmeaTime < 100 { // be generous with the time window at rollover
-			myGPSPerfStats[index].nmeaTime += 86400
-		} else {
-			// time decreased, but not due to a recent rollover. Something odd is going on.
-			log.Printf("GPS attitude: Time isn't near 0000Z. Unknown reason for offset. Can't calculate GPS attitude.\n")
-			return false
-		}
-
-		// check time array to see if all timestamps are > 86401 seconds since midnight
-		var tempTime []float64
-		tempTime = make([]float64, length, length)
-		for i := 0; i < length; i++ {
-			tempTime[i] = float64(myGPSPerfStats[i].nmeaTime)
-		}
-		minTime, _ := common.ArrayMin(tempTime)
-		if minTime > 86401.0 {
-			log.Printf("GPS attitude: Rebasing GPS time since midnight to current day.\n")
-			for i := 0; i < length; i++ {
-				myGPSPerfStats[i].nmeaTime -= 86400
-			}
-		}
-
-		// Verify adjustment
-		dt = myGPSPerfStats[index].nmeaTime - myGPSPerfStats[index-1].nmeaTime
-		log.Printf("GPS attitude: New dt = %f\n", dt)
-		if dt > 3 {
-			log.Printf("GPS attitude: Can't calculate GPS attitude. Reference data is old. dt = %v\n", dt)
-			return false
-		} else if dt < 0 {
-			log.Printf("GPS attitude: Something went wrong rebasing the time.\n")
-			return false
-		}
-
-	}
-
-	// If all of the bounds checks pass, begin processing the GPS data.
-
-	// local variables
-	var headingAvg, dh, v_x, v_z, a_c, omega, slope, intercept float64
-	var tempHdg, tempHdgUnwrapped, tempHdgTime, tempSpeed, tempVV, tempSpeedTime, tempRegWeights []float64 // temporary arrays for regression calculation
-	var valid bool
-	var lengthHeading, lengthSpeed int
-	var halfwidth float64 // width of regression evaluation window. Minimum of 1.5 seconds and maximum of 3.5 seconds.
-
-	center := float64(myGPSPerfStats[index].nmeaTime) // current time for calculating regression weights
-
-	/*	// frequency detection
-		tempSpeedTime = make([]float64, 0)
-		for i := 1; i < length; i++ {
-			dt = myGPSPerfStats[i].nmeaTime - myGPSPerfStats[i-1].nmeaTime
-			if dt > 0.05 { // avoid double counting messages with same / similar timestamps
-				tempSpeedTime = append(tempSpeedTime, float64(dt))
-			}
-		}
-		//log.Printf("Delta time array is %v.\n",tempSpeedTime)
-		dt_avg, valid = mean(tempSpeedTime)
-		if valid && dt_avg > 0 {
-			if globalSettings.DEBUG {
-				log.Printf("GPS attitude: Average delta time is %.2f s (%.1f Hz)\n", dt_avg, 1/dt_avg)
-			}
-			halfwidth = 9 * dt_avg
-			mySituation.GPSPositionSampleRate = 1 / dt_avg
-		} else {
-			if globalSettings.DEBUG {
-				log.Printf("GPS attitude: Couldn't determine sample rate\n")
-			}
-			halfwidth = 3.5
-			mySituation.GPSPositionSampleRate = 0
-		}
-
-		if halfwidth > 3.5 {
-			halfwidth = 3.5 // limit calculation window to 3.5 seconds of data for 1 Hz or slower samples
-		} else if halfwidth < 1.5 {
-			halfwidth = 1.5 // use minimum of 1.5 seconds for sample rates faster than 5 Hz
-		}
-	*/
-	halfwidth = calculateNavRate()
-
-	//v_x = float64(myGPSPerfStats[index].gsf * 1.687810)
-	//v_z = 0
-
-	// first, parse groundspeed from RMC messages.
-	tempSpeedTime = make([]float64, 0)
-	tempSpeed = make([]float64, 0)
-	tempRegWeights = make([]float64, 0)
-
-	for i := 0; i < length; i++ {
-		if myGPSPerfStats[i].msgType == "GPRMC" || myGPSPerfStats[i].msgType == "GNRMC" {
-			tempSpeed = append(tempSpeed, float64(myGPSPerfStats[i].gsf))
-			tempSpeedTime = append(tempSpeedTime, float64(myGPSPerfStats[i].nmeaTime))
-			tempRegWeights = append(tempRegWeights, common.TriCubeWeight(center, halfwidth, float64(myGPSPerfStats[i].nmeaTime)))
-		}
-	}
-	lengthSpeed = len(tempSpeed)
-	if lengthSpeed == 0 {
-		log.Printf("GPS Attitude: No groundspeed data could be parsed from NMEA RMC messages\n")
-		return false
-	} else if lengthSpeed == 1 {
-		v_x = tempSpeed[0] * 1.687810
-	} else {
-		slope, intercept, valid = common.LinRegWeighted(tempSpeedTime, tempSpeed, tempRegWeights)
-		if !valid {
-			log.Printf("GPS attitude: Error calculating speed regression from NMEA RMC position messages")
-			return false
-		} else {
-			v_x = (slope*float64(myGPSPerfStats[index].nmeaTime) + intercept) * 1.687810 // units are knots, converted to feet/sec
-			//log.Printf("Avg speed %f calculated from %d RMC messages\n", v_x, lengthSpeed) // DEBUG
-		}
-	}
-
-	// next, calculate vertical velocity from GGA altitude data.
-	tempSpeedTime = make([]float64, 0)
-	tempVV = make([]float64, 0)
-	tempRegWeights = make([]float64, 0)
-
-	for i := 0; i < length; i++ {
-		if myGPSPerfStats[i].msgType == "GPGGA" || myGPSPerfStats[i].msgType == "GNGGA" {
-			tempVV = append(tempVV, float64(myGPSPerfStats[i].alt))
-			tempSpeedTime = append(tempSpeedTime, float64(myGPSPerfStats[i].nmeaTime))
-			tempRegWeights = append(tempRegWeights, common.TriCubeWeight(center, halfwidth, float64(myGPSPerfStats[i].nmeaTime)))
-		}
-	}
-	lengthSpeed = len(tempVV)
-	if lengthSpeed < 2 {
-		log.Printf("GPS Attitude: Not enough points to calculate vertical speed from NMEA GGA messages\n")
-		return false
-	} else {
-		slope, _, valid = common.LinRegWeighted(tempSpeedTime, tempVV, tempRegWeights)
-		if !valid {
-			log.Printf("GPS attitude: Error calculating vertical speed regression from NMEA GGA messages")
-			return false
-		} else {
-			v_z = slope // units are feet/sec
-			//log.Printf("Avg VV %f calculated from %d GGA messages\n", v_z, lengthSpeed) // DEBUG
-		}
-	}
-
-	// If we're going too slow for processNMEALine() to give us valid heading data, there's no sense in trying to parse it.
-	// However, we need to return a valid level attitude so we don't get the "red X of death" on our AHRS display.
-	// This will also eliminate most of the nuisance error message from the turn rate calculation.
-	if v_x < 6 { // ~3.55 knots
-
-		myGPSPerfStats[index].gpsPitch = 0
-		myGPSPerfStats[index].gpsRoll = 0
-		myGPSPerfStats[index].gpsTurnRate = 0
-		myGPSPerfStats[index].gpsLoadFactor = 1.0
-		mySituation.GPSTurnRate = 0
-
-		// Output format:GPSAtttiude,seconds,nmeaTime,msg_type,GS,Course,Alt,VV,filtered_GS,filtered_course,turn rate,filtered_vv,pitch, roll,load_factor
-		buf := fmt.Sprintf("GPSAttitude,%.1f,%.2f,%s,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f\n", float64(stratuxClock.Milliseconds)/1000, myGPSPerfStats[index].nmeaTime, myGPSPerfStats[index].msgType, myGPSPerfStats[index].gsf, myGPSPerfStats[index].coursef, myGPSPerfStats[index].alt, myGPSPerfStats[index].vv, v_x/1.687810, headingAvg, myGPSPerfStats[index].gpsTurnRate, v_z, myGPSPerfStats[index].gpsPitch, myGPSPerfStats[index].gpsRoll, myGPSPerfStats[index].gpsLoadFactor)
-		if globalSettings.DEBUG {
-			log.Printf("%s", buf) // FIXME. Send to sqlite log or other file?
-		}
-		logGPSAttitude(myGPSPerfStats[index])
-		//replayLog(buf, MSGCLASS_AHRS)
-
-		return true
-	}
-
-	// Heading.  Same method used for UBX and generic.
-	// First, walk through the PerfStats and parse only valid heading data.
-	//log.Printf("Raw heading data:")
-	for i := 0; i < length; i++ {
-		//log.Printf("%.1f,",myGPSPerfStats[i].coursef)
-		if myGPSPerfStats[i].coursef >= 0 { // negative values are used to flag invalid / unavailable course
-			tempHdg = append(tempHdg, float64(myGPSPerfStats[i].coursef))
-			tempHdgTime = append(tempHdgTime, float64(myGPSPerfStats[i].nmeaTime))
-		}
-	}
-	//log.Printf("\n")
-	//log.Printf("tempHdg: %v\n", tempHdg)
-
-	// Next, unwrap the heading so we don't mess up the regression by fitting a line across the 0/360 deg discontinuity.
-	lengthHeading = len(tempHdg)
-	tempHdgUnwrapped = make([]float64, lengthHeading, lengthHeading)
-	tempRegWeights = make([]float64, lengthHeading, lengthHeading)
-
-	if lengthHeading > 1 {
-		tempHdgUnwrapped[0] = tempHdg[0]
-		tempRegWeights[0] = common.TriCubeWeight(center, halfwidth, tempHdgTime[0])
-		for i := 1; i < lengthHeading; i++ {
-			tempRegWeights[i] = common.TriCubeWeight(center, halfwidth, tempHdgTime[i])
-			if math.Abs(tempHdg[i]-tempHdg[i-1]) < 180 { // case 1: if angle change is less than 180 degrees, use the same reference system
-				tempHdgUnwrapped[i] = tempHdgUnwrapped[i-1] + tempHdg[i] - tempHdg[i-1]
-			} else if tempHdg[i] > tempHdg[i-1] { // case 2: heading has wrapped around from NE to NW. Subtract 360 to keep consistent with previous data.
-				tempHdgUnwrapped[i] = tempHdgUnwrapped[i-1] + tempHdg[i] - tempHdg[i-1] - 360
-			} else { // case 3:  heading has wrapped around from NW to NE. Add 360 to keep consistent with previous data.
-				tempHdgUnwrapped[i] = tempHdgUnwrapped[i-1] + tempHdg[i] - tempHdg[i-1] + 360
-			}
-		}
-	} else { //
-		if globalSettings.DEBUG {
-			log.Printf("GPS attitude: Can't calculate turn rate with less than two points.\n")
-		}
-		return false
-	}
-
-	// Finally, calculate turn rate as the slope of the weighted linear regression of unwrapped heading.
-	slope, intercept, valid = common.LinRegWeighted(tempHdgTime, tempHdgUnwrapped, tempRegWeights)
-
-	if !valid {
-		log.Printf("GPS attitude: Regression error calculating turn rate")
-		return false
-	} else {
-		headingAvg = slope*float64(myGPSPerfStats[index].nmeaTime) + intercept
-		dh = slope // units are deg per sec; no conversion needed here
-		//log.Printf("Calculated heading and turn rate: %.3f degrees, %.3f deg/sec\n",headingAvg,dh)
-	}
-
-	myGPSPerfStats[index].gpsTurnRate = dh
-	mySituation.GPSTurnRate = dh
-
-	// pitch angle -- or to be more pedantic, glide / climb angle, since we're just looking a rise-over-run.
-	// roll angle, based on turn rate and ground speed. Only valid for coordinated flight. Differences between airspeed and groundspeed will trip this up.
-	if v_x > 20 { // reduce nuisance 'bounce' at low speeds. 20 ft/sec = 11.9 knots.
-		myGPSPerfStats[index].gpsPitch = math.Atan2(v_z, v_x) * 180.0 / math.Pi
-
-		/*
-			Governing equations for roll calculations
-
-			Physics tells us that
-				a_z = g     (in steady-state flight -- climbing, descending, or level -- this is gravity. 9.81 m/s^2 or 32.2 ft/s^2)
-				a_c = v^2/r (centripetal acceleration)
-
-			We don't know r. However, we do know the tangential velocity (v) and angular velocity (omega). Express omega in radians per unit time, and
-
-				v = omega*r
-
-			By substituting and rearranging terms:
-
-				a_c = v^2 / (v / omega)
-				a_c = v*omega
-
-			Free body diagram time!
-
-				   /|
-			  a_r / |  a_z
-				 /__|
-			   X   a_c
-				\_________________ [For the purpose of this comment, " X" is an airplane in a 20 degree bank. Use your imagination, mkay?)
-
-			Resultant acceleration a_r is what the wings feel; a_r/a_z = load factor. Anyway, trig out the bank angle:
-
-				bank angle = atan(a_c/a_z)
-						   = atan(v*omega/g)
-
-				wing loading = sqrt(a_c^2 + a_z^2) / g
-
-		*/
-
-		g := 32.174                                               // ft/(s^2)
-		omega = common.Radians(myGPSPerfStats[index].gpsTurnRate) // need radians/sec
-		a_c = v_x * omega
-		myGPSPerfStats[index].gpsRoll = math.Atan2(a_c, g) * 180 / math.Pi // output is degrees
-		myGPSPerfStats[index].gpsLoadFactor = math.Sqrt(a_c*a_c+g*g) / g
-	} else {
-		myGPSPerfStats[index].gpsPitch = 0
-		myGPSPerfStats[index].gpsRoll = 0
-		myGPSPerfStats[index].gpsLoadFactor = 1
-	}
-
-	if globalSettings.DEBUG {
-		// Output format:GPSAtttiude,seconds,nmeaTime,msg_type,GS,Course,Alt,VV,filtered_GS,filtered_course,turn rate,filtered_vv,pitch, roll,load_factor
-		buf := fmt.Sprintf("GPSAttitude,%.1f,%.2f,%s,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f\n", float64(stratuxClock.Milliseconds)/1000, myGPSPerfStats[index].nmeaTime, myGPSPerfStats[index].msgType, myGPSPerfStats[index].gsf, myGPSPerfStats[index].coursef, myGPSPerfStats[index].alt, myGPSPerfStats[index].vv, v_x/1.687810, headingAvg, myGPSPerfStats[index].gpsTurnRate, v_z, myGPSPerfStats[index].gpsPitch, myGPSPerfStats[index].gpsRoll, myGPSPerfStats[index].gpsLoadFactor)
-		log.Printf("%s", buf) // FIXME. Send to sqlite log or other file?
-	}
-
-	logGPSAttitude(myGPSPerfStats[index])
-	//replayLog(buf, MSGCLASS_AHRS)
-	return true
-}
-
-/*
 	registerSituationUpdate().
 	 Called whenever there is a change in mySituation.
 */
@@ -503,49 +180,16 @@ func registerSituationUpdate() {
 	situationUpdate.SendJSON(mySituation)
 }
 
-func calculateNavRate() float64 {
-	length := len(myGPSPerfStats)
-	tempSpeedTime := make([]float64, 0)
-
-	for i := 1; i < length; i++ {
-		dt := myGPSPerfStats[i].nmeaTime - myGPSPerfStats[i-1].nmeaTime
-		if dt > 0.05 { // avoid double counting messages with same / similar timestamps
-			tempSpeedTime = append(tempSpeedTime, float64(dt))
-		}
-	}
-
-	var halfwidth float64
-	dt_avg, valid := common.Mean(tempSpeedTime)
-	if valid && dt_avg > 0 {
-		if globalSettings.DEBUG {
-			log.Printf("GPS attitude: Average delta time is %.2f s (%.1f Hz)\n", dt_avg, 1/dt_avg)
-		}
-		halfwidth = 9 * dt_avg
-		mySituation.GPSPositionSampleRate = 1 / dt_avg
-	} else {
-		if globalSettings.DEBUG {
-			log.Printf("GPS attitude: Couldn't determine sample rate\n")
-		}
-		halfwidth = 3.5
-		mySituation.GPSPositionSampleRate = 0
-	}
-
-	if halfwidth > 3.5 {
-		halfwidth = 3.5 // limit calculation window to 3.5 seconds of data for 1 Hz or slower samples
-	} else if halfwidth < 1.5 {
-		halfwidth = 1.5 // use minimum of 1.5 seconds for sample rates faster than 5 Hz
-	}
-
-	return halfwidth
-}
-
 /*
 	updateConstellation(): Periodic cleanup and statistics calculation for 'Satellites'
 		data structure. Calling functions must protect this in a mySituation.muSatellite.
 
 */
 
-func getConstalationInfo() (sats uint16, tracked uint16, seen uint16) {
+func updateConstellation() (sats uint16, tracked uint16, seen uint16) {
+	// TODO: RVT: THis function updates and returns
+	mySituation.muSatellite.Lock()
+	defer mySituation.muSatellite.Unlock()
 	for svStr, thisSatellite := range Satellites {
 		if stratuxClock.Since(thisSatellite.TimeLastTracked) > 10*time.Second { // remove stale satellites if they haven't been tracked for 10 seconds
 			delete(Satellites, svStr)
@@ -572,7 +216,8 @@ func getConstalationInfo() (sats uint16, tracked uint16, seen uint16) {
   This should be used from GNGSA,GPGSA,GLGSA,GAGSA,GBGSA sentences only
 */
 func updateSatellites(x []string) {
-
+	mySituation.muSatellite.Lock()
+	defer mySituation.muSatellite.Unlock()
 	for _, svtxt := range x[3:15] {
 
 		sv, svType, svStr, err := getsvTypesvStr(svtxt)
@@ -605,6 +250,9 @@ func updateSatellites(x []string) {
   This should be used from GPGSV,GLGSV,GAGSV,GBGSV sentences only
 */
 func updateSatellitesInView(x []string) {
+	mySituation.muSatellite.Lock()
+	defer mySituation.muSatellite.Unlock()
+
 	msgNum, _ := strconv.Atoi(x[2]) // TODO: RVT is this not x[1] ??
 	msgIndex, _ := strconv.Atoi(x[2])
 
@@ -716,10 +364,22 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 // Process a NMEA line and update strauc
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+func (s *GPSDeviceManager) setSystemTime(t time.Time) {
+	select {
+	case s.systemTimeSetter <- mySituation.GPSTime:
+	default:
+		if globalSettings.DEBUG {
+			log.Println("SetSystemTime: Queue full, disregarding value")
+		}
+	}
+}
 func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscovery gps.DiscoveredDevice) (sentenceUsed bool) {
 	deviceDiscovery.HasTXChannel = false
 	mySituation.muGPS.Lock()
 	defer func() {
+		mySituation.GPSLastValidNMEAMessageTime = stratuxClock.Time
+		mySituation.GPSLastValidNMEAMessage = l
 		mySituation.muGPS.Unlock()
 	}()
 	// Simulate in-flight moving GPS, useful in combination with demo traffic in gen_gdl90.go
@@ -744,9 +404,6 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 
 	x := strings.Split(l, ",")
 
-	mySituation.GPSLastValidNMEAMessageTime = stratuxClock.Time
-	mySituation.GPSLastValidNMEAMessage = l
-
 	// ############################################# GNVTG GNVTG #############################################
 	if (x[0] == "GNVTG") || (x[0] == "GPVTG") { // Ground track information.
 		// RTV: Verified
@@ -764,38 +421,33 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 
 			// AT65 'ticks' the seconds, based on this we set the date/tome in statux.
 			// Do other GPSes also this?
-			if (globalStatus.GPS_detected_type & 0x0F) == common.GPS_TYPE_SOFTRF_AT65 {
-				t := mySituation.GPSLastFixSinceMidnightUTC
+			t := mySituation.GPSLastFixSinceMidnightUTC
 
-				hh := int(t / 3600)
-				mm := int(t-float32(hh)*3600) / 60
-				ss := int(t - float32(hh)*3600 - float32(mm)*60)
-				t1 := time.Date(
-					mySituation.GPSTime.Year(),
-					mySituation.GPSTime.Month(),
-					mySituation.GPSTime.Day(),
-					hh, mm, ss, 0, mySituation.GPSTime.Location())
+			hh := int(t / 3600)
+			mm := int(t-float32(hh)*3600) / 60
+			ss := int(t - float32(hh)*3600 - float32(mm)*60)
+			t1 := time.Date(
+				mySituation.GPSTime.Year(),
+				mySituation.GPSTime.Month(),
+				mySituation.GPSTime.Day(),
+				hh, mm, ss, 0, mySituation.GPSTime.Location())
 
-				gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPpsMs) // rough estimate for PPS offset
-
-				select {
-				case s.systemTimeSetter <- gpsTime:
-				default:
-					if globalSettings.DEBUG {
-						log.Println("WARNING: Time setting in progress, disregarding value")
-					}
-				}
-			}
-
+			gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPpsMs) // rough estimate for PPS offset
+			mySituation.GPSTime = gpsTime
 			thisGpsPerf.nmeaTime = mySituation.GPSLastFixSinceMidnightUTC
 			thisGpsPerf.alt = float32(mySituation.GPSAltitudeMSL)
 			thisGpsPerf.msgType = x[0]
 			updateGPSPerfmStat(thisGpsPerf)
+
+			if (globalStatus.GPS_detected_type & 0x0F) == common.GPS_TYPE_SOFTRF_AT65 {
+				s.setSystemTime(gpsTime.Add(deviceDiscovery.GpsTimeOffsetPpsMs))
+			}
 		}
 		return err == nil
 		// ############################################# GNRMC GPRMC #############################################
 	} else if (x[0] == "GNRMC") || (x[0] == "GPRMC") { // Recommended Minimum data.
-		data, err := parseNMEALine_GNRMC_GPRMC(x, &mySituation, deviceDiscovery.GpsTimeOffsetPpsMs)
+		// RVT: Verified
+		data, err := parseNMEALine_GNRMC_GPRMC(x, &mySituation)
 		if err == nil {
 			previousSituation := mySituation
 			mySituation = data
@@ -809,20 +461,14 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			}
 			thisGpsPerf.gsf = float32(mySituation.GPSGroundSpeed)
 			thisGpsPerf.msgType = x[0]
+			thisGpsPerf.nmeaTime = mySituation.GPSLastFixSinceMidnightUTC
 
 			// We need to set AT65 type GPS in GNGGA because for this GPS that's the start of a real second
 			if len(x[9]) == 6 && (globalStatus.GPS_detected_type&0x0F) != common.GPS_TYPE_SOFTRF_AT65 {
-				select {
-				case s.systemTimeSetter <- mySituation.GPSTime:
-				default:
-					if globalSettings.DEBUG {
-						log.Println("WARNING: Time setting, disregarding value")
-					}
-				}
+				s.setSystemTime(mySituation.GPSTime.Add(deviceDiscovery.GpsTimeOffsetPpsMs))
 			}
 
 			updateGPSPerfmStat(thisGpsPerf)
-			stratuxClock.SetRealTimeReference(mySituation.GPSTime)
 			setDataLogTimeWithGPS(mySituation)
 		}
 		return err == nil
@@ -832,53 +478,50 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		// RVT: Verified
 		data, err := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x, &mySituation)
 		if err == nil {
-
-			// Calculate some data based on GPS type, then we copy back to mySituation
-			hdop := data.GPSHorizontalAccuracy
 			if data.GPSFixQuality == FIX_QUALITY_AGPS { // Rough 95% confidence estimate for SBAS solution
 				if globalStatus.GPS_detected_type == common.GPS_TYPE_UBX9 {
-					data.GPSHorizontalAccuracy = float32(hdop * 3.0) // ublox 9
+					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 3.0) // ublox 9
 				} else {
-					data.GPSHorizontalAccuracy = float32(hdop * 4.0) // ublox 6/7/8
+					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 4.0) // ublox 6/7/8
 				}
 			} else { // Rough 95% confidence estimate non-SBAS solution
 				if globalStatus.GPS_detected_type == common.GPS_TYPE_UBX9 {
-					data.GPSHorizontalAccuracy = float32(hdop * 4.0) // ublox 9
+					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 4.0) // ublox 9
 				} else {
-					data.GPSHorizontalAccuracy = float32(hdop * 5.0) // ublox 6/7/8
+					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 5.0) // ublox 6/7/8
 				}
 			}
+			data.GPSVerticalAccuracy = data.GPSVDop * 5.0 // Rough 95% confidence estimate
 			data.GPSNACp = calculateNACp(data.GPSHorizontalAccuracy)
 
-			mySituation.muSatellite.Lock()
-			updateSatellites(x)
-			mySituation.muSatellite.Unlock()
-
-			sats, tracked, seen := getConstalationInfo()
+			sats, tracked, seen := updateConstellation()
 			data.GPSSatellites = sats
 			data.GPSSatellitesTracked = tracked
 			data.GPSSatellitesSeen = seen
 
 			mySituation = data
+
+			updateSatellites(x)
 		}
 		return err == nil
 		// ############################################# GPGSV GLGSV GAGSV GBGSV #############################################
 	} else if (x[0] == "GPGSV") || (x[0] == "GLGSV") || (x[0] == "GAGSV") || (x[0] == "GBGSV") { // GPS + SBAS or GLONASS or Galileo or Beidou satellites in view message.
+
 		// RVT: Verified
 		data, err := parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x, &mySituation)
 		if err == nil {
-			mySituation.muSatellite.Lock()
-			updateSatellitesInView(x)
-			mySituation.muSatellite.Unlock()
 
-			sats, tracked, seen := getConstalationInfo()
+			sats, tracked, seen := updateConstellation()
 			data.GPSSatellites = sats
 			data.GPSSatellitesTracked = tracked
 			data.GPSSatellitesSeen = seen
 
 			mySituation = data
+
+			updateSatellitesInView(x)
 		}
 		return err == nil
+
 		// ############################################# POGNB #############################################
 	} else if x[0] == "POGNB" {
 		// RTV: Verified
@@ -901,9 +544,9 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 
 			if x[1] == "AT65" {
 				deviceDiscovery.GpsDetectedType = common.GPS_TYPE_SOFTRF_AT65
+				deviceDiscovery.IsTypeUpgrade = true
 				s.discoveredDevicesCh <- deviceDiscovery
 			}
-
 		}
 		return err == nil
 		// ############################################# POGNR #############################################
@@ -962,33 +605,33 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		}
 		return true
 		// ############################################# PGRMZ #############################################
-	} else if x[0] == "PGRMZ" && 
-	   ((globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SERIAL ||
-		(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_DONGLE ||
-		(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_AT65) {
+	} else if x[0] == "PGRMZ" &&
+		((globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SERIAL ||
+			(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_DONGLE ||
+			(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_AT65) {
 		// RVT: Verified
 		fq := SituationData{}
 		data, err := parseNMEALine_PGRMZ(x, &fq)
 
-		mySituation.muBaro.Lock()
 		if err != nil && (!isTempPressValid() || (mySituation.BaroSourceType != common.BARO_TYPE_BMP280 &&
 			mySituation.BaroSourceType != common.BARO_TYPE_OGNTRACKER)) {
+			mySituation.muBaro.Lock()
 			mySituation.BaroPressureAltitude = data.BaroPressureAltitude // meters to feet
 			mySituation.BaroLastMeasurementTime = data.BaroLastMeasurementTime
 			mySituation.BaroSourceType = data.BaroSourceType
+			mySituation.muBaro.Unlock()
 		}
-		mySituation.muBaro.Unlock()
 
-		return err != nil
+		return err == nil
 	}
 
 	// If we've gotten this far, the message isn't one that we can use.
 	return false
 }
 
-func isGPSConnected() bool {
-	return stratuxClock.Since(mySituation.GPSLastValidNMEAMessageTime) < 5*time.Second
-}
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// GPS Helpers
+//////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /*
 isGPSValid returns true only if a valid position fix has been seen in the last 3 seconds,
@@ -997,47 +640,46 @@ and if the GPS subsystem has recently detected a GPS device.
 If false, 'GPSFixQuality` is set to 0 ("No fix"), as is the number of satellites in solution.
 */
 
-func setGPSNotValidMySituation() {
+func resetGPSMySituation() {
 	mySituation.GPSFixQuality = 0
 	mySituation.GPSSatellites = 0
+	mySituation.GPSSatellitesSeen = 0
+	mySituation.GPSSatellitesTracked = 0
 	mySituation.GPSHorizontalAccuracy = 999999
 	mySituation.GPSVerticalAccuracy = 999999
 	mySituation.GPSNACp = 0
+	mySituation.GPSHDop = 0
+	mySituation.GPSVDop = 0
+	mySituation.GPSPositionSampleRate = 0;	
+	mySituation.GPSTurnRate = 0;
+	mySituation.GPSAltitudeMSL = 0;
 }
 
 /** Reset GOS global status
  */
 func resetGPSGlobalStatus() {
 	// Reset global status
-	globalStatus.GPS_satellites_locked = 0x00
-	globalStatus.GPS_satellites_seen = 0x00
-	globalStatus.GPS_satellites_tracked = 0x00
-	globalStatus.GPS_position_accuracy = 99999
 	globalStatus.GPS_connected = false
-	globalStatus.GPS_source = 0x00
-	globalStatus.GPS_solution = ""
-	globalStatus.GPS_detected_type = 0x00
+	globalStatus.GPS_source = 0
+	globalStatus.GPS_detected_type = 0
 	globalStatus.GPS_NetworkRemoteIp = ""
-
-	mySituation.GPSSatellitesSeen = 0x00
-	mySituation.GPSSatellitesTracked = 0x00
+	globalStatus.GPS_source_name = ""
 
 	// reset my situation
-	setGPSNotValidMySituation()
+	resetGPSMySituation()
 	updateStatus()
 
 	// Remove all satellites
 	Satellites = make(map[string]SatelliteInfo)
 }
 
+func isGPSConnected() bool {
+	return stratuxClock.Since(mySituation.GPSLastValidNMEAMessageTime) < GPS_CONSIDERING_CONNECTED
+}
+
 func isGPSValid() bool {
-	isValid := false
-	if (stratuxClock.Since(mySituation.GPSLastFixLocalTime) < 3*time.Second) && globalStatus.GPS_connected && mySituation.GPSFixQuality > 0 {
-		isValid = true
-	} else {
-		setGPSNotValidMySituation()
-	}
-	return isValid
+	return stratuxClock.Since(mySituation.GPSLastFixLocalTime) < GPS_VALID_TIME &&
+		globalStatus.GPS_connected && mySituation.GPSFixQuality > 0
 }
 
 /*
@@ -1129,8 +771,8 @@ Returns true when any device has a valid fix
 */
 func (d *GPSDeviceStatus) hasValidFix() bool {
 	return d.gpsFixQuality > 0 &&
-		d.gpsLastSeen > stratuxClock.Milliseconds-GPS_TIME_SOURCE &&
-		d.gpsLastGoodFix > stratuxClock.Milliseconds-GPS_FIX_TIME
+		stratuxClock.Since(d.gpsLastSeen) < GPS_TIME_SOURCE &&
+		stratuxClock.Since(d.gpsLastGoodFix) < GPS_FIX_TIME
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1152,10 +794,11 @@ func (s *GPSDeviceManager) ConfigureOgnTrackerFromSettings() {
 
 // Find a gps Source with a fix
 // Not thread safe, only call from within a lock
+// When GpsSource == 0 we get the first GPS with a fix
 func (s *GPSDeviceManager) gpsDeviceWithFix(GpsSource uint16) (string, GPSDeviceStatus) {
 	// TODO: RVT: We should sort on a GPS devices with the best fix ??
 	for k, v := range s.gpsDeviceStatus {
-		if v.gpsSource == GpsSource && v.hasValidFix() {
+		if (v.gpsSource == GpsSource || GpsSource == 0) && v.hasValidFix() {
 			return k, v
 		}
 	}
@@ -1164,19 +807,19 @@ func (s *GPSDeviceManager) gpsDeviceWithFix(GpsSource uint16) (string, GPSDevice
 
 // Find any GPS with a fix with preference to gpsSource
 // Not thread safe, only call from within a lock
-func (s *GPSDeviceManager) anyGpsDeviceWithFix(gpsSource uint16) (string, GPSDeviceStatus) {
-	k, v := s.gpsDeviceWithFix(gpsSource)
+func (s *GPSDeviceManager) anyGpsDeviceWithFix(gpsSource uint16) (k string, v GPSDeviceStatus) {
+	k, v = s.gpsDeviceWithFix(gpsSource)
 	if !v.hasValidFix() {
 		k, v = s.gpsDeviceWithFix(0)
 	}
-	return k, v
+	return
 }
 
 /**
 Maintain and decide on what gps source to use
 When we do not have any GPS, we just pick one from the list that has a fix, if not we just pick the first if any
 **/
-func (s *GPSDeviceManager) maintainAndDecideGPSConnections() {
+func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 	maintenanceJob := func() {
 		s.m.Lock()
 		defer s.m.Unlock()
@@ -1200,7 +843,7 @@ func (s *GPSDeviceManager) maintainAndDecideGPSConnections() {
 		// Find the current GPS device and validate if it is still valid
 		if hasDeviceConfig {
 			// Verify of we still have a good fix from the current GPS device, if not we find a other
-			// GPS with a good fix, if not found then we keep current GPS
+			// GPS with a good fix, if not found then reset GPS system
 			GPSPreferredSource := uint16(globalSettings.GPSPreferredSource)
 			if !currentGPSSource.hasValidFix() {
 				anyGpsName, _ := s.anyGpsDeviceWithFix(GPSPreferredSource)
@@ -1210,13 +853,29 @@ func (s *GPSDeviceManager) maintainAndDecideGPSConnections() {
 			}
 
 			// Verify if the current GPS source might not be preferred, if so then lookup a GPS
-			// source that is preferrred and has a fix, if found use the preferred source if not leave it as is
+			// source that is preferrred and has a fix, if found use the preferred source
 			if currentGPSSource.gpsSource != GPSPreferredSource {
 				possiblePreferredSource, _ := s.gpsDeviceWithFix(GPSPreferredSource)
 				if possiblePreferredSource != "" {
 					s.currentGPSName = possiblePreferredSource
 				}
 			}
+		}
+
+		// Loop over all sources and see if we have any GPS still connected, if not reset teh GPS
+		anyGPSWIthActivity := false
+		for gpsDeviceName := range s.gpsDeviceStatus {
+			if stratuxClock.Since(s.gpsDeviceStatus[gpsDeviceName].gpsLastSeen) < GPS_CONSIDERING_CONNECTED {
+				anyGPSWIthActivity = true
+			} else {
+				// When this is the current device, it's expired since it was a while since we last seen it then make it not current anymore
+				if gpsDeviceName == s.currentGPSName {
+					s.currentGPSName = ""
+				}
+			}
+		}
+		if !anyGPSWIthActivity {
+			resetGPSGlobalStatus()
 		}
 	}
 
@@ -1253,11 +912,11 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 		if !hasDeviceConfig {
 			thisGPS = GPSDeviceStatus{
 				gpsFixQuality:  0,
-				gpsLastGoodFix: 0,
+				gpsLastGoodFix: time.Time{},
 				gpsCRCErrors:   0,
 			}
 		}
-		thisGPS.gpsLastSeen = stratuxClock.Milliseconds
+		thisGPS.gpsLastSeen = stratuxClock.Time
 
 		// Validate NMEA sentence, and ignore if the CRC was wrong
 		l_valid, validNMEAcs := common.ValidateNMEAChecksum(rxMessage.NmeaLine)
@@ -1269,7 +928,7 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 		} else {
 			nmeaSlice := strings.Split(l_valid, ",")
 
-			// Check if the Name matches that of a discvered GPS device, only these are allowed to get processed
+			// Test if the Name matches that of a discvered GPS device, only these are allowed to get processed
 			if deviceRaw, ok := s.discoveredDevices.Get(rxMessage.Name); ok {
 				// Always process OGN
 				ognPublishNmea(rxMessage.NmeaLine)
@@ -1291,19 +950,20 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 							globalStatus.GPS_source_name = rxMessage.Name
 							globalStatus.GPS_connected = true
 							globalStatus.GPS_source = uint(discoveredDevice.GpsSource)
-							thisGPS.gpsSource = discoveredDevice.GpsSource // TODO: RVT: We need to gpsSource in the gpsDevice status for sorting, we could also just use the map?					
+							// We should add the GPS to gpsDeviceStatus directly when we discover it!
+							thisGPS.gpsSource = discoveredDevice.GpsSource // TODO: RVT: We need to gpsSource in the gpsDevice status for sorting, we could also just use the map?
 						}
 					}
 
 					// Check and remmeber this GPS fix quality
-					fq := SituationData{}
-					fq.GPSFixQuality = 255 // We would not expect a fq of 255, so we use it as a marker to see if it was changed
-					situ, _ := parseNMEALine_GNGGA_GPGGA(nmeaSlice, &fq)
+					var situ SituationData;
+					situ.GPSFixQuality = 255 // We would not expect GPSFixQuality of 255, so we use it as a marker to see if it was changed
+					situ, _ = parseNMEALine_GNGGA_GPGGA(nmeaSlice, &situ)
 					situ, _ = parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(nmeaSlice, &situ)
 					if situ.GPSFixQuality != 255 {
 						thisGPS.gpsFixQuality = situ.GPSFixQuality
 						if thisGPS.gpsFixQuality > 0 {
-							thisGPS.gpsLastGoodFix = stratuxClock.Milliseconds
+							thisGPS.gpsLastGoodFix = stratuxClock.Time
 						}
 					}
 				}
@@ -1390,8 +1050,8 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 /**
 Maintain a list of configured and found GPS devices and set the list in globalStatus
 */
-func (s *GPSDeviceManager) maintainConnectedDeviceList() {
-	handleDeviceDiscovery := func(discoveredDevice gps.DiscoveredDevice) {
+func (s *GPSDeviceManager) handleDeviceDiscovery() {
+	handleNewDiscoveredDevice := func(discoveredDevice gps.DiscoveredDevice) {
 
 		// Copy TXChannel if one previously was already known because device discovery might not always have a TXCHannel added
 		if previousRaw, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
@@ -1400,6 +1060,13 @@ func (s *GPSDeviceManager) maintainConnectedDeviceList() {
 				discoveredDevice.HasTXChannel = true
 				discoveredDevice.TXChannel = previous.TXChannel
 			}
+			// If the last Version was a upgraded version, then copy the device type
+			// This is to avoid any device discovery send of versions that where not upgraded
+			if previous.IsTypeUpgrade {
+				discoveredDevice.IsTypeUpgrade = true
+				discoveredDevice.GpsDetectedType = previous.GpsDetectedType
+			}
+
 		}
 		discoveredDevice.LastDiscoveryMessage = stratuxClock.Milliseconds
 		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)
@@ -1420,7 +1087,7 @@ func (s *GPSDeviceManager) maintainConnectedDeviceList() {
 		globalStatus.GPS_Discovery = deviceList
 	}
 
-	sendGPSMessage := func(message *gps.TXMessage) {
+	sendGPSAMessage := func(message *gps.TXMessage) {
 		if deviceRaw, ok := s.discoveredDevices.Get(message.Name); ok {
 			device := deviceRaw.(gps.DiscoveredDevice)
 			if device.Connected && device.HasTXChannel {
@@ -1432,10 +1099,10 @@ func (s *GPSDeviceManager) maintainConnectedDeviceList() {
 	for {
 		select {
 		case discoveredDevice := <-s.discoveredDevicesCh:
-			handleDeviceDiscovery(discoveredDevice)
+			handleNewDiscoveredDevice(discoveredDevice)
 			break
 		case txConfig := <-s.txMessageCh:
-			sendGPSMessage(&txConfig)
+			sendGPSAMessage(&txConfig)
 			break
 		}
 	}
@@ -1448,23 +1115,31 @@ goroutine that listens to systemTimeSetter channel and set the time accordingly
 var movingTimeDifference float64
 var lastMovingAverageTime time.Time
 var lastSetTime time.Time
+
 const SHOW_TIME_DIFFERENCE_ONLY = false
+
 func (s *GPSDeviceManager) systemTimeSetterHandler() {
-	const TIME_TO_SPAWN_PROCESS_MS = 40 // Time it takes for golang/OS to spawn the 'date' process 
-	const AVERAGE_OVER = 10.0 // AVerage over 10 seconds
+	const TIME_TO_SPAWN_PROCESS_MS = 40  // Time it takes for golang/OS to spawn the 'date' process
+	const AVERAGE_OVER = 10.0            // AVerage over 10 seconds
 	const ACCEPTABLE_TIME_OFFSET_MS = 40 // number of ms we still accept as a time offset
 	// Function to calculate a moving average
 	movingExpAvg := func(value, oldValue, fdtime, ftime float64) float64 {
 		alpha := 1.0 - math.Exp(-fdtime/ftime)
-		r := alpha * value + (1.0 - alpha) * oldValue
+		r := alpha*value + (1.0-alpha)*oldValue
 		return r
 	}
 
 	// Function to set the time
-	setSystemTime := func(newTime time.Time) {
-		setStr := newTime.Format("20060102 15:04:05.000") + " UTC"
-		log.Printf("setting system time from %s to: '%s' difference %s\n", time.Now().Format("20060102 15:04:05.000"), setStr, time.Since(newTime))
+	setSystemTime := func(gpsTime time.Time) {
+		// Protect against setting weird years, this might happen during startup
+		if gpsTime.Year() < 2022 {
+			return
+		}
+		stratuxClock.SetRealTimeReference(gpsTime)
 
+		// Set OS time, other option could be using a syscall, but might not awlays work on all systems?
+		setStr := gpsTime.Format("20060102 15:04:05.000") + " UTC"
+		log.Printf("setting system time from %s to: '%s' difference %s\n", time.Now().Format("20060102 15:04:05.000"), setStr, time.Since(gpsTime))
 		var err error
 		if common.IsRunningAsRoot() {
 			err = exec.Command("date", "-s", setStr).Run()
@@ -1485,32 +1160,36 @@ func (s *GPSDeviceManager) systemTimeSetterHandler() {
 	}
 
 	for {
-		newTime := <-s.systemTimeSetter
+		gpsTime := <-s.systemTimeSetter
+		// Protect against setting weird years, this might happen during startup
+		if gpsTime.Year() < 2022 {
+			return
+		}
 
 		// We only use the moving average time difference if it's not off by some rediculous value
-		if !isOffByMoreThan(newTime, 5000) {
-			movingTimeDifference = movingExpAvg(float64(time.Since(newTime).Milliseconds()), movingTimeDifference, float64(time.Since(lastMovingAverageTime).Milliseconds())/1000.0, AVERAGE_OVER)
+		if !isOffByMoreThan(gpsTime, 5000) {
+			movingTimeDifference = movingExpAvg(float64(time.Since(gpsTime).Milliseconds()), movingTimeDifference, float64(time.Since(lastMovingAverageTime).Milliseconds())/1000.0, AVERAGE_OVER)
 			lastMovingAverageTime = time.Now()
 		} else {
 			movingTimeDifference = 0
 		}
 
 		if SHOW_TIME_DIFFERENCE_ONLY {
-			log.Printf("PPS Calibration mode: difference from Chrony %v moving average %.2fms\n", time.Since(newTime), movingTimeDifference)
+			log.Printf("PPS Calibration mode: difference from Chrony %v moving average %.2fms\n", time.Since(gpsTime), movingTimeDifference)
 		} else {
-			// Set new time directly  if it it's more than 300ms off 
-			if isOffByMoreThan(newTime, 300) {
-				setSystemTime(newTime)
+			// Set new time directly  if it it's more than 300ms off
+			if isOffByMoreThan(gpsTime, 300) {
+				setSystemTime(gpsTime)
 				lastSetTime = time.Now()
 			} else {
 				// log.Printf("Difference %v moving average %.2fms\n", time.Since(newTime), movingTimeDifference)
 				// Only try to set time if it's off by more than ACCEPTABLE_TIME_OFFSET_MS, at most once a minute
-				if isOffByMoreThan(time.Now().Add(time.Duration(movingTimeDifference) * time.Millisecond), ACCEPTABLE_TIME_OFFSET_MS) && time.Since(lastSetTime).Seconds() > 60 {
-					setSystemTime(time.Now().UTC().Add(time.Duration(-movingTimeDifference + TIME_TO_SPAWN_PROCESS_MS) * time.Millisecond))
+				if isOffByMoreThan(time.Now().Add(time.Duration(movingTimeDifference)*time.Millisecond), ACCEPTABLE_TIME_OFFSET_MS) && time.Since(lastSetTime).Seconds() > 60 {
+					setSystemTime(time.Now().UTC().Add(time.Duration(-movingTimeDifference+TIME_TO_SPAWN_PROCESS_MS) * time.Millisecond))
 					lastSetTime = time.Now()
 				}
 			}
-		}		
+		}
 	}
 }
 
@@ -1522,8 +1201,8 @@ func (s *GPSDeviceManager) Run() {
 	go s.systemTimeSetterHandler()
 	go s.globalConfigChangeWatcher()
 	go s.rxMessageHandler()
-	go s.maintainAndDecideGPSConnections()
-	go s.maintainConnectedDeviceList()
+	go s.maintainPreferredGPSDevice()
+	go s.handleDeviceDiscovery()
 	for {
 		s.configureGPSSubsystems()
 		time.Sleep(1000 * time.Millisecond)

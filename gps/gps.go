@@ -32,7 +32,8 @@ type DiscoveredDevice struct {
 	GpsSource uint16					  // mandatory: This is the source, network, Blue Tooth or serial
 	HasTXChannel bool				  // mandatory: True when this message contains a valid TXChannel
 	TXChannel chan []byte			  // TX Channel can be used to send a (NMEA) message to a channel
-    GpsTimeOffsetPpsMs time.Duration  // mandatory: Estimated GPS offset
+	IsTypeUpgrade bool				  // True when this device is teh same device, but the type has been upgraded. For example from a serial GPS to OGN
+	GpsTimeOffsetPpsMs time.Duration  // mandatory: Estimated GPS offset
 }
 
 type DiscoveredDeviceDTO struct {
