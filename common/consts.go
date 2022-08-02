@@ -27,20 +27,10 @@ const (
 	// other GPS types to be defined as needed
 )
 
-// When we have multiple GPS connected, we use this to show our preference if one or more
-// GPSes do have an fix
 const (
-	GPS_PREFER_SERIAL		= 0x01
-	GPS_PREFER_BLUETOOTH	= 0x02
-	GPS_PREFER_NETWORK	    = 0x03
-	GPS_PREFER_BEST_FIX	    = 0x04 
-)
-
-const (
-	GPS_SOURCE_UNKNOWN		= 0x01
-	GPS_SOURCE_NETWORK		= 0x02
-	GPS_SOURCE_SERIAL   	= 0x03
-	GPS_SOURCE_BLE	        = 0x04
+	GPS_SOURCE_SERIAL   	= 0x01
+	GPS_SOURCE_BLUETOOTH    = 0x02
+	GPS_SOURCE_NETWORK		= 0x03
 )
 
 const (

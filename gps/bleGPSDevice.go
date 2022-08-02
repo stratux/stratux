@@ -275,7 +275,7 @@ func (b *BleGPSDevice) defaultDeviceDiscoveryData(name string, connected bool) D
 		Name:               name,
 		Connected:          connected,
 		GpsDetectedType:    common.GPS_TYPE_BLUETOOTH,
-		GpsSource:          common.GPS_SOURCE_BLE,
+		GpsSource:          common.GPS_SOURCE_BLUETOOTH,
 		GpsTimeOffsetPpsMs: 250 * time.Millisecond, // For SoftRF t-Echo AT65 it seemed to be around 250ms
 	}
 }

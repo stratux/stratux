@@ -414,9 +414,9 @@
                                     ui-show="gpSourceDropDown" 
                                     ui-state="gpSourceDropDown"
                                     ui-turn-off="gpSourceDropDown">                                
-                                    <li ng-click="updateGpsPrefSource(3)"><a>{{GPSPreferredSources[3]}}</a></li>
-                                    <li ng-click="updateGpsPrefSource(4)"><a>{{GPSPreferredSources[4]}}</a></li>
+                                    <li ng-click="updateGpsPrefSource(1)"><a>{{GPSPreferredSources[1]}}</a></li>
                                     <li ng-click="updateGpsPrefSource(2)"><a>{{GPSPreferredSources[2]}}</a></li>
+                                    <li ng-click="updateGpsPrefSource(3)"><a>{{GPSPreferredSources[3]}}</a></li>
                                   </ul>
                             </div>
                         </div>
@@ -434,7 +434,7 @@
                         <label class="control-label col-xs-5">Discovered Devices:</label>
                         <div class="col-xs-7">
                             <div ng-repeat="d in GPS_Discovery">
-                                <div ng-show="d.GpsSource == 4">{{d.Name}}&nbsp;&nbsp;<button class="btn btn-primary btn-sm" ng-click="addToBle(d)" ng-if="canAddBle(d)">Add</button>&nbsp;<span ng-show="d.Connected">&nbsp;&#x2705;</span> </div>
+                                <div ng-show="d.GpsSource == 2">{{d.Name}}&nbsp;&nbsp;<button class="btn btn-primary btn-sm" ng-click="addToBle(d)" ng-if="canAddBle(d)">Add</button>&nbsp;<span ng-show="d.Connected">&nbsp;&#x2705;</span> </div>
                             </div>
                         </div>
                     </div>
