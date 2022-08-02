@@ -378,7 +378,7 @@ func parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x []string, tmpSituation *SituationDa
 	return *tmpSituation, nil
 }
 
-func parseNMEALine_PSOFT(x []string, tmpSituation *SituationData, gpsTimeOffsetPpsMs time.Duration) (SituationData, error) {
+func parseNMEALine_PSOFT(x []string, tmpSituation *SituationData) (SituationData, error) {
 	if !(x[0] == "PSOFT") {
 		return *tmpSituation, errors.New("Not PSOFT")
 	}

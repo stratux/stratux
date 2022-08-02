@@ -2,7 +2,7 @@
 
 ## How to find GpsTimeOffsetPpsMs for GPS devices
 
-in `main/gps.go` above the function `systemTimeSetterHandler` and look for `SHOW_TIME_DIFFERENCE_ONLY`, set it to true
+in `main/gps/osTime.go` set `SHOW_TIME_DIFFERENCE_ONLY` to true
 ```go
 			const SHOW_TIME_DIFFERENCE_ONLY = true
 ```
@@ -33,7 +33,7 @@ Leap status     : Normal
 
 For the GPS device you want to find out a correct `GpsTimeOffsetPpsMs` set the value to `0 * time.Millisecond`
 Now start running stratux and let it run for a while so stratux will try to set time (but actually won't). Since the time is correctly synced by chrony,
-we should see a small offset in the form of : `2022/07/29 10:16:35 PPS Calibration mode: difference from Chrony -86.507192ms moving average -76.60ms`,
+we should see a small offset in the form of : `2022/08/02 19:58:29 PPS Calibration mode: Based on your time source (Chrony??): Use GpsTimeOffsetPpsMs=245ms for your device`,
 this is the time Stratux the thinks it should be. If the value is around `76` ms, you can set the `GpsTimeOffsetPpsMs`
 to `76 * time.Millisecond`. It does not have to be super presice for our purpose, just good enough...
 

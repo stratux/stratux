@@ -12,13 +12,10 @@ package main
 import (
 	"fmt"
 	"log"
-	"math"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"os/exec"
 
 	"github.com/b3nn0/stratux/v2/common"
 	"github.com/b3nn0/stratux/v2/gps"
@@ -149,8 +146,7 @@ type GPSDeviceManager struct {
 	txMessageCh         chan gps.TXMessage         // Channel used to send a any device a message
 
 	ognTrackerConfigured bool
-
-	systemTimeSetter  chan time.Time
+	systemTimeSetter	*gps.OSTimeSetter
 	discoveredDevices cmap.ConcurrentMap
 }
 
@@ -166,7 +162,7 @@ func NewGPSDeviceManager() GPSDeviceManager {
 		txMessageCh:          make(chan gps.TXMessage, 20),
 		discoveredDevicesCh:  make(chan gps.DiscoveredDevice, 20),
 		ognTrackerConfigured: false,
-		systemTimeSetter:     make(chan time.Time, 1),
+		systemTimeSetter:     gps.NewOSTimeSetter(),
 		discoveredDevices:    cmap.New(),
 	}
 }
@@ -365,15 +361,6 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-func (s *GPSDeviceManager) setSystemTime(t time.Time) {
-	select {
-	case s.systemTimeSetter <- mySituation.GPSTime:
-	default:
-		if globalSettings.DEBUG {
-			log.Println("SetSystemTime: Queue full, disregarding value")
-		}
-	}
-}
 func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscovery gps.DiscoveredDevice) (sentenceUsed bool) {
 	deviceDiscovery.HasTXChannel = false
 	mySituation.muGPS.Lock()
@@ -422,7 +409,6 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			// AT65 'ticks' the seconds, based on this we set the date/tome in statux.
 			// Do other GPSes also this?
 			t := mySituation.GPSLastFixSinceMidnightUTC
-
 			hh := int(t / 3600)
 			mm := int(t-float32(hh)*3600) / 60
 			ss := int(t - float32(hh)*3600 - float32(mm)*60)
@@ -432,7 +418,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 				mySituation.GPSTime.Day(),
 				hh, mm, ss, 0, mySituation.GPSTime.Location())
 
-			gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPpsMs) // rough estimate for PPS offset
+			gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPpsMs)
 			mySituation.GPSTime = gpsTime
 			thisGpsPerf.nmeaTime = mySituation.GPSLastFixSinceMidnightUTC
 			thisGpsPerf.alt = float32(mySituation.GPSAltitudeMSL)
@@ -440,7 +426,8 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			updateGPSPerfmStat(thisGpsPerf)
 
 			if (globalStatus.GPS_detected_type & 0x0F) == common.GPS_TYPE_SOFTRF_AT65 {
-				s.setSystemTime(gpsTime.Add(deviceDiscovery.GpsTimeOffsetPpsMs))
+				s.systemTimeSetter.SetTime(gpsTime)
+				stratuxClock.SetRealTimeReference(gpsTime)
 			}
 		}
 		return err == nil
@@ -462,10 +449,11 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			thisGpsPerf.gsf = float32(mySituation.GPSGroundSpeed)
 			thisGpsPerf.msgType = x[0]
 			thisGpsPerf.nmeaTime = mySituation.GPSLastFixSinceMidnightUTC
-
+			mySituation.GPSTime = mySituation.GPSTime.Add(deviceDiscovery.GpsTimeOffsetPpsMs)
 			// We need to set AT65 type GPS in GNGGA because for this GPS that's the start of a real second
 			if len(x[9]) == 6 && (globalStatus.GPS_detected_type&0x0F) != common.GPS_TYPE_SOFTRF_AT65 {
-				s.setSystemTime(mySituation.GPSTime.Add(deviceDiscovery.GpsTimeOffsetPpsMs))
+				s.systemTimeSetter.SetTime(mySituation.GPSTime)
+				stratuxClock.SetRealTimeReference(mySituation.GPSTime)
 			}
 
 			updateGPSPerfmStat(thisGpsPerf)
@@ -538,7 +526,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		// ############################################# POGNB #############################################
 	} else if x[0] == "PSOFT" {
 		// When PSOFT is send, we know the device is a SOFTRF and we can take special care of setting date/time
-		data, err := parseNMEALine_PSOFT(x, &mySituation, deviceDiscovery.GpsTimeOffsetPpsMs)
+		data, err := parseNMEALine_PSOFT(x, &mySituation)
 		if err == nil {
 			mySituation = data
 
@@ -994,9 +982,10 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 		reInit := x || y || z || d || g
 
 		if reInit {
-			s.settingsCopy = globalSettings
 
 			s.qh.Quit()
+			s.settingsCopy = globalSettings
+
 			// At this point new threads can start all adapters, but we assume here
 			// that we will be faster resetting the GPS device
 			s.gpsDeviceStatus = make(map[string]GPSDeviceStatus)
@@ -1108,97 +1097,13 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 	}
 }
 
-/**
-goroutine that listens to systemTimeSetter channel and set the time accordingly
-*/
-
-var movingTimeDifference float64
-var lastMovingAverageTime time.Time
-var lastSetTime time.Time
-
-const SHOW_TIME_DIFFERENCE_ONLY = false
-
-func (s *GPSDeviceManager) systemTimeSetterHandler() {
-	const TIME_TO_SPAWN_PROCESS_MS = 40  // Time it takes for golang/OS to spawn the 'date' process
-	const AVERAGE_OVER = 10.0            // AVerage over 10 seconds
-	const ACCEPTABLE_TIME_OFFSET_MS = 40 // number of ms we still accept as a time offset
-	// Function to calculate a moving average
-	movingExpAvg := func(value, oldValue, fdtime, ftime float64) float64 {
-		alpha := 1.0 - math.Exp(-fdtime/ftime)
-		r := alpha*value + (1.0-alpha)*oldValue
-		return r
-	}
-
-	// Function to set the time
-	setSystemTime := func(gpsTime time.Time) {
-		// Protect against setting weird years, this might happen during startup
-		if gpsTime.Year() < 2022 {
-			return
-		}
-		stratuxClock.SetRealTimeReference(gpsTime)
-
-		// Set OS time, other option could be using a syscall, but might not awlays work on all systems?
-		setStr := gpsTime.Format("20060102 15:04:05.000") + " UTC"
-		log.Printf("setting system time from %s to: '%s' difference %s\n", time.Now().Format("20060102 15:04:05.000"), setStr, time.Since(gpsTime))
-		var err error
-		if common.IsRunningAsRoot() {
-			err = exec.Command("date", "-s", setStr).Run()
-		} else {
-			err = exec.Command("sudo", "date", "-s", setStr).Run()
-		}
-		if err != nil {
-			log.Printf("Set Date failure: %s error\n", err)
-		} else {
-			log.Printf("Time set from GPS. Current time is %v\n", time.Now())
-		}
-	}
-
-	// Function to calculate if given time if off by more than xx ms
-	isOffByMoreThan := func(t time.Time, v int64) bool {
-		m := time.Since(t).Milliseconds()
-		return m > v || m < -v
-	}
-
-	for {
-		gpsTime := <-s.systemTimeSetter
-		// Protect against setting weird years, this might happen during startup
-		if gpsTime.Year() < 2022 {
-			return
-		}
-
-		// We only use the moving average time difference if it's not off by some rediculous value
-		if !isOffByMoreThan(gpsTime, 5000) {
-			movingTimeDifference = movingExpAvg(float64(time.Since(gpsTime).Milliseconds()), movingTimeDifference, float64(time.Since(lastMovingAverageTime).Milliseconds())/1000.0, AVERAGE_OVER)
-			lastMovingAverageTime = time.Now()
-		} else {
-			movingTimeDifference = 0
-		}
-
-		if SHOW_TIME_DIFFERENCE_ONLY {
-			log.Printf("PPS Calibration mode: difference from Chrony %v moving average %.2fms\n", time.Since(gpsTime), movingTimeDifference)
-		} else {
-			// Set new time directly  if it it's more than 300ms off
-			if isOffByMoreThan(gpsTime, 300) {
-				setSystemTime(gpsTime)
-				lastSetTime = time.Now()
-			} else {
-				// log.Printf("Difference %v moving average %.2fms\n", time.Since(newTime), movingTimeDifference)
-				// Only try to set time if it's off by more than ACCEPTABLE_TIME_OFFSET_MS, at most once a minute
-				if isOffByMoreThan(time.Now().Add(time.Duration(movingTimeDifference)*time.Millisecond), ACCEPTABLE_TIME_OFFSET_MS) && time.Since(lastSetTime).Seconds() > 60 {
-					setSystemTime(time.Now().UTC().Add(time.Duration(-movingTimeDifference+TIME_TO_SPAWN_PROCESS_MS) * time.Millisecond))
-					lastSetTime = time.Now()
-				}
-			}
-		}
-	}
-}
-
 func (s *GPSDeviceManager) Run() {
 	Satellites = make(map[string]SatelliteInfo)
 	log.Printf("GPS: Listen: Started")
 	// message := make(chan DiscoveredDevice, 20)
 
-	go s.systemTimeSetterHandler()
+	go s.systemTimeSetter.Calibrate()
+	go s.systemTimeSetter.Run()
 	go s.globalConfigChangeWatcher()
 	go s.rxMessageHandler()
 	go s.maintainPreferredGPSDevice()

@@ -502,7 +502,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 				if !s.ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
 					s.ognTrackerConfigured = true
 					s.GPSDetectedType = common.GPS_TYPE_OGNTRACKER
-					s.gpsTimeOffsetPpsMs = 200 * time.Millisecond
+					s.gpsTimeOffsetPpsMs = 75 * time.Millisecond
 					go func() {
 						log.Printf("serialGPSReader() OGN detected, configuring with Ublox8 config\n")
 						writeUblox8ConfigCommands(serialPort)
