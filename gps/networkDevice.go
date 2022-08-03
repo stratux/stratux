@@ -2,8 +2,10 @@ package gps
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/b3nn0/stratux/v2/common"
@@ -40,10 +42,10 @@ func (b *NetworkDevice) updateDeviceDiscovery(name string, connected bool) {
 }
 
 /* Server that can be used to feed NMEA data to, e.g. to connect OGN Tracker wirelessly */
-func (n *NetworkDevice) tcpNMEAInListener() {
+func (n *NetworkDevice) tcpNMEAInListener(port int) {
 	n.qh.Add()
 	defer n.qh.Done()
-	ln, err := net.Listen("tcp", ":30011")
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 
 	if err != nil {
 		log.Printf(err.Error())
@@ -82,15 +84,17 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 	}()
 
 	for {
-		line, err := reader.ReadString('\n')
+		line, err := reader.ReadString('\r')
 		if err != nil {
 			break
 		}
-		
-		n.rxMessageCh <- RXMessage{
-			Name:     remoteAddress,
-			NmeaLine: line,
-		}		
+		trimedLine := strings.TrimSpace(line)
+		if len(trimedLine) > 0 {
+			n.rxMessageCh <- RXMessage{
+				Name:     remoteAddress,
+				NmeaLine: trimedLine,
+			}		
+		}
 	}
 	n.updateDeviceDiscovery(remoteAddress, false)
 }
@@ -100,6 +104,9 @@ func (n *NetworkDevice) Stop() {
 }
 
 func (n *NetworkDevice) Run() {
-	go n.tcpNMEAInListener()
+	ports := [...]int{30011} 
+	for _, port := range ports {
+		go n.tcpNMEAInListener(port)
+	}
 }
 
