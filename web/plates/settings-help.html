@@ -40,6 +40,15 @@
         - When it runs smooth and you think it can run slower, decrease the value.<br />
         The goal is to ensure the fan runs smooth at lowest RPM without the tendency to go off and with minimum noise.</p>
 
+    <p>The <strong>BlueTooth LE GPS/Traffic</strong> section allows for connecting to GPS/Traffic devices that support Bluetooth Low Energy 
+        like the T-Echo from LilyGo. When enabled stratux will enable service discovery and when the device is discovered and found suitable
+        the device can be added with the [Add] button that will appear next to the discovered device. When connected a Green &#x2705; will appear
+        next to the device when connected.</p>
+    <p>When Stratux is connected to multiple GPS sources it will use Location and Time from the Preferred source but other NMEA sentences like
+        traffic will be handled by stratux. When connection is lost to a GPS source stratux will look for a suitable source and use that 
+        for location services.<br />
+        <strong>Note:</strong>This is for BlueTooth Low Energy, it will not connect to non Bluetooth sources.</p>
+
     <p>GLoad Limits allows the user to set which limits will show on the G Meter on the GPS/AHRS page.
         Enter a space-separated list of G limits, e.g. "-1.76 4.4".</p>
 
