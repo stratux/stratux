@@ -63,7 +63,7 @@ const (
 
 	/* Maximum duty for PWM controller */
 	pwmDutyMax        = 100   // Must be kept at 100
-	defaultPwmFrequency   = 500
+	defaultPwmFrequency   = 64000
 
 	// how often to update
 	updateDelayMS = 5000
@@ -71,7 +71,7 @@ const (
 	// start delay of the fan to start the fan to 80% to give the fan a kick to start spinning
 	PWMDuty80PStartDelay = 500
 
-	// GPIO-1/BCM "18"/Pin 12 on a Rev 2 and 3,4 Raspberry Pi   
+	// GPIO-1/BCM "18"/Pin 12 on a Rev 2 and 3,4 Raspberry Pi
 	defaultPin = 18
 
 	// name of the service
@@ -134,7 +134,7 @@ func fanControl() {
 		}
 	})
 
-	// Open Raspberry GPIO pins		
+	// Open Raspberry GPIO pins
 	err := rpio.Open()
 	if err != nil {
 			os.Exit(1)
@@ -145,8 +145,8 @@ func fanControl() {
 	pin := rpio.Pin(myFanControl.PWMPin)
 	pin.Mode(rpio.Pwm)
 	setFanFrequency := func(frequency uint32) {
-		if (frequency < 50000) {
-			frequency = 50000
+		if (frequency < 250000) {
+			frequency = 250000
 		} else if (frequency > 100000000) {
 			frequency = 100000000
 		}
