@@ -1,7 +1,7 @@
 package main
 
 import (
-	"../uatparse"
+	"github.com/b3nn0/stratux/v2/uatparse"
 	"bufio"
 	"fmt"
 	"os"

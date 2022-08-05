@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	//	"time"
-	"../uatparse"
+	"github.com/b3nn0/stratux/v2/uatparse"
+
 	"bufio"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"

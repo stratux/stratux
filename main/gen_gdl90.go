@@ -925,21 +925,6 @@ func updateStatus() {
 		globalStatus.GPS_solution = "Unknown"
 	}
 
-	// TODO: RVT See if we still need this
-	// if !(globalStatus.GPS_connected) || !(isGPSConnected()) { // isGPSConnected looks for valid NMEA messages. GPS_connected is set by gpsSerialReader and will immediately fail on disconnected USB devices, or in a few seconds after "blocked" comms on ttyAMA0.
-
-	// 	mySituation.muSatellite.Lock()
-	// 	Satellites = make(map[string]SatelliteInfo)
-	// 	mySituation.muSatellite.Unlock()
-
-	// 	mySituation.GPSSatellites = 0
-	// 	mySituation.GPSSatellitesSeen = 0
-	// 	mySituation.GPSSatellitesTracked = 0
-	// 	mySituation.GPSFixQuality = 0
-	// 	globalStatus.GPS_solution = "Disconnected"
-	// 	globalStatus.GPS_connected = false
-	// }
-
 	globalStatus.GPS_satellites_locked = mySituation.GPSSatellites
 	globalStatus.GPS_satellites_seen = mySituation.GPSSatellitesSeen
 	globalStatus.GPS_satellites_tracked = mySituation.GPSSatellitesTracked
