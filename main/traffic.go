@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/b3nn0/stratux/v2/common"
+	"github.com/b3nn0/stratux/v2/gps"
 )
 
 //-0b2b48fe3aef1f88621a0856110a31c01105c4e6c4e6c40a9a820300000000000000;rs=7;
@@ -213,7 +214,7 @@ func removeTarget(id uint32) {
 func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool) {
 	// First, check if this is our own OGN tracker
 	
-	if (globalStatus.GPS_detected_type & 0x0F) == common.GPS_TYPE_OGNTRACKER {
+	if (globalStatus.GPS_detected_type & 0x0F) == gps.GPS_TYPE_OGNTRACKER {
 		ognTrackerCodeInt, _ := strconv.ParseUint(globalSettings.OGNAddr, 16, 32)
 		prevTrackerCodeInt, _ := strconv.ParseUint(globalStatus.OGNPrevRandomAddr, 16, 32)
 		if uint32(ognTrackerCodeInt) == ti.Icao_addr || uint32(prevTrackerCodeInt) == ti.Icao_addr {

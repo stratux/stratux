@@ -31,8 +31,8 @@ func (b *NetworkDevice) defaultDeviceDiscoveryData(name string, connected bool) 
 	return DiscoveredDevice{
 		Name:               name,
 		Connected:          connected,
-		GpsDetectedType:    common.GPS_TYPE_NETWORK, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-		GpsSource:          common.GPS_SOURCE_NETWORK,
+		GpsDetectedType:    GPS_TYPE_NETWORK, // TODO: Should we be more specific for example mention that it's an SoftRF device?
+		GpsSource:          GPS_SOURCE_NETWORK,
 		GpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
 	}
 }

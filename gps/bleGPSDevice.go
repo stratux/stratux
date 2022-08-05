@@ -63,24 +63,9 @@ func NewBleGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- Di
 	}
 }
 
-/**
-We must increase <limit name="max_match_rules_per_connection">8192</limit>
-under /etc/dbus-1/system.d/bluetooth.conf
-See logs stratux dbus-daemon[300]: [system] Connection ":1.28" is not allowed to add more match rules (increase limits in configuration file if required; max_match_rules_p
-er_connection=512)
-change /boot/config.txt and set # dtoverlay=disable-bt
-
-// sudo apt install pi-bluetooth bluez-tools
-// sudo modprobe btusb
-// dtparam=krnbt=on
-// dtoverlay=disable-bt
-// sudo usermod -G bluetooth -a <username>
-
-*/
-
 var (
-	serviceUUID, _ = bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
-	characteristicsUUID, _ = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
+	HM_10_CONF, _ = bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
+	BLE_RX, _ = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
 )
 
 // WATCHDOG for the blue device, if we do not receive data at least once a second we will diconnect and re-connect
@@ -95,9 +80,10 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 	}()
 	executeScan := func() error {
 		err := b.adapter.Scan(
-			// Note: within func we might be within a interrupt service route, no heap allocation allowed
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-				if result.AdvertisementPayload.HasServiceUUID(serviceUUID) && result.Address != nil {
+				if b.qh.IsQuit() {
+					b.adapter.StopScan()
+				} else if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && result.Address != nil {
 					b.adapter.StopScan()
 					scanInfoResultChan <- scanInfoResult{result.Address.String(), result.LocalName()}
 				}
@@ -108,15 +94,14 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 		return nil
 	}
 
-	// Scan de ble stack every 5000ms for new devices
-	timer := time.NewTicker(5000 * time.Millisecond)
-	select {
-	case <-b.qh.C:
-		return
-	case <- timer.C:
+	for {
+		if (b.qh.IsQuit()) {
+			return
+		}
 		if err :=executeScan(); err!=nil {
 			log.Printf("Error from ble scanner: %s", err.Error())
 		}
+		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -142,14 +127,14 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 		log.Printf("bleGPSDevice: Disconnected from : %s", discoveredDeviceInfo.name)
 	}()
 
-	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUUID})
+	services, err := device.DiscoverServices([]bluetooth.UUID{HM_10_CONF})
 	if err != nil {
 		return err
 	}
 	service := services[0]
 
 	// Get the two characteristics present in this service.
-	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{characteristicsUUID})
+	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{BLE_RX})
 	if err != nil {
 		return err
 	}
@@ -274,8 +259,8 @@ func (b *BleGPSDevice) defaultDeviceDiscoveryData(name string, connected bool) D
 	return DiscoveredDevice{
 		Name:               name,
 		Connected:          connected,
-		GpsDetectedType:    common.GPS_TYPE_BLUETOOTH,
-		GpsSource:          common.GPS_SOURCE_BLUETOOTH,
+		GpsDetectedType:    GPS_TYPE_BLUETOOTH,
+		GpsSource:          GPS_SOURCE_BLUETOOTH,
 		GpsTimeOffsetPpsMs: 250 * time.Millisecond, // For SoftRF t-Echo AT65 it seemed to be around 250ms
 	}
 }

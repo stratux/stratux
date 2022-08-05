@@ -786,7 +786,7 @@ func heartBeatSender() {
 
 			sendNetFLARM(makeGPRMCString(), time.Second, -1)
 			sendNetFLARM(makeGPGGAString(), time.Second, 0)
-			if isTempPressValid() && mySituation.BaroSourceType != common.BARO_TYPE_NONE && mySituation.BaroSourceType != common.BARO_TYPE_ADSBESTIMATE {
+			if isTempPressValid() && mySituation.BaroSourceType != BARO_TYPE_NONE && mySituation.BaroSourceType != BARO_TYPE_ADSBESTIMATE {
 				sendNetFLARM(makePGRMZString(), time.Second, 0)
 			}
 			sendNetFLARM("$GPGSA,A,3,,,,,,,,,,,,,1.0,1.0,1.0*33\r\n", time.Second, 1)
@@ -1312,7 +1312,7 @@ func defaultSettings() {
 	globalSettings.OGNI2CTXEnabled = true
 
 	globalSettings.BleGPSEnabled = false
-	globalSettings.GPSPreferredSource = common.GPS_SOURCE_SERIAL
+	globalSettings.GPSPreferredSource = gps.GPS_SOURCE_SERIAL
 	globalSettings.BleEnabledDevices = ""
 }
 

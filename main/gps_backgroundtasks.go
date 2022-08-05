@@ -11,10 +11,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/b3nn0/stratux/v2/common"
 	"log"
 	"math"
 	"time"
+
+	"github.com/b3nn0/stratux/v2/common"
 )
 
 var gnssBaroAltDiffs = make(map[int]int)
@@ -450,7 +451,7 @@ func BaroAltGuesser() {
 		if len(gnssBaroAltDiffs) < 30 {
 			continue // not enough data
 		}
-		if isGPSValid() && (!isTempPressValid() || mySituation.BaroSourceType == common.BARO_TYPE_NONE || mySituation.BaroSourceType == common.BARO_TYPE_ADSBESTIMATE) {
+		if isGPSValid() && (!isTempPressValid() || mySituation.BaroSourceType == BARO_TYPE_NONE || mySituation.BaroSourceType == BARO_TYPE_ADSBESTIMATE) {
 			// We have no real baro source.. try to estimate baro altitude with the help of closeby ADS-B aircraft that define BaroGnssDiff...
 
 			myAlt := mySituation.GPSAltitudeMSL
@@ -482,7 +483,7 @@ func BaroAltGuesser() {
 					mySituation.muBaro.Lock()
 					mySituation.BaroLastMeasurementTime = stratuxClock.Time
 					mySituation.BaroPressureAltitude = mySituation.GPSHeightAboveEllipsoid - float32(gnssBaroDiff)
-					mySituation.BaroSourceType = common.BARO_TYPE_ADSBESTIMATE
+					mySituation.BaroSourceType = BARO_TYPE_ADSBESTIMATE
 					//fmt.Printf(" %f * x + %f \n", slope, intercept)
 					mySituation.muBaro.Unlock()
 				}

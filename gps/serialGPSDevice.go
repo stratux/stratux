@@ -121,20 +121,20 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 	if _, err := os.Stat("/dev/ublox9"); err == nil { // u-blox 8 (RY83xAI over USB).
 		device = "/dev/ublox9"
 		s.gpsName = "ublox9"
-		s.GPSDetectedType = common.GPS_TYPE_UBX9
+		s.GPSDetectedType = GPS_TYPE_UBX9
 	} else if _, err := os.Stat("/dev/ublox8"); err == nil { // u-blox 8 (RY83xAI or GPYes 2.0).
 		device = "/dev/ublox8"
 		s.gpsName = "ublox8"
-		s.GPSDetectedType = common.GPS_TYPE_UBX8
+		s.GPSDetectedType = GPS_TYPE_UBX8
 		s.gpsTimeOffsetPpsMs = 80 * time.Millisecond // Ublox 8 seems to have higher delay
 	} else if _, err := os.Stat("/dev/ublox7"); err == nil { // u-blox 7 (VK-172, VK-162 Rev 2, GPYes, RY725AI over USB).
 		device = "/dev/ublox7"
 		s.gpsName = "ublox7"
-		s.GPSDetectedType = common.GPS_TYPE_UBX7
+		s.GPSDetectedType = GPS_TYPE_UBX7
 	} else if _, err := os.Stat("/dev/ublox6"); err == nil { // u-blox 6 (VK-162 Rev 1).
 		device = "/dev/ublox6"
 		s.gpsName = "ublox6"
-		s.GPSDetectedType = common.GPS_TYPE_UBX6
+		s.GPSDetectedType = GPS_TYPE_UBX6
 	} else if _, err := os.Stat("/dev/prolific0"); err == nil { // Assume it's a BU-353-S4 SIRF IV.
 		//TODO: Check a "serialout" flag and/or deal with multiple prolific devices.
 		isSirfIV = true
@@ -143,22 +143,22 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		baudrates = []int{4800, 38400, 9600}
 		device = "/dev/prolific0"
 		s.gpsName = "prolific"
-		s.GPSDetectedType = common.GPS_TYPE_PROLIFIC
+		s.GPSDetectedType = GPS_TYPE_PROLIFIC
 	} else if _, err := os.Stat("/dev/serialin"); err == nil {
 		device = "/dev/serialin"
 		s.gpsName = "serialIn"
-		s.GPSDetectedType = common.GPS_TYPE_SERIAL
+		s.GPSDetectedType = GPS_TYPE_SERIAL
 		// OGN Tracker uses 115200, SoftRF 38400
 		baudrates = []int{115200, 38400, 9600}
 	} else if _, err := os.Stat("/dev/softrf_dongle"); err == nil {
 		device = "/dev/softrf_dongle"
 		s.gpsName = "softrf_dongle"
-		s.GPSDetectedType = common.GPS_TYPE_SOFTRF_DONGLE
+		s.GPSDetectedType = GPS_TYPE_SOFTRF_DONGLE
 		baudrates[0] = 115200
 	} else if _, err := os.Stat("/dev/ttyAMA0"); err == nil { // ttyAMA0 is PL011 UART (GPIO pins 8 and 10) on all RPi.
 		device = "/dev/ttyAMA0"
 		s.gpsName = "ttyAMA0"
-		s.GPSDetectedType = common.GPS_TYPE_UART
+		s.GPSDetectedType = GPS_TYPE_UART
 		// UART connected u-blox GPS @ 10Hz update rate need 115200, 38400 and 9600 just as fallback
 		baudrates = []int{115200, 38400, 9600}
 	} else {
@@ -200,7 +200,7 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		if s.DEBUG {
 			log.Printf("Finished writing SiRF GPS config to %s. Opening port to test connection.\n", device)
 		}
-	} else if s.GPSDetectedType == common.GPS_TYPE_UART {
+	} else if s.GPSDetectedType ==GPS_TYPE_UART {
 		// UBX-CFG-VALSET for u-blox M10S
 		// RAM Layer configuration message
 		// NMEA 4.0, NMEA extended svnumbering, dynamic model 7, AssistNow Autonomous, GPS+GAL+BDS+SBAS, 10Hz update rate, disable GLL
@@ -210,8 +210,8 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		// NMEA 4.0, NMEA extended svnumbering, dynamic model 7, AssistNow Autonomous, GPS+GAL+BDS+SBAS, 10Hz update rate, disable GLL
 		payloadBBR := []byte{0xB5, 0x62, 0x06, 0x8A, 0x28, 0x00, 0x01, 0x02, 0x00, 0x00, 0x01, 0x00, 0x23, 0x10, 0x01, 0x21, 0x00, 0x11, 0x20, 0x07, 0x01, 0x00, 0x21, 0x30, 0x64, 0x00, 0x22, 0x00, 0x31, 0x10, 0x01, 0xCA, 0x00, 0x91, 0x20, 0x00, 0x01, 0x00, 0x93, 0x20, 0x28, 0x07, 0x00, 0x93, 0x20, 0x01, 0x75, 0xF5}
 		p.Write(payloadBBR)
-	} else if s.GPSDetectedType == common.GPS_TYPE_UBX6 || s.GPSDetectedType == common.GPS_TYPE_UBX7 ||
-		s.GPSDetectedType == common.GPS_TYPE_UBX8 || s.GPSDetectedType == common.GPS_TYPE_UBX9 {
+	} else if s.GPSDetectedType ==GPS_TYPE_UBX6 || s.GPSDetectedType ==GPS_TYPE_UBX7 ||
+		s.GPSDetectedType ==GPS_TYPE_UBX8 || s.GPSDetectedType ==GPS_TYPE_UBX9 {
 
 		// Byte order for UBX configuration is little endian.
 
@@ -228,19 +228,19 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		p.Write(makeUBXCFG(0x06, 0x09, 13, []byte{0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x03}))
 		time.Sleep(100 * time.Millisecond)
 
-		if s.GPSDetectedType == common.GPS_TYPE_UBX9 {
+		if s.GPSDetectedType ==GPS_TYPE_UBX9 {
 			if s.DEBUG {
 				log.Printf("ublox 9 detected\n")
 			}
 			// ublox 9
 			writeUblox9ConfigCommands(p)
-		} else if s.GPSDetectedType == common.GPS_TYPE_UBX8 {
+		} else if s.GPSDetectedType ==GPS_TYPE_UBX8 {
 			if s.DEBUG {
 				log.Printf("ublox 8 detected\n")
 			}
 			// ublox 8
 			writeUblox8ConfigCommands(p)
-		} else if (s.GPSDetectedType == common.GPS_TYPE_UBX7) || (s.GPSDetectedType == common.GPS_TYPE_UBX6) {
+		} else if (s.GPSDetectedType ==GPS_TYPE_UBX7) || (s.GPSDetectedType ==GPS_TYPE_UBX6) {
 			if s.DEBUG {
 				log.Printf("ublox 6 or 7 detected\n")
 			}
@@ -304,7 +304,7 @@ func (s *SerialGPSDevice) initGPSSerial() *serial.Port {
 		if s.DEBUG {
 			log.Printf("Finished writing u-blox GPS config to %s. Opening port to test connection.\n", device)
 		}
-	} else if s.GPSDetectedType == common.GPS_TYPE_SOFTRF_DONGLE {
+	} else if s.GPSDetectedType ==GPS_TYPE_SOFTRF_DONGLE {
 		p.Write([]byte("@GNS 0x7\r\n")) // enable SBAS
 		p.Flush()
 		time.Sleep(250 * time.Millisecond) // Otherwise second command doesn't seem to work?
@@ -475,7 +475,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 			TXChannel:          TXChannel,
 			HasTXChannel:       true,
 			GpsDetectedType:    s.GPSDetectedType,
-			GpsSource:          common.GPS_SOURCE_SERIAL,
+			GpsSource:          GPS_SOURCE_SERIAL,
 			GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
 		}
 
@@ -501,7 +501,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 				// We peek into the NMEA string, if we detect OGN for the first time we configure it as a OGN device
 				if !s.ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
 					s.ognTrackerConfigured = true
-					s.GPSDetectedType = common.GPS_TYPE_OGNTRACKER
+					s.GPSDetectedType =GPS_TYPE_OGNTRACKER
 					s.gpsTimeOffsetPpsMs = 75 * time.Millisecond
 					go func() {
 						log.Printf("serialGPSReader() OGN detected, configuring with Ublox8 config\n")
@@ -518,7 +518,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX() {
 							Connected:          true,
 							HasTXChannel:       false,
 							GpsDetectedType:    s.GPSDetectedType,
-							GpsSource:          common.GPS_SOURCE_SERIAL,
+							GpsSource:          GPS_SOURCE_SERIAL,
 							GpsTimeOffsetPpsMs: s.gpsTimeOffsetPpsMs,
 							IsTypeUpgrade:		true,
 						}

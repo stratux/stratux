@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-
-	"github.com/b3nn0/stratux/v2/common"
 )
 
 var EMPTY_SITUATION = SituationData{}
@@ -38,28 +36,28 @@ func getsvTypesvStr(s string) (sv int, svType uint8, svStr string, err error) {
 	}
 
 	if sv <= 32 {
-		svType = common.SAT_TYPE_GPS
+		svType = SAT_TYPE_GPS
 		svStr = fmt.Sprintf("G%d", sv) // GPS 1-32
 	} else if sv <= 64 {
-		svType = common.SAT_TYPE_SBAS
+		svType = SAT_TYPE_SBAS
 		svStr = fmt.Sprintf("S%d", sv+87) // SBAS 33-64, 33 = SBAS PRN 120
 	} else if sv <= 96 {
-		svType = common.SAT_TYPE_GLONASS
+		svType = SAT_TYPE_GLONASS
 		svStr = fmt.Sprintf("R%d", sv-64) // GLONASS 65-96
 	} else if sv <= 158 {
-		svType = common.SAT_TYPE_SBAS
+		svType = SAT_TYPE_SBAS
 		svStr = fmt.Sprintf("S%d", sv-151) // SBAS 152-158
 	} else if sv <= 202 {
-		svType = common.SAT_TYPE_QZSS
+		svType = SAT_TYPE_QZSS
 		svStr = fmt.Sprintf("Q%d", sv-192) // QZSS 193-202
 	} else if sv <= 336 {
-		svType = common.SAT_TYPE_GALILEO
+		svType = SAT_TYPE_GALILEO
 		svStr = fmt.Sprintf("E%d", sv-300) // GALILEO 301-336
 	} else if sv <= 437 {
-		svType = common.SAT_TYPE_BEIDOU
+		svType = SAT_TYPE_BEIDOU
 		svStr = fmt.Sprintf("B%d", sv-400) // BEIDOU 401-437
 	} else {
-		svType = common.SAT_TYPE_UNKNOWN
+		svType = SAT_TYPE_UNKNOWN
 		svStr = fmt.Sprintf("U%d", sv)
 	}
 
@@ -416,11 +414,11 @@ func parseNMEALine_POGNB(x []string, tmpSituation *SituationData) (SituationData
 	}
 
 	// Prever internal baro over OGN baro
-	if !isTempPressValid2(*tmpSituation) || tmpSituation.BaroSourceType != common.BARO_TYPE_BMP280 {
+	if !isTempPressValid2(*tmpSituation) || tmpSituation.BaroSourceType != BARO_TYPE_BMP280 {
 		tmpSituation.BaroPressureAltitude = float32(pressureAlt * 3.28084) // meters to feet
 		tmpSituation.BaroVerticalSpeed = float32(vspeed * 196.85)          // m/s in ft/min
 		tmpSituation.BaroLastMeasurementTime = stratuxClock.Time
-		tmpSituation.BaroSourceType = common.BARO_TYPE_OGNTRACKER
+		tmpSituation.BaroSourceType = BARO_TYPE_OGNTRACKER
 	}
 
 	return *tmpSituation, nil
@@ -449,7 +447,7 @@ func parseNMEALine_PGRMZ(x []string, tmpSituation *SituationData) (SituationData
 	// Prefer internal sensor and OGN tracker over this...
 	tmpSituation.BaroPressureAltitude = float32(pressureAlt) // meters to feet
 	tmpSituation.BaroLastMeasurementTime = stratuxClock.Time
-	tmpSituation.BaroSourceType = common.BARO_TYPE_NMEA
+	tmpSituation.BaroSourceType = BARO_TYPE_NMEA
 
 	return *tmpSituation, nil
 }

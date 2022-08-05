@@ -23,15 +23,37 @@ import (
 )
 
 // Array of NMEA lines we would always want to process from any attached GPS device
-// This should never contain any NMEA codes for GPS Location data
-var ALWAYS_PROCESS_NMEAS = []string{"PFLAU", "PFLAA", "POGNS", "POGNR", "POGNB", "PSOFT"}
+// This should never contain any NMEA codes for GPS Location data because we want location data to be comming from one GPS only
+func alwaysProcessTheseNMEAs () []string {
+	return []string{"PFLAU", "PFLAA", "POGNS", "POGNR", "POGNB", "PSOFT"}
+}
 
-const GPS_FIX_TIME = 5000 * time.Millisecond              // Time we expect a GPS satelite to have a valid fix
-const GPS_TIME_SOURCE = 2000 * time.Millisecond           // Time we expect the GPS to be a valid source before we reconsider other GPS location sources
-const GPS_VALID_TIME = 3000 * time.Millisecond            // TIme we consider a GPS data source to be valid
-const GPS_CONSIDERING_CONNECTED = 5000 * time.Millisecond // Time we expect a GPS as beeing connected to stratux
-const FIX_QUALITY_3DGPS = 1                               // 3DGPS
-const FIX_QUALITY_AGPS = 2                                // SBAS/WAAS
+const (
+	GPS_FIX_TIME = 5000 * time.Millisecond              // Time we expect a GPS satelite to have a valid fix
+	GPS_TIME_SOURCE = 2000 * time.Millisecond           // Time we expect the GPS to be a valid source before we reconsider other GPS location sources
+	GPS_VALID_TIME = 3000 * time.Millisecond            // TIme we consider a GPS data source to be valid
+	GPS_CONSIDERING_CONNECTED = 5000 * time.Millisecond // Time we expect a GPS as beeing connected to stratux
+	FIX_QUALITY_3DGPS = 1                               // 3DGPS
+	FIX_QUALITY_AGPS = 2                                // SBAS/WAAS   
+)
+
+const (
+	SAT_TYPE_UNKNOWN = 0  // default type
+	SAT_TYPE_GPS     = 1  // GPxxx; NMEA IDs 1-32
+	SAT_TYPE_GLONASS = 2  // GLxxx; NMEA IDs 65-96
+	SAT_TYPE_GALILEO = 3  // GAxxx; NMEA IDs
+	SAT_TYPE_BEIDOU  = 4  // GBxxx; NMEA IDs 201-235
+	SAT_TYPE_QZSS    = 5  // QZSS
+	SAT_TYPE_SBAS    = 10 // NMEA IDs 33-54
+)
+
+const (
+	BARO_TYPE_NONE         = 0 // No baro present
+	BARO_TYPE_BMP280       = 1 // Stratux AHRS module or similar internal baro
+	BARO_TYPE_OGNTRACKER   = 2 // OGN Tracker with baro pressure
+	BARO_TYPE_NMEA         = 3 // Other NMEA provider that reports $PGRMZ (SoftRF)
+	BARO_TYPE_ADSBESTIMATE = 4 // If we have no baro, we will try to estimate baro pressure from ADS-B targets reporting GnssDiffFromBaroAlt (HAE<->Baro difference)
+)
 
 type SatelliteInfo struct {
 	SatelliteNMEA    uint8     // NMEA ID of the satellite. 1-32 is GPS, 33-54 is SBAS, 65-88 is Glonass.
@@ -119,14 +141,6 @@ type gpsPerfStats struct {
 	//TODO: valid/invalid flag.
 }
 
-var gpsPerf gpsPerfStats
-var myGPSPerfStats []gpsPerfStats
-var gpsTimeOffsetPpsMs = 100.0 * time.Millisecond
-
-var Satellites map[string]SatelliteInfo
-
-var ognTrackerConfigured = false
-
 type GPSDeviceStatus struct {
 	gpsSource      uint16
 	gpsFixQuality  uint8
@@ -149,6 +163,11 @@ type GPSDeviceManager struct {
 	systemTimeSetter	*gps.OSTimeSetter
 	discoveredDevices cmap.ConcurrentMap
 }
+
+var gpsPerf gpsPerfStats
+var myGPSPerfStats []gpsPerfStats
+var Satellites map[string]SatelliteInfo
+
 
 func NewGPSDeviceManager() GPSDeviceManager {
 
@@ -183,7 +202,6 @@ func registerSituationUpdate() {
 */
 
 func updateConstellation() (sats uint16, tracked uint16, seen uint16) {
-	// TODO: RVT: THis function updates and returns
 	mySituation.muSatellite.Lock()
 	defer mySituation.muSatellite.Unlock()
 	for svStr, thisSatellite := range Satellites {
@@ -320,7 +338,7 @@ func updateSatellitesInView(x []string) {
 
 			// hack workaround for GSA 12-sv limitation... if this is a SBAS satellite, we have a SBAS solution, and signal is greater than some arbitrary threshold, set InSolution
 			// drawback is this will show all tracked SBAS satellites as being in solution.
-			if thisSatellite.Type == common.SAT_TYPE_SBAS {
+			if thisSatellite.Type == SAT_TYPE_SBAS {
 				if mySituation.GPSFixQuality == FIX_QUALITY_AGPS {
 					if thisSatellite.Signal > 16 {
 						thisSatellite.InSolution = true
@@ -351,7 +369,9 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 	myGPSPerfStats = append(myGPSPerfStats, thisGpsPerf)
 	lenGPSPerfStats := len(myGPSPerfStats)
 	//	log.Printf("GPSPerf array has %n elements. Contents are: %v\n",lenGPSPerfStats,myGPSPerfStats)
-	if lenGPSPerfStats > 299 { //30 seconds @ 10 Hz for UBX, 30 seconds @ 5 Hz for MTK or SIRF with 2x messages per 200 ms)
+	//30 seconds @ 10 Hz for UBX, 30 seconds @ 5 Hz for MTK or SIRF with 2x messages per 200 ms)
+	// This might not be true for all GPS systems, is this important?
+	if lenGPSPerfStats > 299 { 
 		myGPSPerfStats = myGPSPerfStats[(lenGPSPerfStats - 299):] // remove the first n entries if more than 300 in the slice
 	}
 }
@@ -360,7 +380,7 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 // Process a NMEA line and update strauc
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
+// Process a NMEA line and update stratux internal variables
 func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscovery gps.DiscoveredDevice) (sentenceUsed bool) {
 	deviceDiscovery.HasTXChannel = false
 	mySituation.muGPS.Lock()
@@ -425,7 +445,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			thisGpsPerf.msgType = x[0]
 			updateGPSPerfmStat(thisGpsPerf)
 
-			if (globalStatus.GPS_detected_type & 0x0F) == common.GPS_TYPE_SOFTRF_AT65 {
+			if (globalStatus.GPS_detected_type & 0x0F) == gps.GPS_TYPE_SOFTRF_AT65 {
 				s.systemTimeSetter.SetTime(gpsTime)
 				stratuxClock.SetRealTimeReference(gpsTime)
 			}
@@ -451,7 +471,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			thisGpsPerf.nmeaTime = mySituation.GPSLastFixSinceMidnightUTC
 			mySituation.GPSTime = mySituation.GPSTime.Add(deviceDiscovery.GpsTimeOffsetPpsMs)
 			// We need to set AT65 type GPS in GNGGA because for this GPS that's the start of a real second
-			if len(x[9]) == 6 && (globalStatus.GPS_detected_type&0x0F) != common.GPS_TYPE_SOFTRF_AT65 {
+			if len(x[9]) == 6 && (globalStatus.GPS_detected_type&0x0F) != gps.GPS_TYPE_SOFTRF_AT65 {
 				s.systemTimeSetter.SetTime(mySituation.GPSTime)
 				stratuxClock.SetRealTimeReference(mySituation.GPSTime)
 			}
@@ -460,36 +480,33 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			setDataLogTimeWithGPS(mySituation)
 		}
 		return err == nil
-		// ############################################# GNGSA GPGSA GLGSA GAGSA GBGSA #############################################
-		// TODO: RVT : In original GPS code we only do GNGSA and GLGSA, why do we now do more??
+	// ############################################# GNGSA GPGSA GLGSA GAGSA GBGSA #############################################
 	} else if (x[0] == "GNGSA") || (x[0] == "GPGSA") || (x[0] == "GLGSA") || (x[0] == "GAGSA") || (x[0] == "GBGSA") { // Satellite data.
 		// RVT: Verified
 		data, err := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x, &mySituation)
 		if err == nil {
 			if data.GPSFixQuality == FIX_QUALITY_AGPS { // Rough 95% confidence estimate for SBAS solution
-				if globalStatus.GPS_detected_type == common.GPS_TYPE_UBX9 {
+				if globalStatus.GPS_detected_type == gps.GPS_TYPE_UBX9 {
 					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 3.0) // ublox 9
 				} else {
 					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 4.0) // ublox 6/7/8
 				}
 			} else { // Rough 95% confidence estimate non-SBAS solution
-				if globalStatus.GPS_detected_type == common.GPS_TYPE_UBX9 {
+				if globalStatus.GPS_detected_type == gps.GPS_TYPE_UBX9 {
 					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 4.0) // ublox 9
 				} else {
 					data.GPSHorizontalAccuracy = float32(data.GPSHDop * 5.0) // ublox 6/7/8
 				}
 			}
+
 			data.GPSVerticalAccuracy = data.GPSVDop * 5.0 // Rough 95% confidence estimate
 			data.GPSNACp = calculateNACp(data.GPSHorizontalAccuracy)
 
-			sats, tracked, seen := updateConstellation()
-			data.GPSSatellites = sats
-			data.GPSSatellitesTracked = tracked
-			data.GPSSatellitesSeen = seen
+			updateSatellites(x)
+			data.GPSSatellites, data.GPSSatellitesTracked, data.GPSSatellitesSeen = updateConstellation()
 
 			mySituation = data
 
-			updateSatellites(x)
 		}
 		return err == nil
 		// ############################################# GPGSV GLGSV GAGSV GBGSV #############################################
@@ -499,14 +516,11 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		data, err := parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x, &mySituation)
 		if err == nil {
 
-			sats, tracked, seen := updateConstellation()
-			data.GPSSatellites = sats
-			data.GPSSatellitesTracked = tracked
-			data.GPSSatellitesSeen = seen
+			updateSatellitesInView(x)
+			data.GPSSatellites, data.GPSSatellitesTracked, data.GPSSatellitesSeen = updateConstellation()
 
 			mySituation = data
 
-			updateSatellitesInView(x)
 		}
 		return err == nil
 
@@ -531,7 +545,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			mySituation = data
 
 			if x[1] == "AT65" {
-				deviceDiscovery.GpsDetectedType = common.GPS_TYPE_SOFTRF_AT65
+				deviceDiscovery.GpsDetectedType = gps.GPS_TYPE_SOFTRF_AT65
 				deviceDiscovery.IsTypeUpgrade = true
 				s.discoveredDevicesCh <- deviceDiscovery
 			}
@@ -594,15 +608,15 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		return true
 		// ############################################# PGRMZ #############################################
 	} else if x[0] == "PGRMZ" &&
-		((globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SERIAL ||
-			(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_DONGLE ||
-			(globalStatus.GPS_detected_type&0x0f) == common.GPS_TYPE_SOFTRF_AT65) {
+		((globalStatus.GPS_detected_type&0x0f) == gps.GPS_TYPE_SERIAL ||
+			(globalStatus.GPS_detected_type&0x0f) == gps.GPS_TYPE_SOFTRF_DONGLE ||
+			(globalStatus.GPS_detected_type&0x0f) == gps.GPS_TYPE_SOFTRF_AT65) {
 		// RVT: Verified
 		fq := SituationData{}
 		data, err := parseNMEALine_PGRMZ(x, &fq)
 
-		if err != nil && (!isTempPressValid() || (mySituation.BaroSourceType != common.BARO_TYPE_BMP280 &&
-			mySituation.BaroSourceType != common.BARO_TYPE_OGNTRACKER)) {
+		if err != nil && (!isTempPressValid() || (mySituation.BaroSourceType != BARO_TYPE_BMP280 &&
+			mySituation.BaroSourceType != BARO_TYPE_OGNTRACKER)) {
 			mySituation.muBaro.Lock()
 			mySituation.BaroPressureAltitude = data.BaroPressureAltitude // meters to feet
 			mySituation.BaroLastMeasurementTime = data.BaroLastMeasurementTime
@@ -774,7 +788,7 @@ func (d *GPSDeviceStatus) hasValidFix() bool {
 func (s *GPSDeviceManager) ConfigureOgnTrackerFromSettings() {
 	for entry := range s.discoveredDevices.IterBuffered() {
 		v := entry.Val.(gps.DiscoveredDevice)
-		if v.GpsDetectedType == common.GPS_TYPE_OGNTRACKER {
+		if v.GpsDetectedType == gps.GPS_TYPE_OGNTRACKER {
 			s.configureOgnTrackerFromSettings(v.Name)
 		}
 	}
@@ -881,7 +895,11 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 Send a message to an attached GPS
 */
 func (s *GPSDeviceManager) configureGPS(txMessage gps.TXMessage) {
-	s.txMessageCh <- txMessage
+	select {
+		case s.txMessageCh <- txMessage:
+		default:
+			log.Printf("GPSDeviceManager: Failed to send message to GPS %s", txMessage.Name)
+	}
 }
 
 /**
@@ -896,7 +914,6 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 
 		// Load what we currently have seen about this GPS, create a new record if it was never seen
 		thisGPS, hasDeviceConfig := s.gpsDeviceStatus[rxMessage.Name]
-
 		if !hasDeviceConfig {
 			thisGPS = GPSDeviceStatus{
 				gpsFixQuality:  0,
@@ -922,8 +939,8 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 				ognPublishNmea(rxMessage.NmeaLine)
 
 				discoveredDevice := deviceRaw.(gps.DiscoveredDevice)
-				if common.StringInSlice(nmeaSlice[0], ALWAYS_PROCESS_NMEAS) {
-					// Some commands that do not affect GPS location services can always and should bebe processed
+				if common.StringInSlice(nmeaSlice[0], alwaysProcessTheseNMEAs()) {
+					// Some commands that do not affect GPS location/time services can always and should be processed
 					processFlarmNmeaMessage(nmeaSlice)
 					if ok := s.processNMEALine(l_valid, rxMessage.Name, discoveredDevice); ok {
 						registerSituationUpdate()
@@ -932,7 +949,7 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 
 					// Process all NMEA for the current GPS
 					if s.currentGPSName == rxMessage.Name {
-						globalStatus.GPS_detected_type = discoveredDevice.GpsDetectedType | common.GPS_PROTOCOL_NMEA
+						globalStatus.GPS_detected_type = discoveredDevice.GpsDetectedType | gps.GPS_PROTOCOL_NMEA
 						if ok := s.processNMEALine(l_valid, rxMessage.Name, discoveredDevice); ok {
 							registerSituationUpdate()
 							globalStatus.GPS_source_name = rxMessage.Name
@@ -943,7 +960,7 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 						}
 					}
 
-					// Check and remmeber this GPS fix quality
+					// Check and remmeber this GPS fix quality so we can keep track of what GPS is suitable for fallback
 					var situ SituationData;
 					situ.GPSFixQuality = 255 // We would not expect GPSFixQuality of 255, so we use it as a marker to see if it was changed
 					situ, _ = parseNMEALine_GNGGA_GPGGA(nmeaSlice, &situ)
@@ -956,7 +973,7 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 					}
 				}
 			} else {
-				log.Printf("Warning: Receive GPS before discovery for %s", rxMessage.Name) // remove log message once validation complete
+				log.Printf("Warning: Receive GPS before discovery for %s", rxMessage.Name)
 			}
 		}
 
@@ -982,7 +999,6 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 		reInit := x || y || z || d || g
 
 		if reInit {
-
 			s.qh.Quit()
 			s.settingsCopy = globalSettings
 

@@ -134,7 +134,7 @@ func ognListen() {
 					importOgnTrafficMessage(msg, data)
 				}
 			case <- pgrmzTimer.C:
-				if isTempPressValid() && mySituation.BaroSourceType != common.BARO_TYPE_NONE && mySituation.BaroSourceType != common.BARO_TYPE_ADSBESTIMATE {
+				if isTempPressValid() && mySituation.BaroSourceType != BARO_TYPE_NONE && mySituation.BaroSourceType != BARO_TYPE_ADSBESTIMATE {
 					ognOutgoingMsgChan <- makePGRMZString()
 				}
 			case <- ognExitChan:
@@ -155,7 +155,7 @@ func importOgnStatusMessage(msg OgnMessage) {
 
 	// If we have an RFM95 or OGN Tracker connected, provide the config to ogn-rx-eu, so that it sends the same ID (either via RFM95 or internet)
 	/* TODO: RVT */
-//	if msg.Tx_enabled || globalStatus.GPS_detected_type & common.GPS_TYPE_OGNTRACKER > 0 {
+//	if msg.Tx_enabled || globalStatus.GPS_detected_type & gps.GPS_TYPE_OGNTRACKER > 0 {
 //		ognPublishNmea(getOgnTrackerConfigString())
 //	}
 }
