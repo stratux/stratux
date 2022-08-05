@@ -43,4 +43,5 @@ test/uat_read
 test/uatsummary
 
 .DS_Store
+.vscode/*.log
 
