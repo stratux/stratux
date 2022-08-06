@@ -72,6 +72,7 @@ var (
 const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 
 // AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
+// Sometimes we get CRC errors from a attached GPS device that will look like this :GPS error. Invalid NMEA string: Checksum failed. Calculated 0X7F; expected 0X68 $GPGSV,3,1,10,01,15,256,,08,72,282,,10,50*68
 func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoResult) {
 	b.qh.Add()
 	defer func() {

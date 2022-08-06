@@ -427,14 +427,14 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 	// ############################################# GNVTG GNVTG #############################################
 	if (x[0] == "GNVTG") || (x[0] == "GPVTG") { // Ground track information.
 		// RTV: Verified
-		data, err := parseNMEALine_GNVTG_GPVTG(x, &mySituation)
+		data, err := parseNMEALine_GNVTG_GPVTG(x, mySituation)
 		if err == nil {
 			mySituation = data
 		}
 		return err == nil
 	// ############################################# GNGGA GPGGA #############################################
 	} else if (x[0] == "GNGGA") || (x[0] == "GPGGA") { // Position fix.
-		data, err := parseNMEALine_GNGGA_GPGGA(x, &mySituation)
+		data, err := parseNMEALine_GNGGA_GPGGA(x, mySituation)
 		if err == nil {
 			mySituation = data
 
@@ -465,7 +465,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		return err == nil
 	// ############################################# GNRMC GPRMC #############################################
 	} else if (x[0] == "GNRMC") || (x[0] == "GPRMC") { // Recommended Minimum data.
-		data, err := parseNMEALine_GNRMC_GPRMC(x, &mySituation)
+		data, err := parseNMEALine_GNRMC_GPRMC(x, mySituation)
 		if err == nil {
 			previousSituation := mySituation
 			mySituation = data
@@ -493,7 +493,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		return err == nil
 	// ############################################# GNGSA GPGSA GLGSA GAGSA GBGSA #############################################
 	} else if (x[0] == "GNGSA") || (x[0] == "GPGSA") || (x[0] == "GLGSA") || (x[0] == "GAGSA") || (x[0] == "GBGSA") { // Satellite data.
-		data, err := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x, &mySituation)
+		data, err := parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x, mySituation)
 		if err == nil {
 			if data.GPSFixQuality == FIX_QUALITY_AGPS { // Rough 95% confidence estimate for SBAS solution
 				if globalStatus.GPS_detected_type & 0x0F == gps.GPS_TYPE_UBX9 {
@@ -521,7 +521,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		return err == nil
 	// ############################################# GPGSV GLGSV GAGSV GBGSV #############################################
 	} else if (x[0] == "GPGSV") || (x[0] == "GLGSV") || (x[0] == "GAGSV") || (x[0] == "GBGSV") { // GPS + SBAS or GLONASS or Galileo or Beidou satellites in view message.
-		data, err := parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x, &mySituation)
+		data, err := parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x, mySituation)
 		if err == nil {
 
 			updateSatellitesInView(x)
@@ -534,7 +534,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 
 	// ############################################# POGNB #############################################
 	} else if x[0] == "POGNB" {
-		data, err := parseNMEALine_POGNB(x, &mySituation)
+		data, err := parseNMEALine_POGNB(x, mySituation)
 		if err == nil {
 			mySituation.muBaro.Lock()
 			mySituation.BaroPressureAltitude = data.BaroPressureAltitude
@@ -547,7 +547,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 	// ############################################# POGNB #############################################
 	} else if x[0] == "PSOFT" {
 		// When PSOFT is send, we know the device is a SOFTRF and we can take special care of setting date/time
-		data, err := parseNMEALine_PSOFT(x, &mySituation)
+		data, err := parseNMEALine_PSOFT(x, mySituation)
 		if err == nil {
 			mySituation = data
 
@@ -617,9 +617,9 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			(globalStatus.GPS_detected_type&0x0f) == gps.GPS_TYPE_SOFTRF_DONGLE ||
 			(globalStatus.GPS_detected_type&0x0f) == gps.GPS_TYPE_SOFTRF_AT65) {
 		fq := SituationData{}
-		data, err := parseNMEALine_PGRMZ(x, &fq)
+		data, err := parseNMEALine_PGRMZ(x, fq)
 
-		if err != nil && (!isTempPressValid() || (mySituation.BaroSourceType != BARO_TYPE_BMP280 &&
+		if err == nil && (!isTempPressValid() || (mySituation.BaroSourceType != BARO_TYPE_BMP280 &&
 			mySituation.BaroSourceType != BARO_TYPE_OGNTRACKER)) {
 			mySituation.muBaro.Lock()
 			mySituation.BaroPressureAltitude = data.BaroPressureAltitude // meters to feet
@@ -1000,8 +1000,8 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 			// Test and remmeber this GPS fix quality so we can keep track of what GPS is suitable for fallback
 			var situ SituationData;
 			situ.GPSFixQuality = 255 // We would not expect GPSFixQuality of 255, so we use it as a marker to see if it was changed
-			situ, _ = parseNMEALine_GNGGA_GPGGA(nmeaSlice, &situ)
-			situ, _ = parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(nmeaSlice, &situ)
+			situ, _ = parseNMEALine_GNGGA_GPGGA(nmeaSlice, situ)
+			situ, _ = parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(nmeaSlice, situ)
 			if situ.GPSFixQuality != 255 {
 				thisGPS.gpsFixQuality = situ.GPSFixQuality
 				if thisGPS.gpsFixQuality > 0 {

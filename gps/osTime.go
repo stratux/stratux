@@ -9,6 +9,8 @@ import (
 	"github.com/b3nn0/stratux/v2/common"
 )
 
+
+// Small go package to set the system time
 const SHOW_TIME_DIFFERENCE_ONLY = false						// Use this to enable calbration mode if you want to add/test a new device pps
 const AVERAGE_OVER = 10.0            						// Average over 10 seconds to to determine the average time difference
 const ACCEPTABLE_TIME_OFFSET = 40  * time.Millisecond	    // Number of ms we still accept as difference between GPS and OS time
@@ -65,10 +67,11 @@ func (s *OSTimeSetter) setSystemTime(gpsTime time.Time) {
 	}
 }
 
-
+// Caslibrate will measure how long it takes  to set the OS time and take this into consideration
+// as additional time when calling when setting the time
 func (s *OSTimeSetter) Calibrate() { 
 	log.Printf("Calibrating setting of OS time\n")
-	beforeCalibration := time.Now().UTC()
+	beforeCalibration := time.Now()
 	
 	measure := func() float64 {
 		measureTime := time.Now()
@@ -85,9 +88,9 @@ func (s *OSTimeSetter) Calibrate() {
 		log.Printf("Calibrating setting of OS time Done, setting time takes %0.2fms\n", took)
 		time.Sleep(TIME_BETWEEN_MEASUREMENTS)
 	}
-	s.setSystemTime(beforeCalibration.Add( TIME_BETWEEN_MEASUREMENTS * TOTAL_MEASURMENETS))
+	// Settings time back to what we thank it should be
+	s.setSystemTime(beforeCalibration.Add( time.Duration(s.timeToSetTime * TOTAL_MEASURMENETS * float64(TIME_BETWEEN_MEASUREMENTS.Milliseconds())) * time.Millisecond))
 	log.Printf("Calibrating setting of OS time Done, setting time takes %0.2fms\n", s.timeToSetTime)
-
 }
 
 func (s *OSTimeSetter) movingExpAvg(value, oldValue, fdtime, ftime float64) float64 { 
@@ -124,10 +127,11 @@ func (s *OSTimeSetter) Run() {
 		if SHOW_TIME_DIFFERENCE_ONLY {
 			log.Printf("PPS Calibration mode: Based on your time source (Chrony??): Use GpsTimeOffsetPpsMs=%.0fms for your device\n", s.movingTimeDifference)
 		} else {
-			// Set new time directly  if it it's more than 300ms off
+			// Set new time directly if it it's more than 300ms off
 			if isOffByMoreThan(gpsTime, 300) {
 				s.setSystemTime(gpsTime)
 				s.lastSetTime = time.Now()
+			// Otherwise use the moving average time difference and only when we are off more than ACCEPTABLE_TIME_OFFSET we set the time
 			} else {
 				// log.Printf("Difference %v moving average %.2fms\n", time.Since(newTime), movingTimeDifference)
 				// Only try to set time if it's off by more than ACCEPTABLE_TIME_OFFSET_MS, at most once a minute

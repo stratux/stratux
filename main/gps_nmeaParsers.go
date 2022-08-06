@@ -67,9 +67,9 @@ func getsvTypesvStr(s string) (sv int, svType uint8, svStr string, err error) {
 /** Process GNVTG & GPVTG into a SituationData
   function will not have side effects!x
 */
-func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "GNVTG") || (x[0] == "GPVTG") {
-		return *tmpSituation, errors.New("Not GNVTG GPVTG")
+		return tmpSituation, errors.New("Not GNVTG GPVTG")
 	}
 
 	if len(x) < 9 { // Reduce from 10 to 9 to allow parsing by devices pre-NMEA v2.3
@@ -95,12 +95,12 @@ func parseNMEALine_GNVTG_GPVTG(x []string, tmpSituation *SituationData) (Situati
 	tmpSituation.GPSLastGroundTrackTime = stratuxClock.Time
 
 	// We've made it this far, so that means we've processed "everything" and can now make the change to tmpSituation.
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
 
-func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "GNGGA") || (x[0] == "GPGGA") {
-		return *tmpSituation, errors.New("Not GNGGA GPGGA")
+		return tmpSituation, errors.New("Not GNGGA GPGGA")
 	}
 
 	if len(x) < 15 {
@@ -173,7 +173,7 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation *SituationData) (Situati
 	// Timestamp.
 	tmpSituation.GPSLastFixLocalTime = stratuxClock.Time
 
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
 
 /**
@@ -217,9 +217,9 @@ func parse_timeDate(x []string, timeLoc uint8, dateLoc uint8) (GPSLastFixSinceMi
 	return
 }
 
-func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "GNRMC") || (x[0] == "GPRMC") {
-		return *tmpSituation, errors.New("Not GNRMC GPRMC")
+		return tmpSituation, errors.New("Not GNRMC GPRMC")
 	}
 
 	//$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A
@@ -242,8 +242,8 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData) (Situati
 	}
 
 	if x[2] != "A" { // invalid fix
-		tmpSituation.GPSFixQuality = 0 // Just a note.
-		return *tmpSituation, nil
+		tmpSituation.GPSFixQuality = FIX_QUALITY_NOFIX // Just a note.
+		return tmpSituation, nil
 	}
 
 	// Time only for GGA/NGGA
@@ -299,12 +299,12 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation *SituationData) (Situati
 	tmpSituation.GPSTrueCourse = float32(tc)
 	tmpSituation.GPSLastGroundTrackTime = stratuxClock.Time
 
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
 
-func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "GNGSA") || (x[0] == "GPGSA") /* || (x[0] == "GLGSA") || (x[0] == "GAGSA") || (x[0] == "GBGSA") */ {
-		return *tmpSituation, errors.New("Not GNGSA GPGSA GLGSA GAGSA GBGSA")
+		return tmpSituation, errors.New("Not GNGSA GPGSA GLGSA GAGSA GBGSA")
 	}
 
 	if len(x) < 18 {
@@ -325,8 +325,8 @@ func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation *Situa
 	// field 2: solution type
 	// 1 = no solution; 2 = 2D fix, 3 = 3D fix. WAAS status is parsed from GGA message, so no need to get here
 	if (x[2] == "") || (x[2] == "1") { // missing or no solution
-		tmpSituation.GPSFixQuality = 0 // Just a note.
-		return *tmpSituation, nil
+		tmpSituation.GPSFixQuality = FIX_QUALITY_NOFIX // Just a note.
+		return tmpSituation, nil
 	}
 
 	// field 16: HDOP
@@ -348,13 +348,13 @@ func parseNMEALine_GNGSA_GPGSA_GLGSA_GAGSA_GBGSA(x []string, tmpSituation *Situa
 	}
 	tmpSituation.GPSVDop = float32(vdop)
 
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
 
 // note: parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV is only validating the first part of the message
-func parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "GPGSV") || (x[0] == "GLGSV") || (x[0] == "GAGSV") || (x[0] == "GBGSV") {
-		return *tmpSituation, errors.New("Not GPGSV GLGSV GAGSV GBGSV")
+		return tmpSituation, errors.New("Not GPGSV GLGSV GAGSV GBGSV")
 	}
 
 	if len(x) < 4 {
@@ -373,12 +373,12 @@ func parseNMEALine_GPGSV_GLGSV_GAGSV_GBGSV(x []string, tmpSituation *SituationDa
 		return EMPTY_SITUATION, errors.New("GSV field not found")
 	}
 
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
 
-func parseNMEALine_PSOFT(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_PSOFT(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "PSOFT") {
-		return *tmpSituation, errors.New("Not PSOFT")
+		return tmpSituation, errors.New("Not PSOFT")
 	}
 
 	// SOFTRF Tracker time/date
@@ -388,12 +388,12 @@ func parseNMEALine_PSOFT(x []string, tmpSituation *SituationData) (SituationData
 		return EMPTY_SITUATION, errors.New("Length < 2")
 	}
 
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
 
-func parseNMEALine_POGNB(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_POGNB(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "POGNB") {
-		return *tmpSituation, errors.New("Not POGNB")
+		return tmpSituation, errors.New("Not POGNB")
 	}
 
 	// OGN Tracker pressure data:
@@ -414,19 +414,19 @@ func parseNMEALine_POGNB(x []string, tmpSituation *SituationData) (SituationData
 	}
 
 	// Prever internal baro over OGN baro
-	if !isTempPressValid2(*tmpSituation) || tmpSituation.BaroSourceType != BARO_TYPE_BMP280 {
+	if !isTempPressValid2(tmpSituation) || tmpSituation.BaroSourceType != BARO_TYPE_BMP280 {
 		tmpSituation.BaroPressureAltitude = float32(pressureAlt * 3.28084) // meters to feet
 		tmpSituation.BaroVerticalSpeed = float32(vspeed * 196.85)          // m/s in ft/min
 		tmpSituation.BaroLastMeasurementTime = stratuxClock.Time
 		tmpSituation.BaroSourceType = BARO_TYPE_OGNTRACKER
 	}
 
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
 
-func parseNMEALine_PGRMZ(x []string, tmpSituation *SituationData) (SituationData, error) {
+func parseNMEALine_PGRMZ(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "PGRMZ") {
-		return *tmpSituation, errors.New("Not PGRMZ")
+		return tmpSituation, errors.New("Not PGRMZ")
 	}
 
 	// Only evaluate PGRMZ for SoftRF/Flarm, where we know that it is standard barometric pressure.
@@ -449,5 +449,5 @@ func parseNMEALine_PGRMZ(x []string, tmpSituation *SituationData) (SituationData
 	tmpSituation.BaroLastMeasurementTime = stratuxClock.Time
 	tmpSituation.BaroSourceType = BARO_TYPE_NMEA
 
-	return *tmpSituation, nil
+	return tmpSituation, nil
 }
