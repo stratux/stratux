@@ -74,6 +74,8 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 	n.qh.Add()
 	defer n.qh.Done()
+	log.Printf("Connecting network GPS device : %s\n", c.RemoteAddr().String())
+
 	reader := bufio.NewReader(c)
 	remoteAddress := c.RemoteAddr().String()
 	n.updateDeviceDiscovery(remoteAddress, true)
@@ -97,6 +99,7 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 		}
 	}
 	n.updateDeviceDiscovery(remoteAddress, false)
+	log.Printf("Disconnecting network GPS device : %s\n", c.RemoteAddr().String())
 }
 
 func (n *NetworkDevice) Stop() {

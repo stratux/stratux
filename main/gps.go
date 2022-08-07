@@ -957,7 +957,7 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 		// Test if this device was discovered in the first place, if not ignore the whole message
 		var discoveredDevice gps.DiscoveredDevice
 		if dd, ok := s.discoveredDevices.Get(rxMessage.Name); ok {
-			thisGPS.gpsSource = discoveredDevice.GpsSource
+			thisGPS.gpsSource = dd.GpsSource
 			discoveredDevice = dd
 		} else {
 			log.Printf("Warning: Receive GPS before discovery for %s", rxMessage.Name)
@@ -968,7 +968,7 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 		l_valid, validNMEAcs := common.ValidateNMEAChecksum(rxMessage.NmeaLine)
 		if !validNMEAcs {
 			if len(l_valid) > 0 {
-				log.Printf("GPS error. Invalid NMEA string: %s %s\n", l_valid, rxMessage.NmeaLine) // remove log message once validation complete
+				log.Printf("GPS error. Invalid NMEA string from [%s]: %s %s\n", rxMessage.Name, l_valid, rxMessage.NmeaLine) // remove log message once validation complete
 			}
 			thisGPS.gpsCRCErrors++
 			return
