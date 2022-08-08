@@ -619,8 +619,10 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 		fq := SituationData{}
 		data, err := parseNMEALine_PGRMZ(x, fq)
 
-		if err == nil && (!isTempPressValid() || (mySituation.BaroSourceType != BARO_TYPE_BMP280 &&
-			mySituation.BaroSourceType != BARO_TYPE_OGNTRACKER)) {
+		if err == nil && (
+			!isTempPressValid() || 
+			(mySituation.BaroSourceType != BARO_TYPE_BMP280 && 
+			mySituation.BaroSourceType != BARO_TYPE_OGNTRACKER)) {			
 			mySituation.muBaro.Lock()
 			mySituation.BaroPressureAltitude = data.BaroPressureAltitude // meters to feet
 			mySituation.BaroLastMeasurementTime = data.BaroLastMeasurementTime
@@ -963,12 +965,16 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 			log.Printf("Warning: Receive GPS before discovery for %s", rxMessage.Name)
 			return
 		}
-		
+
+		if globalSettings.DEBUG {
+			log.Printf("GPS Received source:%d name:%s line:%s\n", thisGPS.gpsSource, rxMessage.Name, rxMessage.NmeaLine)
+		}
+
 		// Test NMEA sentence, and ignore if the CRC was wrong
 		l_valid, validNMEAcs := common.ValidateNMEAChecksum(rxMessage.NmeaLine)
 		if !validNMEAcs {
 			if len(l_valid) > 0 {
-				log.Printf("GPS error. Invalid NMEA string from [%s]: %s %s\n", rxMessage.Name, l_valid, rxMessage.NmeaLine) // remove log message once validation complete
+				log.Printf("GPS error. Invalid NMEA string from [%s]: %s %s\n", rxMessage.Name, l_valid, rxMessage.NmeaLine)
 			}
 			thisGPS.gpsCRCErrors++
 			return
