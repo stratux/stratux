@@ -5,6 +5,9 @@ StatusCtrl.$inject = ['$rootScope', '$scope', '$state', '$http', '$interval', 'c
 function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) {
 
 	$scope.$parent.helppage = 'plates/status-help.html';
+	$scope.GPSSources = ['-', 'Serial', 'Bluetooth Device', 'Network']
+	$scope.GPSHWCodes = ['Not Installed', 'Serial port', 'Prolific USB-serial bridge', 'OGN Tracker', 'n/a', 'n/a', 'u-blox 6 GPS receiver', 'u-blox 7 GPS receiver',
+	'u-blox 8 GNSS receiver', 'u-blox 9 GNSS receiver', 'USB Serial IN', 'SoftRF Dongle', 'Network', 'Bluetooth LE', 'SoftRF with AT65', 'n/a']
 
 	function connect($scope) {
 		if (($scope === undefined) || ($scope === null))
@@ -84,48 +87,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 					$scope.GPS_position_accuracy = ", " + status.GPS_position_accuracy.toFixed(1) + " m";
 			}
 			var gpsHardwareCode = (status.GPS_detected_type & 0x0f);
-			var tempGpsHardwareString = "Not installed";
-			switch(gpsHardwareCode) {
-				case 0x01:
-					tempGpsHardwareString = "Serial port";
-					break;
-				case 0x02:
-					tempGpsHardwareString = "Prolific USB-serial bridge";
-					break;
-				case 0x03:
-					tempGpsHardwareString = "OGN Tracker";
-					break;
-				case 0x06:
-					tempGpsHardwareString = "USB u-blox 6 GPS receiver";
-					break;
-				case 0x07:
-					tempGpsHardwareString = "USB u-blox 7 GNSS receiver";
-					break;
-				case 0x08:
-					tempGpsHardwareString = "USB u-blox 8 GNSS receiver";
-					break;
-				case 0x09:
-					tempGpsHardwareString = "USB u-blox 9 GNSS receiver";
-					break;
-				case 0x0A:
-					tempGpsHardwareString = "USB Serial IN";
-					break;
-				case 0x0B:
-					tempGpsHardwareString = "SoftRF Dongle";
-					break;
-				case 0x0C:
-					tempGpsHardwareString = "Network";
-					break;
-				case 0x0D:
-					tempGpsHardwareString = "BlueTooth LE";
-					break;
-				case 0x0E:
-					tempGpsHardwareString = "SoftRF with AT65";
-					break;
-					default:
-				tempGpsHardwareString = "Not installed";
-			}
-			$scope.GPS_hardware = tempGpsHardwareString;
+			$scope.GPS_hardware = $scope.GPSHWCodes[gpsHardwareCode];
 			$scope.GPS_NetworkRemoteIp = status.GPS_NetworkRemoteIp;
 			$scope.GPS_Discovery = status.GPS_Discovery
 			var gpsProtocol = (status.GPS_detected_type >> 4);

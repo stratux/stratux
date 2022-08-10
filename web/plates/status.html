@@ -152,6 +152,15 @@
 					<label class="col-xs-6">GPS satellites:</label>
 					<span class="col-xs-6">{{GPS_satellites_locked}} in solution; {{GPS_satellites_seen}} seen; {{GPS_satellites_tracked}} tracked</span>
 				</div>
+				<div class="row" ng-class="{'section_invisible': !visible_gps}">
+					<label class="control-label col-xs-6">All Connected GPS Devices:</label>
+					<div class="col-xs-6">
+						<div ng-repeat="d in GPS_Discovery">
+							<div ng-show="d.GpsSource != 3 && d.Connected">{{GPSHWCodes[d.GpsDetectedType]}} via:{{GPSSources[d.GpsSource]}} <span ng-show="d.Name == GPS_source_name">&nbsp;&#x2705;</span></div>
+							<div ng-show="d.GpsSource == 3 && d.Connected">{{d.Name}} via:{{GPSSources[d.GpsSource]}} <span ng-show="d.Name == GPS_source_name">&nbsp;&#x2705;</span></div>
+						</div>
+					</div>
+				</div>
 				<div class="separator"></div>
 				<div class="row">
 					<div class="col-sm-4 label_adj">

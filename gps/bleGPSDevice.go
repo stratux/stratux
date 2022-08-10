@@ -109,7 +109,7 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 /**
 Coonect to our bluetooth device and listen on the RX channel for NMEA sentences
 **/
-func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan<- nmeaNewLine, TXChannel <-chan []byte) error {
+func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan<- nmeaNewLine) error {
 	b.eh.Add()
 	defer b.eh.Done()
 
@@ -139,6 +139,11 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 	if err != nil {
 		return err
 	}
+
+	// Create a TX Channel and send a connect discovery 
+	TXChannel := make(chan []byte, 1)
+	b.updateDeviceDiscoveryWithChannel(discoveredDeviceInfo.name, TXChannel)
+	defer b.updateDeviceDiscovery(discoveredDeviceInfo.name, false)
 
 	// variables for the NMEA parser
 	var receivedData []byte
@@ -237,18 +242,14 @@ func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan<- nmeaNewLine) {
 				if !info.Connected {
 					info.Connected = true
 					go func() {
-						TXChannel := make(chan []byte, 1)
-						b.updateDeviceDiscoveryWithChannel(info.name, TXChannel)
-
 						// Attempt to connect to a bluetooth device
-						err := b.rxListener(*info, sentenceChannel, TXChannel)
+						err := b.rxListener(*info, sentenceChannel)
 						if err != nil {
 							log.Printf("bleGPSDevice: Error from device : %s : %s", info.name, err.Error())
 						} else {
 							log.Printf("bleGPSDevice: Devices was finished")
 						}
 						info.Connected = false
-						b.updateDeviceDiscovery(info.name, false)
 					}()
 				}
 			}
