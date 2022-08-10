@@ -32,13 +32,20 @@ type SerialDiscoveryConfig struct {
 }
 
 type SerialGPSDevice struct {
-	timeOffsetPPS   time.Duration
-	detectedType      uint
-	name              string
 	DEBUG                bool
-	rxMessageCh          chan<- RXMessage
 	discoveredDevicesCh  chan<- DiscoveredDevice
-	qh                   *common.QuitHelper
+	rxMessageCh  		 chan<- RXMessage
+	eh                   *common.ExitHelper
+}
+
+func NewSerialGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- DiscoveredDevice, debug bool) SerialGPSDevice {
+	m := SerialGPSDevice{
+		DEBUG:                debug,
+		discoveredDevicesCh:  discoveredDevicesCh,
+		rxMessageCh:  		  rxMessageCh,
+		eh:                   common.NewExitHelper(),
+	}
+	return m
 }
 
 func deviceDiscoveryConfig() []SerialDiscoveryConfig {
@@ -109,21 +116,6 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 	return all
 }
 
-
-
-func NewSerialGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- DiscoveredDevice, debug bool) SerialGPSDevice {
-	m := SerialGPSDevice{
-		timeOffsetPPS:   100.0 * time.Millisecond,
-		detectedType:      0x00,
-		name:              "",
-		DEBUG:                debug,
-		rxMessageCh:          rxMessageCh,
-		discoveredDevicesCh:  discoveredDevicesCh,
-		qh:                   common.NewQuitHelper(),
-	}
-	return m
-}
-
 /*
 u-blox5_Referenzmanual.pdf
 Platform settings
@@ -185,6 +177,7 @@ func (s *SerialGPSDevice) detectAndOpenSerialPort(device SerialDiscoveryConfig) 
 			continue
 		}
 		// Check if we get any data...
+		time.Sleep(1 * time.Second)
 		buffer := make([]byte, 10000)
 		n, err := p.Read(buffer)
 		if (n!=0 && err==nil) {
@@ -192,7 +185,7 @@ func (s *SerialGPSDevice) detectAndOpenSerialPort(device SerialDiscoveryConfig) 
 			for _, line := range splitted {
 				_, validNMEAcs := common.ValidateNMEAChecksum(line)
 				if validNMEAcs {
-					// log.Printf("Detected serial port %s with baud %d", device.serialPort, baud)
+					 log.Printf("Detected serial port %s with baud %d", device.serialPort, baud)
 					return p
 				}
 			}
@@ -397,6 +390,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 
 	// test if serial port exists on OS level
 	if _, err := os.Stat(device.serialPort); err != nil { 
+		// log.Printf("Serial port does not exist: %s", device.serialPort)
 		return nil // errors.New("Serial port does not exist")
 	}
 
@@ -424,26 +418,26 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 			readerWatchdog.Stop()
 			serialPort.Close()
 			s.discoveredDevicesCh <- DiscoveredDevice{
-				Name:      s.name,
+				Name:      device.name,
 				Connected: false,
 			}
 		}()
 
 		s.discoveredDevicesCh <- DiscoveredDevice{
-			Name:               s.name,
+			Name:               device.name,
 			Connected:          true,
 			TXChannel:          TXChannel,
 			HasTXChannel:       true,
-			GpsDetectedType:    s.detectedType,
+			GpsDetectedType:    device.deviceType,
 			GpsSource:          GPS_SOURCE_SERIAL,
-			GpsTimeOffsetPpsMs: s.timeOffsetPPS,
+			GpsTimeOffsetPpsMs: device.timeOffsetPPS,
 		}
 
 		// Blocking function that reads serial data
 		serialReader := func() {
 			i := 0 //debug monitor
 			scanner := bufio.NewScanner(serialPort)
-			for scanner.Scan() && !s.qh.IsQuit() && !readerWatchdog.IsTriggered() {
+			for scanner.Scan() && !s.eh.IsExit() && !readerWatchdog.IsTriggered() {
 				readerWatchdog.Poke()
 				i++
 				if s.DEBUG && i%100 == 0 {
@@ -461,32 +455,29 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 				// We peek into the NMEA string, if we detect OGN for the first time we configure it as a OGN device
 				if !ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
 					ognTrackerConfigured = true
-					s.detectedType = GPS_TYPE_OGNTRACKER
-					s.timeOffsetPPS = 75 * time.Millisecond
 					go func() {
 						log.Printf("OGN detected, configuring with Ublox8 config\n")
 						writeUblox8ConfigCommands(serialPort)
 						serialPort.Flush()
-						time.Sleep(time.Second * 5)
+						//time.Sleep(time.Second * 5)
 						// Generic commands always seems to return in a invalid NMEA string, hope that is fine?
-						writeUbloxGenericCommands(5, serialPort)
-						serialPort.Flush()
-						time.Sleep(time.Second * 5)
+						// writeUbloxGenericCommands(5, serialPort)
+						//serialPort.Flush()
 						// Notify of this device type
 						s.discoveredDevicesCh <- DiscoveredDevice{
-							Name:               s.name,
+							Name:               device.name,
 							Connected:          true,
 							HasTXChannel:       false,
-							GpsDetectedType:    s.detectedType,
+							GpsDetectedType:    GPS_TYPE_OGNTRACKER,
 							GpsSource:          GPS_SOURCE_SERIAL,
-							GpsTimeOffsetPpsMs: s.timeOffsetPPS,
+							GpsTimeOffsetPpsMs: 75 * time.Millisecond,
 							IsTypeUpgrade:      true,
 						}
 					}()
 				}
 
 				s.rxMessageCh <- RXMessage{
-					Name:     s.name,
+					Name:     device.name,
 					NmeaLine: thisNmeaLine,
 				}
 			}
@@ -499,9 +490,9 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 			}
 		}
 
-		// We use a private QuitHelper for the local Writer because when serialReader stops we also want the serialWriter to quit
-		localQh := common.NewQuitHelper()
-		defer localQh.Quit()
+		// We use a private ExitHelper for the local Writer because when serialReader stops we also want the serialWriter to quit
+		localQh := common.NewExitHelper()
+		defer localQh.Exit()
 
 		serialWriter := func() {
 			localQh.Add()
@@ -525,7 +516,7 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 
 		go serialWriter()
 		serialReader()
-		log.Printf("serialGPSDevice: exiting gpsSerialTXRX")
+		log.Printf("serialGPSDevice: Stopping %s", device.name)
 	}
 
 	return nil;
@@ -535,8 +526,8 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 Discover serial devices
 */
 func (s *SerialGPSDevice) deviceDiscovery() {
-	s.qh.Add()
-	defer s.qh.Done()
+	s.eh.Add()
+	defer s.eh.Done()
 
 	devices := deviceDiscoveryConfig()
 	currentDevice := 0
@@ -566,7 +557,7 @@ func (s *SerialGPSDevice) deviceDiscovery() {
 	timer := time.NewTicker(1 * time.Second)
 	for {
 		select {
-		case <- s.qh.C:
+		case <- s.eh.C:
 			return
 		case <- timer.C:
 			scanNextDevice()
@@ -578,7 +569,7 @@ func (s *SerialGPSDevice) deviceDiscovery() {
 Request to stop all goroutines and stop serial/GPS
 */
 func (s *SerialGPSDevice) Stop() {
-	s.qh.Quit()
+	s.eh.Exit()
 }
 
 /**

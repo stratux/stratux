@@ -162,7 +162,7 @@ type GPSDeviceManager struct {
 	gpsDeviceStatus     cmap.ConcurrentMap[GPSDeviceStatus] // Map of device status when they are sending us message
 	settingsCopy        settings                   // Copy of the global Settings to help decide if some varas are changed
 	currentGPSNameCh    chan string                     // name of the current GPS device we receive location data from
-	qh                  *common.QuitHelper         // Helper to quick various routines during reconfiguratios
+	eh                  *common.ExitHelper         // Helper to quick various routines during reconfiguratios
 
 	rxMessageCh         chan gps.RXMessage         // Channel used by all GPS devices to receive NMEA data from
 	txMessageCh         chan gps.TXMessage         // Channel used to send a any device a message
@@ -186,7 +186,7 @@ func NewGPSDeviceManager() GPSDeviceManager {
 		gpsDeviceStatus:      cmap.New[GPSDeviceStatus](),
 		settingsCopy:         globalSettings,
 		currentGPSNameCh:     make(chan string),
-		qh:                   common.NewQuitHelper(),
+		eh:                   common.NewExitHelper(),
 
 		rxMessageCh:          make(chan gps.RXMessage, 20),
 		txMessageCh:          make(chan gps.TXMessage, 20),
@@ -903,6 +903,11 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 				} else {
 					// Remove from device if we did not see it for a while
 					s.gpsDeviceStatus.Pop(entry.Key)
+					// Just in case if a device forget's to send a device as disconnected via discovery we send a disconnect
+					s.discoveredDevicesCh <- gps.DiscoveredDevice{
+						Name:               entry.Key,
+						Connected:          false,
+					}
 				}
 			}
 			if !anyGPSWIthActivity {
@@ -920,6 +925,67 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 			continue
 		case <-removeTimer.C:
 			removeOutdatedGPSDevices()
+		}
+	}
+}
+
+
+/**
+Maintain a list of configured and found GPS devices and set the list in globalStatus
+*/
+func (s *GPSDeviceManager) handleDeviceDiscovery() {
+	handleDeviceDiscovery := func(discoveredDevice gps.DiscoveredDevice) {
+
+		if previous, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
+			// Copy TXChannel if one previously was already known because device discovery might not always have a TXCHannel added
+			if previous.HasTXChannel && !discoveredDevice.HasTXChannel {
+				discoveredDevice.HasTXChannel = true
+				discoveredDevice.TXChannel = previous.TXChannel
+			}
+			// If the last Version was a upgraded version, then copy the device type
+			// This is to avoid any device discovery send of versions that where not upgraded
+			if previous.IsTypeUpgrade {
+				discoveredDevice.IsTypeUpgrade = true
+				discoveredDevice.GpsDetectedType = previous.GpsDetectedType
+			}
+		}
+		discoveredDevice.LastDiscoveryMessage = stratuxClock.Time
+		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)
+
+		// Build list of GPS_Discovery source for the UI
+		deviceList := []gps.DiscoveredDeviceDTO{}
+		for entry := range s.discoveredDevices.IterBuffered() {
+			v := entry.Val
+			// Show all devices we have seen since uptime
+			deviceList = append(deviceList, gps.DiscoveredDeviceDTO{
+				Name:                 v.Name,
+				Connected:            v.Connected,
+				GpsDetectedType:      v.GpsDetectedType,
+				GpsSource:            v.GpsSource,
+			})
+		}
+		globalStatus.GPS_Discovery = deviceList
+	}
+
+	sendGPSAMessage := func(message *gps.TXMessage) {
+		if entry, ok := s.discoveredDevices.Get(message.Name); ok {
+			if entry.Connected && entry.HasTXChannel {
+				entry.TXChannel <- []byte(message.Message)
+			}
+			if globalSettings.DEBUG {
+				log.Printf("Device %s does not have an TX Channel", entry.Name)
+			}
+		}
+	}
+
+	for {
+		select {
+		case discoveredDevice := <-s.discoveredDevicesCh:
+			handleDeviceDiscovery(discoveredDevice)
+			break
+		case txConfig := <-s.txMessageCh:
+			sendGPSAMessage(&txConfig)
+			break
 		}
 	}
 }
@@ -1017,7 +1083,6 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 		}
 	}
 
-
 	for {
 		select {
 		case rxMessage := <-s.rxMessageCh:
@@ -1044,7 +1109,7 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 		reInit := x || y || z || d || g
 
 		if reInit {
-			s.qh.Quit()
+			s.eh.Exit()
 			s.settingsCopy = globalSettings
 
 			// At this point new threads can start all adapters, but we assume here
@@ -1066,8 +1131,8 @@ Configure and enable GPS input sources
 */
 func (s *GPSDeviceManager) configureGPSSubsystems() {
 	log.Printf("GPS: configureGPSSubsystems: Started")
-	s.qh.Add()
-	defer s.qh.Done()
+	s.eh.Add()
+	defer s.eh.Done()
 
 	bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh, s.discoveredDevicesCh)
 	serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, s.discoveredDevicesCh, globalSettings.DEBUG)
@@ -1094,72 +1159,12 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 	log.Printf("GPS: configureGPSSubsystems: Enable Network devices")
 	go networkGPSDevice.Run()
 
-	<-s.qh.C
-}
-
-/**
-Maintain a list of configured and found GPS devices and set the list in globalStatus
-*/
-func (s *GPSDeviceManager) handleDeviceDiscovery() {
-	handleDeviceDiscovery := func(discoveredDevice gps.DiscoveredDevice) {
-
-		// Copy TXChannel if one previously was already known because device discovery might not always have a TXCHannel added
-		if previous, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
-			if previous.HasTXChannel && !discoveredDevice.HasTXChannel {
-				discoveredDevice.HasTXChannel = true
-				discoveredDevice.TXChannel = previous.TXChannel
-			}
-			// If the last Version was a upgraded version, then copy the device type
-			// This is to avoid any device discovery send of versions that where not upgraded
-			if previous.IsTypeUpgrade {
-				discoveredDevice.IsTypeUpgrade = true
-				discoveredDevice.GpsDetectedType = previous.GpsDetectedType
-			}
-
-		}
-		discoveredDevice.LastDiscoveryMessage = stratuxClock.Milliseconds
-		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)
-
-		// Build list of GPS_Discovery source for the UI
-		deviceList := []gps.DiscoveredDeviceDTO{}
-		for entry := range s.discoveredDevices.IterBuffered() {
-			v := entry.Val
-			// Show all devices we have seen since uptime
-			deviceList = append(deviceList, gps.DiscoveredDeviceDTO{
-				Name:                 v.Name,
-				Connected:            v.Connected,
-				LastDiscoveryMessage: v.LastDiscoveryMessage,
-				GpsDetectedType:      v.GpsDetectedType,
-				GpsSource:            v.GpsSource,
-			})
-		}
-		globalStatus.GPS_Discovery = deviceList
-	}
-
-	sendGPSAMessage := func(message *gps.TXMessage) {
-		if entry, ok := s.discoveredDevices.Get(message.Name); ok {
-			if entry.Connected && entry.HasTXChannel {
-				entry.TXChannel <- []byte(message.Message)
-			}
-		}
-	}
-
-	for {
-		select {
-		case discoveredDevice := <-s.discoveredDevicesCh:
-			handleDeviceDiscovery(discoveredDevice)
-			break
-		case txConfig := <-s.txMessageCh:
-			sendGPSAMessage(&txConfig)
-			break
-		}
-	}
+	<-s.eh.C
 }
 
 func (s *GPSDeviceManager) Run() {
 	Satellites = make(map[string]SatelliteInfo)
 	log.Printf("GPS: Listen: Started")
-	// message := make(chan DiscoveredDevice, 20)
 
 	go s.systemTimeSetter.Calibrate()
 	go s.systemTimeSetter.Run()
@@ -1169,6 +1174,6 @@ func (s *GPSDeviceManager) Run() {
 	go s.handleDeviceDiscovery()
 	for {
 		s.configureGPSSubsystems()
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }

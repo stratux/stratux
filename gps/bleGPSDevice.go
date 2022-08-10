@@ -48,7 +48,7 @@ type nmeaNewLine struct {
 type BleGPSDevice struct {
 	adapter              bluetooth.Adapter
 	discoveredDeviceList cmap.ConcurrentMap
-	qh                   *common.QuitHelper
+	eh                   *common.ExitHelper
 	rxMessageCh          chan<- RXMessage
 	discoveredDevicesCh  chan<- DiscoveredDevice
 }
@@ -57,7 +57,7 @@ func NewBleGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- Di
 	return BleGPSDevice{
 		adapter:              *bluetooth.DefaultAdapter,
 		discoveredDeviceList: cmap.New(),
-		qh:                   common.NewQuitHelper(),
+		eh:                   common.NewExitHelper(),
 		rxMessageCh:          rxMessageCh,
 		discoveredDevicesCh:  discoveredDevicesCh,
 	}
@@ -74,15 +74,15 @@ const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 // AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
 // Sometimes we get CRC errors from a attached GPS device that will look like this :GPS error. Invalid NMEA string: Checksum failed. Calculated 0X7F; expected 0X68 $GPGSV,3,1,10,01,15,256,,08,72,282,,10,50*68
 func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoResult) {
-	b.qh.Add()
+	b.eh.Add()
 	defer func() {
 		b.adapter.StopScan()
-		b.qh.Done()
+		b.eh.Done()
 	}()
 	executeScan := func() error {
 		err := b.adapter.Scan(
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-				if b.qh.IsQuit() {
+				if b.eh.IsExit() {
 					b.adapter.StopScan()
 				} else if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && result.Address != nil {
 					b.adapter.StopScan()
@@ -96,7 +96,7 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 	}
 
 	for {
-		if (b.qh.IsQuit()) {
+		if (b.eh.IsExit()) {
 			return
 		}
 		if err :=executeScan(); err!=nil {
@@ -110,8 +110,8 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 Coonect to our bluetooth device and listen on the RX channel for NMEA sentences
 **/
 func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sentenceChannel chan<- nmeaNewLine, TXChannel <-chan []byte) error {
-	b.qh.Add()
-	defer b.qh.Done()
+	b.eh.Add()
+	defer b.eh.Done()
 
 	address, _ := bluetooth.ParseMAC(discoveredDeviceInfo.MAC)
 	btAddress := bluetooth.MACAddress{MAC: address}
@@ -210,7 +210,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 	}
 
 	select {
-	case <-b.qh.C:
+	case <-b.eh.C:
 		return nil
 	case <-watchdogTimer.C:
 		return nil
@@ -221,13 +221,13 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo, sen
 connectionMonitor monitors the list discoveredDeviceList for disconnected devices and reconnects them again
 */
 func (b *BleGPSDevice) connectionMonitor(sentenceChannel chan<- nmeaNewLine) {
-	b.qh.Add()
-	defer b.qh.Done()
+	b.eh.Add()
+	defer b.eh.Done()
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	for {
 		select {
-		case <-b.qh.C:
+		case <-b.eh.C:
 			return
 		case <-ticker.C:
 			for entry := range b.discoveredDeviceList.IterBuffered() {
@@ -278,12 +278,12 @@ func (b *BleGPSDevice) updateDeviceDiscoveryWithChannel(name string, TXChannel c
 }
 
 func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <-chan nmeaNewLine) {
-	b.qh.Add()
-	defer b.qh.Done()
+	b.eh.Add()
+	defer b.eh.Done()
 
 	for {
 		select {
-		case <-b.qh.C:
+		case <-b.eh.C:
 			return
 		case nmeaSentence := <-nmeaSentenceChannel:
 			select {
@@ -299,12 +299,12 @@ func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <-chan nmeaNewLine) {
 }
 
 func (b *BleGPSDevice) Stop() {
-	b.qh.Quit()
+	b.eh.Exit()
 }
 
 func (b *BleGPSDevice) Run(allowedDeviceList []string) {
-	b.qh.Add()
-	defer b.qh.Done()
+	b.eh.Add()
+	defer b.eh.Done()
 
 	if err := b.adapter.Enable(); err != nil {
 		log.Printf("bleGPSDevice: Failed to enable bluetooth adapter : %s", err.Error())
@@ -320,7 +320,7 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 
 	for {
 		select {
-		case <-b.qh.C:
+		case <-b.eh.C:
 			return
 		case address := <-scanInfoResultChannel:
 			// Only allow names we see in our list in our allowed list

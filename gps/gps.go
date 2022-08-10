@@ -60,9 +60,9 @@ type TXMessage struct {
 type DiscoveredDevice struct {
 	Name      string				  // Mandatory: Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
 	Connected bool					  // Mandatory: We true we have an actualy connected to the device and can receive/send messages
-	LastDiscoveryMessage  uint64				  // Last time we heard a discovery message
+	LastDiscoveryMessage  time.Time	  // Last time we heard a discovery message
 	GpsDetectedType uint              // mandatory: This is the type, like OGN, ublocx or SOFTRF
-	GpsSource uint16					  // mandatory: This is the source, network, Blue Tooth or serial
+	GpsSource uint16				  // mandatory: This is the source, network, Blue Tooth or serial
 	HasTXChannel bool				  // mandatory: True when this message contains a valid TXChannel
 	TXChannel chan []byte			  // TX Channel can be used to send a (NMEA) message to a channel
 	IsTypeUpgrade bool				  // True when this device is teh same device, but the type has been upgraded. For example from a serial GPS to OGN
@@ -72,7 +72,6 @@ type DiscoveredDevice struct {
 type DiscoveredDeviceDTO struct {
 	Name      string				  // Name of the device
 	Connected bool					  // We true we have an actualy connected to the device and can receive/send messages
-	LastDiscoveryMessage  uint64                  // Last time we heard from this device
 	GpsDetectedType uint              // This is the type, like OGN, ubloc or SOFTRF
 	GpsSource uint16					  // This is the source, network, Blue Tooth or serial
 }

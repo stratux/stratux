@@ -14,7 +14,7 @@ import (
 type NetworkDevice struct {
 	rxMessageCh          chan<- RXMessage
 	discoveredDevicesCh  chan<- DiscoveredDevice
-	qh                   *common.QuitHelper
+	eh                   *common.ExitHelper
 }
 
 
@@ -22,7 +22,7 @@ func NewNetworkGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<
 	m := NetworkDevice{
 		rxMessageCh:          rxMessageCh,
 		discoveredDevicesCh:  discoveredDevicesCh,
-		qh:                   common.NewQuitHelper(),
+		eh:                   common.NewExitHelper(),
 	}
 	return m
 }
@@ -43,8 +43,9 @@ func (b *NetworkDevice) updateDeviceDiscovery(name string, connected bool) {
 
 /* Server that can be used to feed NMEA data to, e.g. to connect OGN Tracker wirelessly */
 func (n *NetworkDevice) tcpNMEAInListener(port int) {
-	n.qh.Add()
-	defer n.qh.Done()
+	n.eh.Add()
+	defer n.eh.Done()
+	log.Printf("Listening for network GPS device on port :%d\n", port)
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 
 	if err != nil {
@@ -53,13 +54,13 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 	}
 
 	go func() {
-		<- n.qh.C
+		<- n.eh.C
 		ln.Close()
 	}()
 
 	for {
 		conn, err := ln.Accept()
-		if n.qh.IsQuit() {
+		if n.eh.IsExit() {
 			return
 		}
 		if err != nil {
@@ -72,8 +73,8 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 }
 
 func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
-	n.qh.Add()
-	defer n.qh.Done()
+	n.eh.Add()
+	defer n.eh.Done()
 	log.Printf("Connecting network GPS device : %s\n", c.RemoteAddr().String())
 
 	reader := bufio.NewReader(c)
@@ -81,7 +82,7 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 	n.updateDeviceDiscovery(remoteAddress, true)
 
 	go func() {
-		<- n.qh.C
+		<- n.eh.C
 		c.Close()
 	}()
 
@@ -103,11 +104,11 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 }
 
 func (n *NetworkDevice) Stop() {
-	n.qh.Quit()
+	n.eh.Exit()
 }
 
 func (n *NetworkDevice) Run() {
-	ports := [...]int{30011} 
+	ports := [...]int{30011, 30012} 
 	for _, port := range ports {
 		go n.tcpNMEAInListener(port)
 	}
