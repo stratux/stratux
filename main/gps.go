@@ -166,13 +166,11 @@ type GPSDeviceManager struct {
 
 	rxMessageCh         chan gps.RXMessage         // Channel used by all GPS devices to receive NMEA data from
 	txMessageCh         chan gps.TXMessage         // Channel used to send a any device a message
-	discoveredDevicesCh chan gps.DiscoveredDevice  // Channel used to send information about discovered devices
 
 	systemTimeSetter	*gps.OSTimeSetter
 	discoveredDevices   cmap.ConcurrentMap[gps.DiscoveredDevice]
 
 	ognTrackerConfigured bool
-
 }
 
 var gpsPerf gpsPerfStats
@@ -190,7 +188,6 @@ func NewGPSDeviceManager() GPSDeviceManager {
 
 		rxMessageCh:          make(chan gps.RXMessage, 20),
 		txMessageCh:          make(chan gps.TXMessage, 20),
-		discoveredDevicesCh:  make(chan gps.DiscoveredDevice, 20),
 
 		systemTimeSetter:     gps.NewOSTimeSetter(),
 		discoveredDevices:    cmap.New[gps.DiscoveredDevice](),
@@ -395,7 +392,6 @@ func updateGPSPerfmStat(thisGpsPerf gpsPerfStats) {
 
 // Process a NMEA line and update stratux internal variables
 func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscovery gps.DiscoveredDevice) (sentenceUsed bool) {
-	deviceDiscovery.HasTXChannel = false
 	mySituation.muGPS.Lock()
 	defer func() {
 		mySituation.GPSLastValidNMEAMessageTime = stratuxClock.Time
@@ -450,7 +446,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 				mySituation.GPSTime.Day(),
 				hh, mm, ss, 0, mySituation.GPSTime.Location())
 
-			gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPpsMs)
+			gpsTime := t1.Add(deviceDiscovery.GpsTimeOffsetPPS)
 			mySituation.GPSTime = gpsTime
 			thisGpsPerf.nmeaTime = mySituation.GPSLastFixSinceMidnightUTC
 			thisGpsPerf.alt = float32(mySituation.GPSAltitudeMSL)
@@ -480,7 +476,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 			thisGpsPerf.gsf = float32(mySituation.GPSGroundSpeed)
 			thisGpsPerf.msgType = x[0]
 			thisGpsPerf.nmeaTime = mySituation.GPSLastFixSinceMidnightUTC
-			mySituation.GPSTime = mySituation.GPSTime.Add(deviceDiscovery.GpsTimeOffsetPpsMs)
+			mySituation.GPSTime = mySituation.GPSTime.Add(deviceDiscovery.GpsTimeOffsetPPS)
 			// We need to set AT65 type GPS in GNGGA because for this GPS that's the start of a real second
 			if len(x[9]) == 6 && (globalStatus.GPS_detected_type&0x0F) != gps.GPS_TYPE_SOFTRF_AT65 {
 				s.systemTimeSetter.SetTime(mySituation.GPSTime)
@@ -553,8 +549,8 @@ func (s *GPSDeviceManager) processNMEALine(l string, name string, deviceDiscover
 
 			if x[1] == "AT65" {
 				deviceDiscovery.GpsDetectedType = gps.GPS_TYPE_SOFTRF_AT65
-				deviceDiscovery.IsTypeUpgrade = true
-				s.discoveredDevicesCh <- deviceDiscovery
+				gps.GetServiceDiscovery().TypeUpgrade(deviceDiscovery.Name, gps.GPS_TYPE_SOFTRF_AT65)
+//				gps.GetServiceDiscovery().Send(deviceDiscovery)
 			}
 		}
 		return err == nil
@@ -904,10 +900,7 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 					// Remove from device if we did not see it for a while
 					s.gpsDeviceStatus.Pop(entry.Key)
 					// Just in case if a device forget's to send a device as disconnected via discovery we send a disconnect
-					s.discoveredDevicesCh <- gps.DiscoveredDevice{
-						Name:               entry.Key,
-						Connected:          false,
-					}
+					gps.GetServiceDiscovery().Connected(entry.Key, false)
 				}
 			}
 			if !anyGPSWIthActivity {
@@ -937,17 +930,7 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 	handleDeviceDiscovery := func(discoveredDevice gps.DiscoveredDevice) {
 
 		if previous, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
-			// Copy TXChannel if one previously was already known because device discovery might not always have a TXCHannel added
-			if previous.HasTXChannel && !discoveredDevice.HasTXChannel {
-				discoveredDevice.HasTXChannel = true
-				discoveredDevice.TXChannel = previous.TXChannel
-			}
-			// If the last Version was a upgraded version, then copy the device type
-			// This is to avoid any device discovery send of versions that where not upgraded
-			if previous.IsTypeUpgrade {
-				discoveredDevice.IsTypeUpgrade = true
-				discoveredDevice.GpsDetectedType = previous.GpsDetectedType
-			}
+			discoveredDevice = gps.GetServiceDiscovery().Merge(previous, discoveredDevice)
 		}
 		discoveredDevice.LastDiscoveryMessage = stratuxClock.Time
 		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)
@@ -969,7 +952,7 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 
 	sendGPSAMessage := func(message *gps.TXMessage) {
 		if entry, ok := s.discoveredDevices.Get(message.Name); ok {
-			if entry.Connected && entry.HasTXChannel {
+			if entry.Connected && entry.CanTX() {
 				entry.TXChannel <- []byte(message.Message)
 			}
 			if globalSettings.DEBUG {
@@ -980,7 +963,7 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 
 	for {
 		select {
-		case discoveredDevice := <-s.discoveredDevicesCh:
+		case discoveredDevice := <-gps.GetServiceDiscovery().C:
 			handleDeviceDiscovery(discoveredDevice)
 			break
 		case txConfig := <-s.txMessageCh:
@@ -1134,9 +1117,9 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 	s.eh.Add()
 	defer s.eh.Done()
 
-	bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh, s.discoveredDevicesCh)
-	serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, s.discoveredDevicesCh, globalSettings.DEBUG)
-	networkGPSDevice := gps.NewNetworkGPSDevice(s.rxMessageCh, s.discoveredDevicesCh)
+	bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh)
+	serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, globalSettings.DEBUG)
+	networkGPSDevice := gps.NewNetworkGPSDevice(s.rxMessageCh)
 
 	defer func() {
 		log.Printf("GPS: configureGPSSubsystems stopping")

@@ -125,7 +125,7 @@ func (s *OSTimeSetter) Run() {
 		}
 
 		if SHOW_TIME_DIFFERENCE_ONLY {
-			log.Printf("PPS Calibration mode: Based on your time source (Chrony??): Use GpsTimeOffsetPpsMs=%.0fms for your device\n", s.movingTimeDifference)
+			log.Printf("PPS Calibration mode: Based on your time source (Chrony??): Use GpsTimeOffsetPPS=%.0fms for your device\n", s.movingTimeDifference)
 		} else {
 			// Set new time directly if it it's more than 300ms off
 			if isOffByMoreThan(gpsTime, 300) {

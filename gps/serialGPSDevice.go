@@ -28,20 +28,19 @@ type SerialDiscoveryConfig struct {
 	baudRate   		[]int
 	timeOffsetPPS	time.Duration
 	deviceType		uint
+	reOpenPort		bool
 	afterConnectFunc func(p *serial.Port)
 }
 
 type SerialGPSDevice struct {
 	DEBUG                bool
-	discoveredDevicesCh  chan<- DiscoveredDevice
 	rxMessageCh  		 chan<- RXMessage
 	eh                   *common.ExitHelper
 }
 
-func NewSerialGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- DiscoveredDevice, debug bool) SerialGPSDevice {
+func NewSerialGPSDevice(rxMessageCh chan<- RXMessage, debug bool) SerialGPSDevice {
 	m := SerialGPSDevice{
 		DEBUG:                debug,
-		discoveredDevicesCh:  discoveredDevicesCh,
 		rxMessageCh:  		  rxMessageCh,
 		eh:                   common.NewExitHelper(),
 	}
@@ -56,6 +55,7 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		baudRate: []int{115200, 9600}, 
 		timeOffsetPPS: 100 * time.Millisecond, 
 		deviceType: GPS_TYPE_UBX9, 
+		reOpenPort: true,
 		afterConnectFunc:writeUblox9ConfigCommands})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/ublox8", 
@@ -63,20 +63,23 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		baudRate: []int{115200, 9600}, 
 		timeOffsetPPS: 80 * time.Millisecond, 
 		deviceType: GPS_TYPE_UBX8,
+		reOpenPort: true,
 		afterConnectFunc: writeUblox8ConfigCommands,})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/ublox7", 
 		name: "ublox7", 
 		baudRate: []int{115200, 9600},
-		 timeOffsetPPS: 100 * time.Millisecond, 
-		 deviceType: GPS_TYPE_UBX7,
-		 afterConnectFunc: writeUblox6_7ConfigCommands})
+		timeOffsetPPS: 100 * time.Millisecond, 
+		deviceType: GPS_TYPE_UBX7,
+		reOpenPort: true,
+		afterConnectFunc: writeUblox6_7ConfigCommands})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/ublox6", 
 		name: "ublox6", 
 		baudRate: []int{115200, 9600},
 		timeOffsetPPS: 100 * time.Millisecond, 
 		deviceType: GPS_TYPE_UBX6,
+		reOpenPort: true,
 		afterConnectFunc: writeUblox6_7ConfigCommands})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/prolific0", 
@@ -92,6 +95,13 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		timeOffsetPPS: 100 * time.Millisecond,
 		deviceType: GPS_TYPE_PROLIFIC,
 		afterConnectFunc: writeProlificConfigCommands})
+	// all = append(all, SerialDiscoveryConfig{
+	// 	serialPort: "/dev/ttyUSB0", 
+	// 	name: "ttyUSB0", 
+	// 	baudRate: []int{115200, 9600, 38400}, 
+	// 	timeOffsetPPS: 100 * time.Millisecond,
+	// 	deviceType: GPS_TYPE_SERIAL,
+	// 	afterConnectFunc: writeSerialInConfigCommands})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/serialin", 
 		name: "serialIn", 
@@ -176,8 +186,7 @@ func (s *SerialGPSDevice) detectAndOpenSerialPort(device SerialDiscoveryConfig) 
 		if err != nil {
 			continue
 		}
-		// Check if we get any data...
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 		buffer := make([]byte, 10000)
 		n, err := p.Read(buffer)
 		if (n!=0 && err==nil) {
@@ -386,7 +395,7 @@ It will send RXMessages the rxMessageCh, it will send any gpsMessage on the txCh
 and will send out discovery messages
 When a OGN tracker is detecdted it will configure as ublox8
 */
-func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
+func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 
 	// test if serial port exists on OS level
 	if _, err := os.Stat(device.serialPort); err != nil { 
@@ -396,12 +405,11 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 
 	serialPort := s.detectAndOpenSerialPort(device)
 	if serialPort != nil {
-		if device.afterConnectFunc!=nil {
+		if device.afterConnectFunc!=nil && device.reOpenPort {
 			device.afterConnectFunc(serialPort)
+			// Close and Re-Open, the GPS might have been configured on a different baudrate after calling afterConnectFunc
 			serialPort.Close()
-			// Re-Open, the GPS might have been configured on a different baudrate
 			serialPort = s.detectAndOpenSerialPort(device)
-			// Re-open port because in 
 			if (serialPort == nil) {
 				return errors.New("Failed to detect serial port after initialisation")
 			}
@@ -417,21 +425,17 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 		defer func() {
 			readerWatchdog.Stop()
 			serialPort.Close()
-			s.discoveredDevicesCh <- DiscoveredDevice{
-				Name:      device.name,
-				Connected: false,
-			}
+			GetServiceDiscovery().Connected(device.name, false)
 		}()
 
-		s.discoveredDevicesCh <- DiscoveredDevice{
+		GetServiceDiscovery().Send(DiscoveredDevice{
 			Name:               device.name,
-			Connected:          true,
-			TXChannel:          TXChannel,
-			HasTXChannel:       true,
+			content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
+			Connected: 			true,
 			GpsDetectedType:    device.deviceType,
 			GpsSource:          GPS_SOURCE_SERIAL,
-			GpsTimeOffsetPpsMs: device.timeOffsetPPS,
-		}
+			GpsTimeOffsetPPS: device.timeOffsetPPS,
+		})
 
 		// Blocking function that reads serial data
 		serialReader := func() {
@@ -464,15 +468,12 @@ func (s *SerialGPSDevice) gpsSerialTXRX(device SerialDiscoveryConfig) error {
 						// writeUbloxGenericCommands(5, serialPort)
 						//serialPort.Flush()
 						// Notify of this device type
-						s.discoveredDevicesCh <- DiscoveredDevice{
+						GetServiceDiscovery().Send(DiscoveredDevice{
 							Name:               device.name,
-							Connected:          true,
-							HasTXChannel:       false,
+							content:			CONTENT_TYPE | CONTENT_OFFSET_PPS,
 							GpsDetectedType:    GPS_TYPE_OGNTRACKER,
-							GpsSource:          GPS_SOURCE_SERIAL,
-							GpsTimeOffsetPpsMs: 75 * time.Millisecond,
-							IsTypeUpgrade:      true,
-						}
+							GpsTimeOffsetPPS: 75 * time.Millisecond,
+						})
 					}()
 				}
 
@@ -542,7 +543,7 @@ func (s *SerialGPSDevice) deviceDiscovery() {
 		if connectedDevices[device.name] == false {
 			connectedDevices[device.name] = true
 			go func() {
-				if error := s.gpsSerialTXRX(device); error!=nil {
+				if error := s.serialRXTX(device); error!=nil {
 					log.Printf("Error connecting to %s: %s\n", device.name, error.Error())
 				}
 				connectedDevices[device.name] = false

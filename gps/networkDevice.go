@@ -13,32 +13,15 @@ import (
 
 type NetworkDevice struct {
 	rxMessageCh          chan<- RXMessage
-	discoveredDevicesCh  chan<- DiscoveredDevice
 	eh                   *common.ExitHelper
 }
 
-
-func NewNetworkGPSDevice(rxMessageCh chan<- RXMessage, discoveredDevicesCh chan<- DiscoveredDevice) NetworkDevice {
+func NewNetworkGPSDevice(rxMessageCh chan<- RXMessage) NetworkDevice {
 	m := NetworkDevice{
 		rxMessageCh:          rxMessageCh,
-		discoveredDevicesCh:  discoveredDevicesCh,
 		eh:                   common.NewExitHelper(),
 	}
 	return m
-}
-
-func (b *NetworkDevice) defaultDeviceDiscoveryData(name string, connected bool) DiscoveredDevice {
-	return DiscoveredDevice{
-		Name:               name,
-		Connected:          connected,
-		GpsDetectedType:    GPS_TYPE_NETWORK, // TODO: Should we be more specific for example mention that it's an SoftRF device?
-		GpsSource:          GPS_SOURCE_NETWORK,
-		GpsTimeOffsetPpsMs: 100.0 * time.Millisecond,
-	}
-}
-
-func (b *NetworkDevice) updateDeviceDiscovery(name string, connected bool) {
-	b.discoveredDevicesCh <- b.defaultDeviceDiscoveryData(name, connected)
 }
 
 /* Server that can be used to feed NMEA data to, e.g. to connect OGN Tracker wirelessly */
@@ -75,11 +58,20 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 	n.eh.Add()
 	defer n.eh.Done()
-	log.Printf("Connecting network GPS device : %s\n", c.RemoteAddr().String())
 
 	reader := bufio.NewReader(c)
 	remoteAddress := c.RemoteAddr().String()
-	n.updateDeviceDiscovery(remoteAddress, true)
+
+	GetServiceDiscovery().Send(DiscoveredDevice{
+		Name:               remoteAddress,
+		content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
+		Connected: 			true,
+		GpsDetectedType:    GPS_TYPE_NETWORK,
+		GpsSource:          GPS_SOURCE_NETWORK,
+		GpsTimeOffsetPPS: 100.0 * time.Millisecond,
+	})
+
+	log.Printf("Connecting network GPS device : %s\n", c.RemoteAddr().String())
 
 	go func() {
 		<- n.eh.C
@@ -99,7 +91,7 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 			}		
 		}
 	}
-	n.updateDeviceDiscovery(remoteAddress, false)
+	GetServiceDiscovery().Connected(remoteAddress, false)
 	log.Printf("Disconnecting network GPS device : %s\n", c.RemoteAddr().String())
 }
 
@@ -108,7 +100,7 @@ func (n *NetworkDevice) Stop() {
 }
 
 func (n *NetworkDevice) Run() {
-	ports := [...]int{30011, 30012} 
+	ports := [...]int{30011} 
 	for _, port := range ports {
 		go n.tcpNMEAInListener(port)
 	}
