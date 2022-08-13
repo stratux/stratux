@@ -35,12 +35,6 @@ type scanInfoResult struct {
 	name string
 }
 
-// Used to send from a received NMEA string data to the switchboard
-type nmeaNewLine struct {
-	nmeaLine string
-	device   discoveredDeviceInfo // We assume that when we just received a NMEA line, the device is not lost so the data structure always exists
-}
-
 type BleGPSDevice struct {
 	adapter              bluetooth.Adapter
 	discoveredDeviceList cmap.ConcurrentMap[*discoveredDeviceInfo]
@@ -59,11 +53,8 @@ func NewBleGPSDevice(rxMessageCh chan<- RXMessage) BleGPSDevice {
 
 var (
 	HM_10_CONF, _ = bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
-	BLE_RX, _ = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
+	BLE_RX, _     = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
 )
-
-// WATCHDOG for the blue device, if we do not receive data at least once a second we will diconnect and re-connect
-const WATCHDOG_RECEIVE_TIMER = 1000 * time.Millisecond
 
 // AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
 // Sometimes we get CRC errors from a attached GPS device that will look like this :GPS error. Invalid NMEA string: Checksum failed. Calculated 0X7F; expected 0X68 $GPGSV,3,1,10,01,15,256,,08,72,282,,10,50*68
@@ -76,7 +67,8 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 	executeScan := func() error {
 		err := b.adapter.Scan(
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-				if b.eh.IsExit() {
+				// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
+				if b.eh.IsExit() { 
 					b.adapter.StopScan()
 				} else if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && result.Address != nil {
 					b.adapter.StopScan()
@@ -89,14 +81,16 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 		return nil
 	}
 
+	ticker := time.NewTicker(5000 * time.Millisecond)
 	for {
-		if (b.eh.IsExit()) {
+		select {
+		case <-b.eh.C:
 			return
+		case <-ticker.C:
+			if err := executeScan(); err != nil {
+				log.Printf("Error from ble scanner: %s", err.Error())
+			}
 		}
-		if err :=executeScan(); err!=nil {
-			log.Printf("Error from ble scanner: %s", err.Error())
-		}
-		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -130,17 +124,17 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 		return err
 	}
 
-	log.Printf("BLE Connected to : %s", discoveredDeviceInfo.name)
+	log.Printf("Connected to : %s", discoveredDeviceInfo.name)
 
-	// Create a TX Channel and send a connect discovery 
+	// Create a TX Channel and send a connect discovery
 	TXChannel := make(chan []byte, 1)
 
 	GetServiceDiscovery().Send(DiscoveredDevice{
-		Name:               discoveredDeviceInfo.name,
-		content:			CONTENT_TX_CHANNEL | CONTENT_CONNECTED,
-		TXChannel: 			TXChannel,
-		Connected:			true,	
-	})	
+		Name:      discoveredDeviceInfo.name,
+		content:   CONTENT_TX_CHANNEL | CONTENT_CONNECTED,
+		TXChannel: TXChannel,
+		Connected: true,
+	})
 	defer GetServiceDiscovery().Connected(discoveredDeviceInfo.name, false)
 
 	// Mutex + condition to sync the write/read routines
@@ -179,13 +173,13 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 					sentenceStarted = false
 					thisOne := strings.Clone(string(byteArray[0:charPosition]))
 					select {
-						case b.rxMessageCh <- RXMessage{
-							Name:     discoveredDeviceInfo.name,
-							NmeaLine: thisOne,
-						}:
-						default:
-							log.Printf("BLE rxMessageCh Full, skipping lines")
-						}
+					case b.rxMessageCh <- RXMessage{
+						Name:     discoveredDeviceInfo.name,
+						NmeaLine: thisOne,
+					}:
+					default:
+						log.Printf("rxMessageCh Full")
+					}
 				}
 
 				// Start of a new NMEA sentence
@@ -203,12 +197,12 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 	// Callback from the enable notification function
 	// This might (depends on underlaying implementation) run in a interrupt where we cannot allocate any heap
 	// we use a mutex with signal to copy the received dataset into a existing byte array for further processing
-	watchdogTimer := common.NewWatchDog(WATCHDOG_RECEIVE_TIMER)
+	watchdogTimer := common.NewWatchDog(1000 * time.Millisecond)
 	defer watchdogTimer.Stop()
 
 	// Listen to bluetooth messages
 	enaNotifyErr := tx.EnableNotifications(func(value []byte) {
-		// Reset the watchdog 
+		// Reset the watchdog
 		watchdogTimer.Poke()
 
 		// Copy received data
@@ -265,27 +259,6 @@ func (b *BleGPSDevice) connectionMonitor() {
 	}
 }
 
-func (b *BleGPSDevice) switchBoard(nmeaSentenceChannel <-chan nmeaNewLine) {
-	b.eh.Add()
-	defer b.eh.Done()
-
-	for {
-		select {
-		case <-b.eh.C:
-			return
-		case nmeaSentence := <-nmeaSentenceChannel:
-			select {
-			case b.rxMessageCh <- RXMessage{
-				Name:     nmeaSentence.device.name,
-				NmeaLine: nmeaSentence.nmeaLine,
-			}:
-			default:
-				log.Printf("BleGPSDevice: rxMessageCh Full, skipping lines")
-			}
-		}
-	}
-}
-
 func (b *BleGPSDevice) Stop() {
 	b.eh.Exit()
 }
@@ -314,10 +287,10 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 				// log.Printf("Device : %s %s found", address.MAC, address.Name)
 				// Send a message about a discovered device, even if it's not configured for reading
 				GetServiceDiscovery().Send(DiscoveredDevice{
-					Name:               address.name,
-					content:			CONTENT_TYPE | CONTENT_SOURCE,
-					GpsDetectedType:    GPS_TYPE_BLUETOOTH,
-					GpsSource:          GPS_SOURCE_BLUETOOTH,
+					Name:            address.name,
+					content:         CONTENT_TYPE | CONTENT_SOURCE,
+					GPSDetectedType: GPS_TYPE_BLUETOOTH,
+					GPSSource:       GPS_SOURCE_BLUETOOTH,
 				})
 			} else {
 				added := b.discoveredDeviceList.SetIfAbsent(address.MAC, &discoveredDeviceInfo{Connected: false, MAC: address.MAC, name: address.name})
@@ -325,11 +298,11 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 					log.Printf("BLE device %s added", address.name)
 
 					GetServiceDiscovery().Send(DiscoveredDevice{
-						Name:               address.name,
-						content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
-						GpsDetectedType:    GPS_TYPE_BLUETOOTH,
-						GpsSource:          GPS_SOURCE_BLUETOOTH,
-						GpsTimeOffsetPPS:   250 * time.Millisecond, // For SoftRF t-Echo AT65 it seemed to be around 250ms
+						Name:             address.name,
+						content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
+						GPSDetectedType:  GPS_TYPE_BLUETOOTH,
+						GPSSource:        GPS_SOURCE_BLUETOOTH,
+						GPSTimeOffsetPPS: 270 * time.Millisecond, // For SoftRF t-Echo AT65 it seemed to be around 250ms
 					})
 				}
 			}

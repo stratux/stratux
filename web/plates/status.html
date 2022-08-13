@@ -156,8 +156,8 @@
 					<label class="control-label col-xs-6">All Connected GPS Devices:</label>
 					<div class="col-xs-6">
 						<div ng-repeat="d in GPS_Discovery">
-							<div ng-show="d.GpsSource != 3 && d.Connected">{{GPSHWCodes[d.GpsDetectedType]}} via:{{GPSSources[d.GpsSource]}} <span ng-show="d.Name == GPS_source_name">&nbsp;&#x2705;</span></div>
-							<div ng-show="d.GpsSource == 3 && d.Connected">{{d.Name}} via:{{GPSSources[d.GpsSource]}} <span ng-show="d.Name == GPS_source_name">&nbsp;&#x2705;</span></div>
+							<div ng-show="d.GPSSource != 3 && d.Connected">{{GPSHWCodes[d.GPSDetectedType]}} via:{{GPSSources[d.GPSSource]}} <span ng-show="d.Name == GPS_source_name">&nbsp;&#x2705;</span></div>
+							<div ng-show="d.GPSSource == 3 && d.Connected">{{d.Name}} via:{{GPSSources[d.GPSSource]}} <span ng-show="d.Name == GPS_source_name">&nbsp;&#x2705;</span></div>
 						</div>
 					</div>
 				</div>

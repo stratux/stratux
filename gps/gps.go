@@ -1,7 +1,6 @@
 package gps
 
 import (
-	"log"
 )
 
 const (
@@ -45,13 +44,6 @@ type RXMessage struct {
 	NmeaLine string					  // Received NMEA Line
 }
 
-func (line *RXMessage) Print() {
-	log.Printf("Name:%s NMEA:%s\r\n", 
-		line.Name,
-		line.NmeaLine,
-	)
-}
-
 /** 
 Structure to be use to send a message to a GPS device, for example to configure it
 */
@@ -63,6 +55,6 @@ type TXMessage struct {
 type DiscoveredDeviceDTO struct {
 	Name      string				  // Name of the device
 	Connected bool					  // We true we have an actualy connected to the device and can receive/send messages
-	GpsDetectedType uint              // This is the type, like OGN, ubloc or SOFTRF
-	GpsSource uint16					  // This is the source, network, Blue Tooth or serial
+	GPSDetectedType uint              // This is the type, like OGN, ubloc or SOFTRF
+	GPSSource uint16					  // This is the source, network, Blue Tooth or serial
 }

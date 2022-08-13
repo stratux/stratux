@@ -61,7 +61,7 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		serialPort: "/dev/ublox8", 
 		name: "ublox8", 
 		baudRate: []int{115200, 9600}, 
-		timeOffsetPPS: 80 * time.Millisecond, 
+		timeOffsetPPS: 43 * time.Millisecond,  // RVT Calibrated
 		deviceType: GPS_TYPE_UBX8,
 		reOpenPort: true,
 		afterConnectFunc: writeUblox8ConfigCommands,})
@@ -396,7 +396,8 @@ and will send out discovery messages
 When a OGN tracker is detecdted it will configure as ublox8
 */
 func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
-
+	s.eh.Add()
+	defer s.eh.Done()
 	// test if serial port exists on OS level
 	if _, err := os.Stat(device.serialPort); err != nil { 
 		// log.Printf("Serial port does not exist: %s", device.serialPort)
@@ -414,6 +415,10 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 				return errors.New("Failed to detect serial port after initialisation")
 			}
 		}
+		go func() {
+			<- s.eh.C
+			serialPort.Close()
+		}()
 
 		log.Printf("Found GPS device %s\n", device.name)
 
@@ -424,7 +429,6 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 		TXChannel := make(chan []byte, 10) // Create a unblocking channel to receive XT messages on
 		defer func() {
 			readerWatchdog.Stop()
-			serialPort.Close()
 			GetServiceDiscovery().Connected(device.name, false)
 		}()
 
@@ -432,9 +436,9 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 			Name:               device.name,
 			content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
 			Connected: 			true,
-			GpsDetectedType:    device.deviceType,
-			GpsSource:          GPS_SOURCE_SERIAL,
-			GpsTimeOffsetPPS: device.timeOffsetPPS,
+			GPSDetectedType:    device.deviceType,
+			GPSSource:          GPS_SOURCE_SERIAL,
+			GPSTimeOffsetPPS: device.timeOffsetPPS,
 		})
 
 		// Blocking function that reads serial data
@@ -454,10 +458,10 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 					continue
 				}
 
-				thisNmeaLine := nmeaLine[startIdx:]
+				nmeaLine = nmeaLine[startIdx:]
 
 				// We peek into the NMEA string, if we detect OGN for the first time we configure it as a OGN device
-				if !ognTrackerConfigured && strings.HasPrefix(thisNmeaLine, "$POGNR") {
+				if !ognTrackerConfigured && strings.HasPrefix(nmeaLine, "$POGNR") {
 					ognTrackerConfigured = true
 					go func() {
 						log.Printf("OGN detected, configuring with Ublox8 config\n")
@@ -471,15 +475,15 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 						GetServiceDiscovery().Send(DiscoveredDevice{
 							Name:               device.name,
 							content:			CONTENT_TYPE | CONTENT_OFFSET_PPS,
-							GpsDetectedType:    GPS_TYPE_OGNTRACKER,
-							GpsTimeOffsetPPS: 75 * time.Millisecond,
+							GPSDetectedType:    GPS_TYPE_OGNTRACKER,
+							GPSTimeOffsetPPS:   100 * time.Millisecond, // RVT Calibrated
 						})
 					}()
 				}
 
 				s.rxMessageCh <- RXMessage{
 					Name:     device.name,
-					NmeaLine: thisNmeaLine,
+					NmeaLine: nmeaLine,
 				}
 			}
 			if err := scanner.Err(); err != nil {

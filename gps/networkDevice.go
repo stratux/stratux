@@ -48,9 +48,9 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 		}
 		if err != nil {
 			log.Printf(err.Error())
-			continue
+		} else {
+			go n.handleNmeaInConnection(conn)
 		}
-		go n.handleNmeaInConnection(conn)
 		time.Sleep(250 * time.Millisecond)
 	}	
 }
@@ -66,9 +66,9 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 		Name:               remoteAddress,
 		content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
 		Connected: 			true,
-		GpsDetectedType:    GPS_TYPE_NETWORK,
-		GpsSource:          GPS_SOURCE_NETWORK,
-		GpsTimeOffsetPPS: 100.0 * time.Millisecond,
+		GPSDetectedType:    GPS_TYPE_NETWORK,
+		GPSSource:          GPS_SOURCE_NETWORK,
+		GPSTimeOffsetPPS: 100.0 * time.Millisecond,
 	})
 
 	log.Printf("Connecting network GPS device : %s\n", c.RemoteAddr().String())

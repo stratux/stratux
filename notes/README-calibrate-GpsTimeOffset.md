@@ -1,6 +1,6 @@
 # For developer:
 
-## How to find GpsTimeOffsetPPS for GPS devices
+## How to find GPSTimeOffsetPPS for GPS devices
 
 in `main/gps/osTime.go` set `SHOW_TIME_DIFFERENCE_ONLY` to true
 ```go
@@ -31,14 +31,14 @@ Update interval : 64.2 seconds
 Leap status     : Normal
 ```
 
-For the GPS device you want to find out a correct `GpsTimeOffsetPPS` set the value to `0 * time.Millisecond`
 Now start running stratux and let it run for a while so stratux will try to set time (but actually won't). Since the time is correctly synced by chrony,
-we should see a small offset in the form of : `2022/08/02 19:58:29 PPS Calibration mode: Based on your time source (Chrony??): Use GpsTimeOffsetPPS=245ms for your device`,
-this is the time Stratux the thinks it should be. If the value is around `76` ms, you can set the `GpsTimeOffsetPPS`
-to `76 * time.Millisecond`. It does not have to be super presice for our purpose, just good enough...
+we should see a small offset in the form of : `2022/08/02 19:58:29 PPS Calibration mode: Based on your time source (Chrony??): Use GPSTimeOffsetPPS=245ms for your device`,
+this is the time Stratux the thinks it should be. If the value is around `76` ms, you can set the `GPSTimeOffsetPPS`
+to `76 * time.Millisecond`. It does not have to be exact for our purpose, just good enough...
 
-The delay is caused by various delays in the chain, serial lines, baudrates and other items that might scew the clock otherwise,
-hence the correction in the form of `GpsTimeOffsetPPS`.
+The delay is caused by various delays in the chain, serial lines, baudrates and other items that might scew the clock otherwise, hence the correction in the form of `GPSTimeOffsetPPS`.
+
+Note: GPS devices often have a PPS pin, that's a specific PIN used by the GPS to give any microcontroller exact timing information. Unfortunatly we cannot use this and we have to use the NMEA sentence for it, but that is good enough for stratux.
 
 
 ## How to verify if stratux set time correctly

@@ -303,7 +303,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		socket.onmessage = function (msg) {
 			var status = JSON.parse(msg.data)
 			$scope.GPS_Discovery = status.GPS_Discovery
-			var OGNGPSDevices = status.GPS_Discovery.filter(item => (item.GpsDetectedType & 0x0f) == 3) // 3 is a OGN Device
+			var OGNGPSDevices = status.GPS_Discovery.filter(item => (item.GPSDetectedType & 0x0f) == 3) // 3 is a OGN Device
 			if (OGNGPSDevices.length>0 || status.OGN_tx_enabled)
 				$scope.hasOgnTracker = true;
 			else
