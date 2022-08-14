@@ -10,7 +10,7 @@ This will prevent stratux from setting the time based on GPS, but will print tim
 
 For installing `chrony` see below.
 On a seperate terminal run `sudo chronyd -n` and let it run for a while, Yet another terminal run `watch chronyc tracking` to see if it's operational.
-You should beable to see that it's tracking time well and that the offset is fairly small, look for `Root dispersion`
+You should beable to see that it's tracking time well and that the offset is fairly small, look for `System time`
 
 #### Example of tracked time good enough for stratux
 ```

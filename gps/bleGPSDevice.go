@@ -68,7 +68,7 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 		err := b.adapter.Scan(
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
 				// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
-				if b.eh.IsExit() { 
+				if b.eh.IsExit() {
 					b.adapter.StopScan()
 				} else if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && result.Address != nil {
 					b.adapter.StopScan()
@@ -131,7 +131,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 
 	GetServiceDiscovery().Send(DiscoveredDevice{
 		Name:      discoveredDeviceInfo.name,
-		content:   CONTENT_TX_CHANNEL | CONTENT_CONNECTED,
+		Content:   CONTENT_TX_CHANNEL | CONTENT_CONNECTED,
 		TXChannel: TXChannel,
 		Connected: true,
 	})
@@ -287,10 +287,11 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 				// log.Printf("Device : %s %s found", address.MAC, address.Name)
 				// Send a message about a discovered device, even if it's not configured for reading
 				GetServiceDiscovery().Send(DiscoveredDevice{
-					Name:            address.name,
-					content:         CONTENT_TYPE | CONTENT_SOURCE,
-					GPSDetectedType: GPS_TYPE_BLUETOOTH,
-					GPSSource:       GPS_SOURCE_BLUETOOTH,
+					Name:             address.name,
+					Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
+					GPSDetectedType:  GPS_TYPE_BLUETOOTH,
+					GPSSource:        GPS_SOURCE_BLUETOOTH,
+					GPSTimeOffsetPPS: 200 * time.Millisecond,
 				})
 			} else {
 				added := b.discoveredDeviceList.SetIfAbsent(address.MAC, &discoveredDeviceInfo{Connected: false, MAC: address.MAC, name: address.name})
@@ -299,10 +300,10 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 
 					GetServiceDiscovery().Send(DiscoveredDevice{
 						Name:             address.name,
-						content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
+						Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
 						GPSDetectedType:  GPS_TYPE_BLUETOOTH,
 						GPSSource:        GPS_SOURCE_BLUETOOTH,
-						GPSTimeOffsetPPS: 270 * time.Millisecond, // For SoftRF t-Echo AT65 it seemed to be around 250ms
+						GPSTimeOffsetPPS: 200 * time.Millisecond,
 					})
 				}
 			}

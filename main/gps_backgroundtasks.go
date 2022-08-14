@@ -569,7 +569,7 @@ func GPSAttitudeSender() {
 			mySituation.muGPSPerformance.Unlock()
 		}
 
-		for !(globalSettings.IMU_Sensor_Enabled && globalStatus.IMUConnected) && (globalSettings.GPS_Enabled && globalStatus.GPS_connected) {
+		for !(globalSettings.IMU_Sensor_Enabled && globalStatus.IMUConnected) && globalStatus.GPS_connected {
 			<-timer.C
 
 			if !isGPSValid() || !calcGPSAttitude() {

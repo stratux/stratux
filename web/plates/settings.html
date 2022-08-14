@@ -317,11 +317,71 @@
                 <div class="panel-heading">Hardware</div>
                 <div class="panel-body">
                     <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">GPS</label>
+                        <label class="control-label col-xs-5">GPS <br />
+                            <small>USB/Serial devices</small></label>
                         <div class="col-xs-7">
                             <ui-switch ng-model='GPS_Enabled' settings-change></ui-switch>
                         </div>
                     </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">Network GPS/Traffic
+                            <br /><small>Port 30011</small></label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='NetworkGPSEnabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">GPS Location service preferred source</label>
+                        <div class="col-xs-7">
+                            
+                            <a ui-turn-on='gpSourceDropDown' class='btn'>
+                                <button class="btn btn-primary btn-block btn-sm">{{GPSPreferredSources[GPSPreferredSource]}}</button>
+                              </a>
+                              <ul
+                                ng-model="GPSPreferredSource"
+                                class="dropdown-menu"
+                                ui-outer-click="Ui.turnOff('gpSourceDropDown')"
+                                ui-outer-click-if="Ui.active('gpSourceDropDown')"
+                                role="menu"
+                                ui-show="gpSourceDropDown" 
+                                ui-state="gpSourceDropDown"
+                                ui-turn-off="gpSourceDropDown">                                
+                                <li ng-click="updateGpsPrefSource(1)"><a>{{GPSPreferredSources[1]}}</a></li>
+                                <li ng-click="updateGpsPrefSource(2)"><a>{{GPSPreferredSources[2]}}</a></li>
+                                <li ng-click="updateGpsPrefSource(3)"><a>{{GPSPreferredSources[3]}}</a></li>
+                              </ul>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">BlueTooth LE GPS/Traffic
+                            <br /><small>Bluetooth Low Energy</small></label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='BleGPSEnabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow" ng-show="BleGPSEnabled">
+                        <label class="control-label col-xs-5">BLE Devices names
+                            <br /><small>(Name, comma separated for multiple devices)</small>
+                        </label>
+                        <form name="bleForm" ng-submit="updateBle()" novalidate>
+                        <input class="col-xs-7" type="text" ble-input ng-model="BleEnabledDevices" placeholder="" ng-blur="updateBle()" />
+                        </form>
+                    </div>
+
+                    <div class="form-group reset-flow" ng-show="BleGPSEnabled">
+                        <label class="control-label col-xs-5">Discovered Devices:</label>
+                        <div class="col-xs-7">
+                            <div ng-repeat="d in GPS_Discovery">
+                                <div ng-show="d.GPSSource == 2">{{d.Name}}&nbsp;&nbsp;<button class="btn btn-primary btn-sm" ng-click="addToBle(d)" ng-if="canAddBle(d)">Add</button>&nbsp;<span ng-show="d.Connected">&nbsp;&#x2705;</span> </div>
+                            </div>
+                        </div>
+                    </div>
+                    <br />
+                    <hr />
 
                     <div class="form-group reset-flow">
                         <label class="control-label col-xs-5">978 Mhz (UAT)</label>
@@ -390,55 +450,6 @@
                         </div>
                     </div>
 
-                    <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">BlueTooth LE GPS/Traffic
-                            <br /><small>Bluetooth Low Energy</small><br /></label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='BleGPSEnabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-
-                    <div class="form-group" ng-show="BleGPSEnabled">
-                        <div class="form-group reset-flow">
-                            <label class="control-label col-xs-5">GPS Location service preferred source</label>
-                            <div class="col-xs-7">
-                                
-                                <a ui-turn-on='gpSourceDropDown' class='btn'>
-                                    <button class="btn btn-primary btn-block btn-sm">{{GPSPreferredSources[GPSPreferredSource]}}</button>
-                                  </a>
-                                  <ul
-                                    ng-model="GPSPreferredSource"
-                                    class="dropdown-menu"
-                                    ui-outer-click="Ui.turnOff('gpSourceDropDown')"
-                                    ui-outer-click-if="Ui.active('gpSourceDropDown')"
-                                    role="menu"
-                                    ui-show="gpSourceDropDown" 
-                                    ui-state="gpSourceDropDown"
-                                    ui-turn-off="gpSourceDropDown">                                
-                                    <li ng-click="updateGpsPrefSource(1)"><a>{{GPSPreferredSources[1]}}</a></li>
-                                    <li ng-click="updateGpsPrefSource(2)"><a>{{GPSPreferredSources[2]}}</a></li>
-                                    <li ng-click="updateGpsPrefSource(3)"><a>{{GPSPreferredSources[3]}}</a></li>
-                                  </ul>
-                            </div>
-                        </div>
-                        <label class="control-label col-xs-5">BLE Devices names
-                            <br /><small>(Name, comma separated for multiple devices)</small>
-                        </label>
-                        <div class="col-xs-7">
-                            <form name="bleForm" ng-submit="updateBle()" novalidate>
-                                <input class="col-xs-7" type="text" ble-input ng-model="BleEnabledDevices"
-                                    placeholder="" ng-blur="updateBle()" />
-                            </form>
-                        </div>
-                    </div>
-                    <div class="form-group reset-flow" ng-show="BleGPSEnabled">
-                        <label class="control-label col-xs-5">Discovered Devices:</label>
-                        <div class="col-xs-7">
-                            <div ng-repeat="d in GPS_Discovery">
-                                <div ng-show="d.GPSSource == 2">{{d.Name}}&nbsp;&nbsp;<button class="btn btn-primary btn-sm" ng-click="addToBle(d)" ng-if="canAddBle(d)">Add</button>&nbsp;<span ng-show="d.Connected">&nbsp;&#x2705;</span> </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

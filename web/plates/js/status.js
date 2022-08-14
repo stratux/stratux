@@ -166,7 +166,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 				$scope.visible_uat = true;
 				$scope.visible_es = true;
 			}
-			$scope.visible_gps = settings.GPS_Enabled;
+			$scope.visible_gps = settings.GPS_Enabled | settings.BleGPSEnabled || settings.NetworkGPSEnabled;
 		}, function (response) {
 			// nop
 		});

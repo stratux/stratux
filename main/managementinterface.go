@@ -358,6 +358,8 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.Ping_Enabled = val.(bool)
 					case "OGNI2CTXEnabled":
 						globalSettings.OGNI2CTXEnabled = val.(bool)
+					case "NetworkGPSEnabled":
+						globalSettings.NetworkGPSEnabled = val.(bool)
 					case "BleGPSEnabled":
 						globalSettings.BleGPSEnabled = val.(bool)
 					case "BleEnabledDevices":

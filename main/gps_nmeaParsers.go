@@ -246,7 +246,7 @@ func parseNMEALine_GNRMC_GPRMC(x []string, tmpSituation SituationData) (Situatio
 		return tmpSituation, nil
 	}
 
-	// Time only for GGA/NGGA
+	// Is GPS time correct, even with an invalid fix??
 	GPSLastFixSinceMidnightUTC, GPSTime, err := parse_timeDate(x, 1, 9)
 	if err != nil {
 		return EMPTY_SITUATION, err

@@ -1,5 +1,6 @@
 /*
-	Copyright (c) 2015-2016 Christopher Young
+	Copyright (c) 2015-2016 Christopher Young,
+	Copyright (c) 2022 Refactored R. van Twisk
 	Distributable under the terms of The "BSD New" License
 	that can be found in the LICENSE file, herein included
 	as part of this header.
@@ -434,7 +435,7 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 
 		GetServiceDiscovery().Send(DiscoveredDevice{
 			Name:               device.name,
-			content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
+			Content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
 			Connected: 			true,
 			GPSDetectedType:    device.deviceType,
 			GPSSource:          GPS_SOURCE_SERIAL,
@@ -474,13 +475,13 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 						// Notify of this device type
 						GetServiceDiscovery().Send(DiscoveredDevice{
 							Name:               device.name,
-							content:			CONTENT_TYPE | CONTENT_OFFSET_PPS,
+							Content:			CONTENT_TYPE | CONTENT_OFFSET_PPS,
 							GPSDetectedType:    GPS_TYPE_OGNTRACKER,
-							GPSTimeOffsetPPS:   100 * time.Millisecond, // RVT Calibrated
+							GPSTimeOffsetPPS:   149 * time.Millisecond, // RVT Calibrated
 						})
 					}()
 				}
-
+				
 				s.rxMessageCh <- RXMessage{
 					Name:     device.name,
 					NmeaLine: nmeaLine,

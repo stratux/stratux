@@ -263,7 +263,11 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
+<<<<<<< HEAD
 	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'BleGPSEnabled', 'IMU_Sensor_Enabled',
+=======
+	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'Ping_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'BleGPSEnabled', 'NetworkGPSEnabled', 'IMU_Sensor_Enabled',
+>>>>>>> dfb8a27 (Added network GPS switch)
 		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
 
 	var settings = {};
@@ -303,7 +307,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		socket.onmessage = function (msg) {
 			var status = JSON.parse(msg.data)
 			$scope.GPS_Discovery = status.GPS_Discovery
-			var OGNGPSDevices = status.GPS_Discovery.filter(item => (item.GPSDetectedType & 0x0f) == 3) // 3 is a OGN Device
+			var OGNGPSDevices = status.GPS_Discovery.filter(item => item.GPSDetectedType == 3) // 3 is a OGN Device
 			if (OGNGPSDevices.length>0 || status.OGN_tx_enabled)
 				$scope.hasOgnTracker = true;
 			else
@@ -336,6 +340,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.GPS_Enabled = settings.GPS_Enabled;
 		$scope.OGNI2CTXEnabled = settings.OGNI2CTXEnabled;
 		$scope.BleGPSEnabled = settings.BleGPSEnabled;
+		$scope.NetworkGPSEnabled = settings.NetworkGPSEnabled;
 		$scope.BleEnabledDevices = settings.BleEnabledDevices;
 		$scope.GPSPreferredSource = settings.GPSPreferredSource;
 		

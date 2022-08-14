@@ -1,4 +1,11 @@
-package gps
+/*
+ 	Copyright (c) 2022 R. van Twisk
+ 	Distributable under the terms of The "BSD New" License
+ 	that can be found in the LICENSE file, herein included
+ 	as part of this header.
+ 	aprs.go: Routines for reading traffic from aprs
+ */
+ package gps
 
 import (
 	"bufio"
@@ -64,11 +71,11 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 
 	GetServiceDiscovery().Send(DiscoveredDevice{
 		Name:               remoteAddress,
-		content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
+		Content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
 		Connected: 			true,
 		GPSDetectedType:    GPS_TYPE_NETWORK,
 		GPSSource:          GPS_SOURCE_NETWORK,
-		GPSTimeOffsetPPS: 100.0 * time.Millisecond,
+		GPSTimeOffsetPPS:   100.0 * time.Millisecond,
 	})
 
 	log.Printf("Connecting network GPS device : %s\n", c.RemoteAddr().String())
