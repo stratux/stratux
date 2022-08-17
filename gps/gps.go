@@ -1,14 +1,13 @@
 /*
- 	Copyright (c) 2022 R. van Twisk
- 	Distributable under the terms of The "BSD New" License
- 	that can be found in the LICENSE file, herein included
- 	as part of this header.
- 	aprs.go: Routines for reading traffic from aprs
- */
- package gps
+	Copyright (c) 2022 R. van Twisk
+	Distributable under the terms of The "BSD New" License
+	that can be found in the LICENSE file, herein included
+	as part of this header.
+	aprs.go: Routines for reading traffic from aprs
+*/
+package gps
 
-import (
-)
+import ()
 
 const (
 	/*
@@ -38,30 +37,31 @@ const (
 )
 
 const (
-	GPS_SOURCE_SERIAL   	= 0x01
-	GPS_SOURCE_BLUETOOTH    = 0x02
-	GPS_SOURCE_NETWORK		= 0x03
+	GPS_SOURCE_SERIAL    = 0x01
+	GPS_SOURCE_BLUETOOTH = 0x02
+	GPS_SOURCE_NETWORK   = 0x03
 )
 
 /**
 Structure for message that will be send from GPS devices
 */
 type RXMessage struct {
-	Name string                       // Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
-	NmeaLine string					  // Received NMEA Line
+	Name     string // Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
+	NmeaLine string // Received NMEA Line
 }
 
-/** 
+/**
 Structure to be use to send a message to a GPS device, for example to configure it
 */
 type TXMessage struct {
-	Message []byte				      // Message to send
-	Name string                       // Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
+	Message []byte // Message to send
+	Name    string // Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
 }
 
 type DiscoveredDeviceDTO struct {
-	Name      string				  // Name of the device
-	Connected bool					  // We true we have an actualy connected to the device and can receive/send messages
-	GPSDetectedType uint              // This is the type, like OGN, ubloc or SOFTRF
-	GPSSource uint16					  // This is the source, network, Blue Tooth or serial
+	Name            string // Name of the device
+	MAC             string // MAC address of the device
+	Connected       bool   // We true we have an actualy connected to the device and can receive/send messages
+	GPSDetectedType uint   // This is the type, like OGN, ubloc or SOFTRF
+	GPSSource       uint16 // This is the source, network, Blue Tooth or serial
 }

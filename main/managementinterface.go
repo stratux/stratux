@@ -362,10 +362,10 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.NetworkGPSEnabled = val.(bool)
 					case "BleGPSEnabled":
 						globalSettings.BleGPSEnabled = val.(bool)
-					case "BleEnabledDevices":
-						globalSettings.BleEnabledDevices = val.(string)
 					case "GPSPreferredSource":
 						globalSettings.GPSPreferredSource = int(val.(float64))
+					case "BleDiscovery":
+						globalSettings.BleDiscovery = val.(map[string]interface{})
 					case "GPS_Enabled":
 						globalSettings.GPS_Enabled = val.(bool)
 					case "IMU_Sensor_Enabled":
@@ -719,6 +719,10 @@ func handleDownloadLogRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=stratux.log")
 	http.ServeFile(w, r, "/var/log/stratux.log")
 }
+
+func handleScanDevices(w http.ResponseWriter, r *http.Request) {
+	go gpsDeviceManager.ScanDevices()
+}	
 
 func handleDownloadAHRSLogsRequest(w http.ResponseWriter, r *http.Request) {
 	// Common error handler
@@ -1183,6 +1187,7 @@ func managementInterface() {
 	http.HandleFunc("/resetGMeter", handleResetGMeter)
 	http.HandleFunc("/deletelogfile", handleDeleteLogFile)
 	http.HandleFunc("/downloadlog", handleDownloadLogRequest)
+	http.HandleFunc("/scanDevices", handleScanDevices)
 	http.HandleFunc("/deleteahrslogfiles", handleDeleteAHRSLogFiles)
 	http.HandleFunc("/downloadahrslogs", handleDownloadAHRSLogsRequest)
 	http.HandleFunc("/downloaddb", handleDownloadDBRequest)

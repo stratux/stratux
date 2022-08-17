@@ -364,16 +364,15 @@
                     </div>
 
                     <div class="form-group reset-flow" ng-show="BleGPSEnabled">
-                        <label class="control-label col-xs-5">BLE Devices names
-                            <br /><small>(Name, comma separated for multiple devices)</small>
-                        </label>
-                        <form name="bleForm" ng-submit="updateBle()" novalidate>
-                        <input class="col-xs-7" type="text" ble-input ng-model="BleEnabledDevices" placeholder="" ng-blur="updateBle()" />
-                        </form>
+                        <label class="control-label col-xs-5"></label>
+                        <div class="col-xs-7">
+                            <button ng-show="GPS_Scanning > 0" ng-click="startScanning()" ng-disabled="GPS_Scanning > 0" class="btn btn-primary btn-sm">Scanning: {{GPS_Scanning}}</button>
+                            <button ng-show="GPS_Scanning == 0" ng-click="startScanning()" ng-disabled="GPS_Scanning > 0" class="btn btn-primary btn-sm">Start Scanning</button>
+                        </div>
                     </div>
 
                     <div class="form-group reset-flow" ng-show="BleGPSEnabled">
-                        <label class="control-label col-xs-5">Discovered Devices:</label>
+                        <label class="control-label col-xs-5">Devices:</label>
                         <div class="col-xs-7">
                             <div ng-repeat="d in GPS_Discovery">
                                 <div ng-show="d.GPSSource == 2">{{d.Name}}&nbsp;&nbsp;<button class="btn btn-primary btn-sm" ng-click="addToBle(d)" ng-if="canAddBle(d)">Add</button>&nbsp;<span ng-show="d.Connected">&nbsp;&#x2705;</span> </div>

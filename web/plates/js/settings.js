@@ -307,6 +307,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		socket.onmessage = function (msg) {
 			var status = JSON.parse(msg.data)
 			$scope.GPS_Discovery = status.GPS_Discovery
+			$scope.GPS_Scanning = status.GPS_Scanning
 			var OGNGPSDevices = status.GPS_Discovery.filter(item => item.GPSDetectedType == 3) // 3 is a OGN Device
 			if (OGNGPSDevices.length>0 || status.OGN_tx_enabled)
 				$scope.hasOgnTracker = true;
@@ -343,7 +344,8 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.NetworkGPSEnabled = settings.NetworkGPSEnabled;
 		$scope.BleEnabledDevices = settings.BleEnabledDevices;
 		$scope.GPSPreferredSource = settings.GPSPreferredSource;
-		
+		$scope.BleDiscovery = settings.BleDiscovery;
+			
 		$scope.IMU_Sensor_Enabled = settings.IMU_Sensor_Enabled;
 		$scope.BMP_Sensor_Enabled = settings.BMP_Sensor_Enabled;
 		$scope.DisplayTrafficSource = settings.DisplayTrafficSource;
@@ -498,36 +500,31 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	};
 
 	$scope.addToBle = function (device) {
-		currentDeviceList = $scope.BleEnabledDevices.split(',')
-		currentDeviceList.push(device.Name)
-		newList = currentDeviceList
-			.filter( (value) => {
-				return value.trim().length > 0
-			})
-			.filter((value, index, self) => {
-			return self.indexOf(value) === index;
-		  })
-		$scope.BleEnabledDevices = newList.join(',')
-		$scope.updateBle()
-	}
-
-	$scope.canAddBle = function (device) {
-		currentDeviceList = $scope.BleEnabledDevices.split(',')
-
-		isNotInList = currentDeviceList.filter((value) => {
-			return value === device.Name
-		  }).length == 0 
-		return isNotInList
-	}
-
-	$scope.updateBle = function () {
-		if ($scope.BleEnabledDevices !== settings["BleEnabledDevices"]) {
+		if (!$scope.BleDiscovery[device.Name]) {
+			$scope.BleDiscovery[device.Name] = device
 			var newsettings = {
-				"BleEnabledDevices": $scope.BleEnabledDevices
+				"BleDiscovery": $scope.BleDiscovery
 			};
 			// console.log(angular.toJson(newsettings));
 			setSettings(angular.toJson(newsettings));
 		}
+	}
+
+	$scope.canAddBle = function (device) {
+		return !$scope.BleDiscovery[device.Name]
+	}
+
+	$scope.startScanning = function (sourceNum) {
+		$http.post(URL_POST_SCANDEVICES, {}).
+		then(function (response) {
+			// console.log("sent " + action + " message.");
+		}, function(response) {
+			// failure: cancel the calibration
+			// console.log(response.data);
+//			$scope.Orientation_Failure_Message = response.data;
+//			$scope.Ui.turnOff('modalCalibrateDone');
+//			$scope.Ui.turnOn("modalCalibrateFailed");
+		});
 	};
 
 	$scope.updateGpsPrefSource = function (sourceNum) {

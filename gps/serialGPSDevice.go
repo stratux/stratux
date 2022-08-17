@@ -482,9 +482,13 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 					}()
 				}
 				
-				s.rxMessageCh <- RXMessage{
+				select {
+				case s.rxMessageCh <- RXMessage {
 					Name:     device.name,
 					NmeaLine: nmeaLine,
+				}:
+				default:
+					log.Printf("Serial rxMessageCh Full")
 				}
 			}
 			if err := scanner.Err(); err != nil {
@@ -576,6 +580,10 @@ Request to stop all goroutines and stop serial/GPS
 */
 func (s *SerialGPSDevice) Stop() {
 	s.eh.Exit()
+}
+
+func (n *SerialGPSDevice) Scan(leh *common.ExitHelper) {
+	// Not implemented
 }
 
 /**

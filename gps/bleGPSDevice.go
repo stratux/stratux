@@ -27,6 +27,7 @@ type discoveredDeviceInfo struct {
 	Connected bool
 	MAC       string
 	name      string
+	Allowed   bool
 }
 
 // Hold's information about a device that has beeing scanned
@@ -40,6 +41,8 @@ type BleGPSDevice struct {
 	discoveredDeviceList cmap.ConcurrentMap[*discoveredDeviceInfo]
 	eh                   *common.ExitHelper
 	rxMessageCh          chan<- RXMessage
+	scanMutex			 *sync.Mutex
+	scanInfoCh			 chan scanInfoResult
 }
 
 func NewBleGPSDevice(rxMessageCh chan<- RXMessage) BleGPSDevice {
@@ -48,6 +51,8 @@ func NewBleGPSDevice(rxMessageCh chan<- RXMessage) BleGPSDevice {
 		discoveredDeviceList: cmap.New[*discoveredDeviceInfo](),
 		eh:                   common.NewExitHelper(),
 		rxMessageCh:          rxMessageCh,
+		scanMutex:            &sync.Mutex{},
+		scanInfoCh:           make(chan scanInfoResult, 5),
 	}
 }
 
@@ -56,23 +61,23 @@ var (
 	BLE_RX, _     = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
 )
 
-// AdvertisementListener will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
+// startScanningBluetoothLEDevices will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
 // Sometimes we get CRC errors from a attached GPS device that will look like this :GPS error. Invalid NMEA string: Checksum failed. Calculated 0X7F; expected 0X68 $GPGSV,3,1,10,01,15,256,,08,72,282,,10,50*68
-func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoResult) {
-	b.eh.Add()
+func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
+	leh.Add()
 	defer func() {
 		b.adapter.StopScan()
-		b.eh.Done()
+		leh.Done()
 	}()
 	executeScan := func() error {
 		err := b.adapter.Scan(
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
 				// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
-				if b.eh.IsExit() {
+				if leh.IsExit() {
 					b.adapter.StopScan()
 				} else if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && result.Address != nil {
 					b.adapter.StopScan()
-					scanInfoResultChan <- scanInfoResult{result.Address.String(), result.LocalName()}
+					b.scanInfoCh <- scanInfoResult{result.Address.String(), result.LocalName()}
 				}
 			})
 		if err != nil {
@@ -81,15 +86,16 @@ func (b *BleGPSDevice) advertisementListener(scanInfoResultChan chan<- scanInfoR
 		return nil
 	}
 
-	ticker := time.NewTicker(5000 * time.Millisecond)
+	timer := time.NewTimer(1000 * time.Millisecond)
 	for {
 		select {
-		case <-b.eh.C:
+		case <-leh.C:
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			if err := executeScan(); err != nil {
 				log.Printf("Error from ble scanner: %s", err.Error())
 			}
+			timer.Reset(1000 * time.Millisecond)
 		}
 	}
 }
@@ -178,7 +184,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 						NmeaLine: thisOne,
 					}:
 					default:
-						log.Printf("rxMessageCh Full")
+						log.Printf("BLE rxMessageCh Full")
 					}
 				}
 
@@ -241,7 +247,7 @@ func (b *BleGPSDevice) connectionMonitor() {
 				info := entry.Val
 
 				// When the device is not connected, we attemt to connect it again
-				if !info.Connected {
+				if !info.Connected && info.Allowed {
 					info.Connected = true
 					go func() {
 						// Attempt to connect to a bluetooth device
@@ -263,7 +269,43 @@ func (b *BleGPSDevice) Stop() {
 	b.eh.Exit()
 }
 
-func (b *BleGPSDevice) Run(allowedDeviceList []string) {
+func (b *BleGPSDevice) setConfig( data map[string]interface{}) {
+	// loop over map to create discoery
+	for key, value := range data {
+		m := value.(map[string]interface{})
+ 		b.discoveredDeviceList.SetIfAbsent(m["MAC"].(string), &discoveredDeviceInfo{
+			Connected: false,
+			MAC: m["MAC"].(string), 
+			Allowed: true,
+			name: key})
+
+			GetServiceDiscovery().Send(DiscoveredDevice{
+				Name:             key,
+				Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
+				GPSDetectedType:  GPS_TYPE_BLUETOOTH,
+				GPSSource:        GPS_SOURCE_BLUETOOTH,
+				GPSTimeOffsetPPS: 200 * time.Millisecond,
+			})			
+	}
+}
+
+func (b *BleGPSDevice) GetConfig( ) map[string]interface{} {
+	data := make(map[string]interface{})
+	for entry := range b.discoveredDeviceList.IterBuffered() {
+		if (entry.Val.Allowed) {
+			data[entry.Val.MAC] = entry.Val
+		}
+	}
+	return data
+}
+
+func (b *BleGPSDevice) Scan(leh *common.ExitHelper) {	
+	log.Printf("Start scanning Bluetooth LE devices")
+	b.startScanningBluetoothLEDevices(leh)
+	log.Printf("Stop scanning Bluetooth LE devices")
+}
+
+func (b *BleGPSDevice) Run(deviceList map[string]interface{}) {
 	b.eh.Add()
 	defer b.eh.Done()
 
@@ -271,41 +313,27 @@ func (b *BleGPSDevice) Run(allowedDeviceList []string) {
 		log.Printf("Failed to enable bluetooth LE adapter : %s", err.Error())
 		return
 	}
-
-	scanInfoResultChannel := make(chan scanInfoResult, 1)
-
+	b.setConfig(deviceList)
 	go b.connectionMonitor()
-	go b.advertisementListener(scanInfoResultChannel)
 
 	for {
 		select {
 		case <-b.eh.C:
 			return
-		case address := <-scanInfoResultChannel:
+		case address := <-b.scanInfoCh:
 			// Only allow names we see in our list in our allowed list
-			if !common.StringInSlice(address.name, allowedDeviceList) {
-				// log.Printf("Device : %s %s found", address.MAC, address.Name)
-				// Send a message about a discovered device, even if it's not configured for reading
+			added := b.discoveredDeviceList.SetIfAbsent(address.MAC, &discoveredDeviceInfo{Connected: false, Allowed: false, MAC: address.MAC, name: address.name})
+			if added {
+				log.Printf("BLE device %s added", address.name)
+
 				GetServiceDiscovery().Send(DiscoveredDevice{
 					Name:             address.name,
+					MAC:			  address.MAC,
 					Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
 					GPSDetectedType:  GPS_TYPE_BLUETOOTH,
 					GPSSource:        GPS_SOURCE_BLUETOOTH,
 					GPSTimeOffsetPPS: 200 * time.Millisecond,
 				})
-			} else {
-				added := b.discoveredDeviceList.SetIfAbsent(address.MAC, &discoveredDeviceInfo{Connected: false, MAC: address.MAC, name: address.name})
-				if added {
-					log.Printf("BLE device %s added", address.name)
-
-					GetServiceDiscovery().Send(DiscoveredDevice{
-						Name:             address.name,
-						Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
-						GPSDetectedType:  GPS_TYPE_BLUETOOTH,
-						GPSSource:        GPS_SOURCE_BLUETOOTH,
-						GPSTimeOffsetPPS: 200 * time.Millisecond,
-					})
-				}
 			}
 		}
 	}

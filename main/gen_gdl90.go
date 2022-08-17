@@ -1184,7 +1184,7 @@ type settings struct {
 	OGNTxPower           int
 
 	BleGPSEnabled		 bool
-	BleEnabledDevices    string
+	BleDiscovery         map[string]interface{}
 	GPSPreferredSource   int
 	NetworkGPSEnabled    bool
 
@@ -1224,6 +1224,7 @@ type status struct {
 	GPS_detected_type                          uint
 	GPS_NetworkRemoteIp                        string // for NMEA via TCP from OGN tracker: display remote IP to configure the OGN tracker
 	GPS_Discovery                              []gps.DiscoveredDeviceDTO
+	GPS_Scanning							   uint
 	Uptime                                     int64
 	UptimeClock                                time.Time
 	CPUTemp                                    float32
@@ -1300,7 +1301,7 @@ func defaultSettings() {
 	globalSettings.BleGPSEnabled = false
 	globalSettings.NetworkGPSEnabled = true
 	globalSettings.GPSPreferredSource = gps.GPS_SOURCE_SERIAL
-	globalSettings.BleEnabledDevices = ""
+	globalSettings.BleDiscovery = make(map[string]interface{})
 }
 
 func readSettings() {

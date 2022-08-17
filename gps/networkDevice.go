@@ -92,10 +92,14 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 		}
 		trimedLine := strings.TrimSpace(line)
 		if len(trimedLine) > 0 {
-			n.rxMessageCh <- RXMessage{
+			select {
+			case n.rxMessageCh <- RXMessage{
 				Name:     remoteAddress,
 				NmeaLine: trimedLine,
-			}		
+			}:
+			default:
+				log.Printf("Network rxMessageCh Full")
+			}
 		}
 	}
 	GetServiceDiscovery().Connected(remoteAddress, false)
@@ -104,6 +108,10 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 
 func (n *NetworkDevice) Stop() {
 	n.eh.Exit()
+}
+
+func (n *NetworkDevice) Scan(leh *common.ExitHelper) {
+	// Not implemented
 }
 
 func (n *NetworkDevice) Run() {

@@ -158,6 +158,11 @@ func (d *GPSDeviceStatus) hasValidFix() bool {
 		stratuxClock.Since(d.gpsLastGoodFix) < GPS_FIX_TIME // Would it not be already good enough to just check the fix?
 }
 
+type gpsDevice interface {
+	Scan(leh *common.ExitHelper)
+    Stop() 
+}
+
 type GPSDeviceManager struct {
 	gpsDeviceStatus  cmap.ConcurrentMap[GPSDeviceStatus] // Map of device status when they are sending us message
 	settingsCopy     settings                            // Copy of the global Settings to help decide if some varas are changed
@@ -171,6 +176,9 @@ type GPSDeviceManager struct {
 	discoveredDevices cmap.ConcurrentMap[gps.DiscoveredDevice]
 
 	ognTrackerConfigured bool
+
+	deviceList []gpsDevice
+	scanMutex			 *sync.Mutex
 }
 
 var gpsPerf gpsPerfStats
@@ -192,6 +200,10 @@ func NewGPSDeviceManager() GPSDeviceManager {
 		discoveredDevices: cmap.New[gps.DiscoveredDevice](),
 
 		ognTrackerConfigured: false,
+
+		deviceList: make([]gpsDevice, 0),
+
+		scanMutex: &sync.Mutex{},
 	}
 }
 
@@ -857,7 +869,7 @@ func (s *GPSDeviceManager) anyGpsDeviceWithFix(gpsSource uint16) (v GPSDeviceSta
 	return
 }
 
-// Find any GPS devices that we receive data on
+// Find any GPS devices that we receive data on, we prefer the GPS from gpsSource
 func (s *GPSDeviceManager) anyGpsDevice(gpsSource uint16) (v GPSDeviceStatus, ok bool) {
 	deviceList := s.gpsDeviceStatusAsList(gpsSource)
 	if len(deviceList) > 0 {
@@ -902,6 +914,7 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 			}
 		}
 
+		// When we have a new GPS device, we configure it
 		if currentGPSName != gpsName {
 			resetGPSGlobalStatus()
 			s.currentGPSNameCh <- gpsName
@@ -950,7 +963,6 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 		if previous, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
 			discoveredDevice = gps.GetServiceDiscovery().Merge(previous, discoveredDevice)
 		}
-		discoveredDevice.LastDiscoveryMessage = stratuxClock.Time
 		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)
 
 		// Build list of GPS_Discovery source for the UI
@@ -963,6 +975,7 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 				Connected:       v.Connected,
 				GPSDetectedType: v.GPSDetectedType,
 				GPSSource:       v.GPSSource,
+				MAC:             v.MAC,
 			})
 		}
 		globalStatus.GPS_Discovery = deviceList
@@ -1101,14 +1114,13 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 	log.Printf("GPS: globalConfigChangeWatcher: Started")
 
 	checkAndReInit := func() {
+		g := s.settingsCopy.GPS_Enabled != globalSettings.GPS_Enabled
 		x := s.settingsCopy.BleGPSEnabled != globalSettings.BleGPSEnabled
 		n := s.settingsCopy.NetworkGPSEnabled != globalSettings.NetworkGPSEnabled
 		y := s.settingsCopy.GPSPreferredSource != globalSettings.GPSPreferredSource
-		z := s.settingsCopy.BleEnabledDevices != globalSettings.BleEnabledDevices
 		d := s.settingsCopy.DEBUG != globalSettings.DEBUG
-		g := s.settingsCopy.GPS_Enabled != globalSettings.GPS_Enabled
 
-		reInit := x || n || y || z || d || g
+		reInit := x || n || y || d || g
 
 		if reInit {
 
@@ -1133,38 +1145,62 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 Configure and enable GPS input sources
 */
 func (s *GPSDeviceManager) configureGPSSubsystems() {
-	log.Printf("GPS: configureGPSSubsystems: Started")
 	s.eh.Add()
 	defer s.eh.Done()
 	s.ognTrackerConfigured = false // Bit of a hack to reset OGN detection here...
 
-	bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh)
-	serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, globalSettings.DEBUG)
-	networkGPSDevice := gps.NewNetworkGPSDevice(s.rxMessageCh)
-
 	defer func() {
 		log.Printf("GPS: configureGPSSubsystems stopping")
-		bleGPSDevice.Stop()
-		serialGPSDevice.Stop()
-		networkGPSDevice.Stop()
+		for _, o := range s.deviceList {
+			o.Stop()
+		}
 		log.Printf("GPS: configureGPSSubsystems Stopped")
 	}()
 
 	if globalSettings.BleGPSEnabled {
 		log.Printf("GPS: configureGPSSubsystems: Enable Bluetooth devices")
-		go bleGPSDevice.Run(strings.Split(globalSettings.BleEnabledDevices, ","))
+		bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh)
+		s.deviceList = append(s.deviceList, &bleGPSDevice)
+		defer func() {
+			// globalSettings.BleDiscovery = bleGPSDevice.GetConfig()
+		}()
+		go bleGPSDevice.Run(globalSettings.BleDiscovery)
 	}
 
 	if globalSettings.GPS_Enabled {
 		log.Printf("GPS: configureGPSSubsystems: Enable USB/Serial devices")
+		serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, globalSettings.DEBUG)
+		s.deviceList = append(s.deviceList, &serialGPSDevice)	
 		go serialGPSDevice.Run()
 	}
 
 	if globalSettings.NetworkGPSEnabled {
 		log.Printf("GPS: configureGPSSubsystems: Enable Network devices")
+		networkGPSDevice := gps.NewNetworkGPSDevice(s.rxMessageCh)
+		s.deviceList = append(s.deviceList, &networkGPSDevice)	
 		go networkGPSDevice.Run()
 	}
 	<-s.eh.C
+}
+
+func (s *GPSDeviceManager) ScanDevices() {
+	s.scanMutex.Lock()
+	defer 	s.scanMutex.Unlock()
+	const TOTAL_SCAN_TIME_SEC = 300
+	log.Printf("GPS: ScanDevices: Started")
+	leh := common.NewExitHelper();
+	for _, o := range s.deviceList {
+		go o.Scan(leh)
+	}
+	// Ticker to update the interface
+	ticker := time.NewTicker(1 * time.Second)
+	globalStatus.GPS_Scanning = TOTAL_SCAN_TIME_SEC
+	for globalStatus.GPS_Scanning > 0 {
+		<- ticker.C
+		globalStatus.GPS_Scanning--
+	}	
+	leh.Exit();
+	log.Printf("GPS: ScanDevices: Done")
 }
 
 func (s *GPSDeviceManager) Run() {
@@ -1178,6 +1214,5 @@ func (s *GPSDeviceManager) Run() {
 	go s.handleDeviceDiscovery()
 	for {
 		s.configureGPSSubsystems()
-		time.Sleep(10 * time.Millisecond)
 	}
 }
