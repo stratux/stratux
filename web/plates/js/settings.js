@@ -510,8 +510,21 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		}
 	}
 
-	$scope.canAddBle = function (device) {
-		return !$scope.BleDiscovery[device.Name]
+	$scope.isPlainObject = function(value) {
+		return !(value instanceof Date) && !Array.isArray(value) && !Object.is(value, null) && !Object.is(value, undefined) && !(value instanceof Function)
+	}
+
+	$scope.deleteFromBle = function (device) {
+		if ($scope.BleDiscovery[device.Name]) {
+			delete $scope.BleDiscovery[device.Name]
+			// Directly remove from GPS_Discovery so it will get removed quickly from the ui
+			// $scope.GPS_Discovery = $scope.GPS_Discovery.filter(item => item.Name != device.Name)
+			var newsettings = {
+				"BleDiscovery": $scope.BleDiscovery
+			};
+			// console.log(angular.toJson(newsettings));
+			setSettings(angular.toJson(newsettings));
+		}
 	}
 
 	$scope.startScanning = function (sourceNum) {

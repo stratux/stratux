@@ -336,7 +336,7 @@
                         <label class="control-label col-xs-5">GPS Location service preferred source</label>
                         <div class="col-xs-7">
                             
-                            <a ui-turn-on='gpSourceDropDown' class='btn'>
+                            <a ui-turn-on='gpSourceDropDown' class='btn' style="padding-left:0">
                                 <button class="btn btn-primary btn-block btn-sm">{{GPSPreferredSources[GPSPreferredSource]}}</button>
                               </a>
                               <ul
@@ -366,8 +366,8 @@
                     <div class="form-group reset-flow" ng-show="BleGPSEnabled">
                         <label class="control-label col-xs-5"></label>
                         <div class="col-xs-7">
-                            <button ng-show="GPS_Scanning > 0" ng-click="startScanning()" ng-disabled="GPS_Scanning > 0" class="btn btn-primary btn-sm">Scanning: {{GPS_Scanning}}</button>
-                            <button ng-show="GPS_Scanning == 0" ng-click="startScanning()" ng-disabled="GPS_Scanning > 0" class="btn btn-primary btn-sm">Start Scanning</button>
+                            <button ng-show="GPS_Scanning > 0" ng-disabled="true" class="btn btn-primary btn-sm">Scanning: {{GPS_Scanning}}</button>
+                            <button ng-show="GPS_Scanning == 0" ng-click="startScanning()" class="btn btn-primary btn-sm">Start Scanning</button>
                         </div>
                     </div>
 
@@ -375,8 +375,13 @@
                         <label class="control-label col-xs-5">Devices:</label>
                         <div class="col-xs-7">
                             <div ng-repeat="d in GPS_Discovery">
-                                <div ng-show="d.GPSSource == 2">{{d.Name}}&nbsp;&nbsp;<button class="btn btn-primary btn-sm" ng-click="addToBle(d)" ng-if="canAddBle(d)">Add</button>&nbsp;<span ng-show="d.Connected">&nbsp;&#x2705;</span> </div>
+                                <div ng-show="d.GPSSource == 2">{{d.Name}}&nbsp;&nbsp;
+                                    <span ng-show="d.Connected">&nbsp;&#x2705;</span>
+                                    <button class="btn btn-primary btn-sm2" ng-show="isPlainObject(BleDiscovery[d.Name])" ng-click="deleteFromBle(d)" >Delete</button>&nbsp;
+                                    <button class="btn btn-primary btn-sm2" ng-show="!isPlainObject(BleDiscovery[d.Name])" ng-click="addToBle(d)" >Add</button>&nbsp;
+                                </div>
                             </div>
+                           
                         </div>
                     </div>
                     <br />

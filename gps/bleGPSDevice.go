@@ -237,7 +237,7 @@ func (b *BleGPSDevice) connectionMonitor() {
 	b.eh.Add()
 	defer b.eh.Done()
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(15000 * time.Millisecond)
 	for {
 		select {
 		case <-b.eh.C:
@@ -253,7 +253,7 @@ func (b *BleGPSDevice) connectionMonitor() {
 						// Attempt to connect to a bluetooth device
 						err := b.rxListener(*info)
 						if err != nil {
-							log.Printf("BLE device error : %s : %s", info.name, err.Error())
+							// log.Printf("BLE device error : %s : %s", info.name, err.Error())
 						} else {
 							log.Printf("BLE device was finished %s", info.name)
 						}

@@ -12,6 +12,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -879,6 +880,17 @@ func (s *GPSDeviceManager) anyGpsDevice(gpsSource uint16) (v GPSDeviceStatus, ok
 }
 
 /**
+Send a message to an attached GPS
+*/
+func (s *GPSDeviceManager) configureGPS(txMessage gps.TXMessage) {
+	select {
+	case s.txMessageCh <- txMessage:
+	default:
+		log.Printf("GPSDeviceManager: Failed to send message to GPS %s", txMessage.Name)
+	}
+}
+
+/**
 Maintain and decide on what gps source to use
 **/
 func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
@@ -1005,17 +1017,6 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 }
 
 /**
-Send a message to an attached GPS
-*/
-func (s *GPSDeviceManager) configureGPS(txMessage gps.TXMessage) {
-	select {
-	case s.txMessageCh <- txMessage:
-	default:
-		log.Printf("GPSDeviceManager: Failed to send message to GPS %s", txMessage.Name)
-	}
-}
-
-/**
 Listen to rxMessageCh and process incomming NMEA message from GPS sources
 */
 func (s *GPSDeviceManager) rxMessageHandler() {
@@ -1119,8 +1120,9 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 		n := s.settingsCopy.NetworkGPSEnabled != globalSettings.NetworkGPSEnabled
 		y := s.settingsCopy.GPSPreferredSource != globalSettings.GPSPreferredSource
 		d := s.settingsCopy.DEBUG != globalSettings.DEBUG
+		b := !reflect.DeepEqual(s.settingsCopy.BleDiscovery, globalSettings.BleDiscovery)
 
-		reInit := x || n || y || d || g
+		reInit := g || x || n || y || d || b
 
 		if reInit {
 
@@ -1130,6 +1132,7 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 			// At this point new threads can start all adapters, but we assume here
 			// that we will be faster resetting the GPS device
 			s.gpsDeviceStatus.Clear()
+			s.discoveredDevices.Clear()
 			resetGPSGlobalStatus()
 		}
 	}
@@ -1148,12 +1151,12 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 	s.eh.Add()
 	defer s.eh.Done()
 	s.ognTrackerConfigured = false // Bit of a hack to reset OGN detection here...
-
 	defer func() {
 		log.Printf("GPS: configureGPSSubsystems stopping")
 		for _, o := range s.deviceList {
 			o.Stop()
 		}
+		s.deviceList = make([]gpsDevice, 0)
 		log.Printf("GPS: configureGPSSubsystems Stopped")
 	}()
 
@@ -1185,10 +1188,17 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 
 func (s *GPSDeviceManager) ScanDevices() {
 	s.scanMutex.Lock()
-	defer 	s.scanMutex.Unlock()
-	const TOTAL_SCAN_TIME_SEC = 300
-	log.Printf("GPS: ScanDevices: Started")
+	s.eh.Add()
 	leh := common.NewExitHelper();
+	defer func() {
+		globalStatus.GPS_Scanning = 0
+		leh.Exit()
+		s.eh.Done()
+		log.Printf("GPS: ScanDevices: Done")
+		s.scanMutex.Unlock()
+	}()
+	const TOTAL_SCAN_TIME_SEC = 30
+	log.Printf("GPS: ScanDevices: Started")
 	for _, o := range s.deviceList {
 		go o.Scan(leh)
 	}
@@ -1196,11 +1206,13 @@ func (s *GPSDeviceManager) ScanDevices() {
 	ticker := time.NewTicker(1 * time.Second)
 	globalStatus.GPS_Scanning = TOTAL_SCAN_TIME_SEC
 	for globalStatus.GPS_Scanning > 0 {
-		<- ticker.C
-		globalStatus.GPS_Scanning--
-	}	
-	leh.Exit();
-	log.Printf("GPS: ScanDevices: Done")
+		select {
+		case <- s.eh.C:
+			return
+		case <- ticker.C:
+			globalStatus.GPS_Scanning--	
+		}
+	}
 }
 
 func (s *GPSDeviceManager) Run() {
@@ -1214,5 +1226,6 @@ func (s *GPSDeviceManager) Run() {
 	go s.handleDeviceDiscovery()
 	for {
 		s.configureGPSSubsystems()
+		time.Sleep(10 * time.Millisecond)
 	}
 }
