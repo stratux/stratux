@@ -364,8 +364,8 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.BleGPSEnabled = val.(bool)
 					case "GPSPreferredSource":
 						globalSettings.GPSPreferredSource = int(val.(float64))
-					case "BleDiscovery":
-						globalSettings.BleDiscovery = val.(map[string]interface{})
+					case "BleGPSAllowedDevices":
+						globalSettings.BleGPSAllowedDevices = val.(map[string]interface{})
 					case "GPS_Enabled":
 						globalSettings.GPS_Enabled = val.(bool)
 					case "IMU_Sensor_Enabled":

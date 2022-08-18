@@ -344,7 +344,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.NetworkGPSEnabled = settings.NetworkGPSEnabled;
 		$scope.BleEnabledDevices = settings.BleEnabledDevices;
 		$scope.GPSPreferredSource = settings.GPSPreferredSource;
-		$scope.BleDiscovery = settings.BleDiscovery;
+		$scope.BleGPSAllowedDevices = settings.BleGPSAllowedDevices;
 			
 		$scope.IMU_Sensor_Enabled = settings.IMU_Sensor_Enabled;
 		$scope.BMP_Sensor_Enabled = settings.BMP_Sensor_Enabled;
@@ -500,10 +500,10 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	};
 
 	$scope.addToBle = function (device) {
-		if (!$scope.BleDiscovery[device.Name]) {
-			$scope.BleDiscovery[device.Name] = device
+		if (!$scope.BleGPSAllowedDevices[device.Name]) {
+			$scope.BleGPSAllowedDevices[device.Name] = device
 			var newsettings = {
-				"BleDiscovery": $scope.BleDiscovery
+				"BleGPSAllowedDevices": $scope.BleGPSAllowedDevices
 			};
 			// console.log(angular.toJson(newsettings));
 			setSettings(angular.toJson(newsettings));
@@ -515,12 +515,12 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	}
 
 	$scope.deleteFromBle = function (device) {
-		if ($scope.BleDiscovery[device.Name]) {
-			delete $scope.BleDiscovery[device.Name]
+		if ($scope.BleGPSAllowedDevices[device.Name]) {
+			delete $scope.BleGPSAllowedDevices[device.Name]
 			// Directly remove from GPS_Discovery so it will get removed quickly from the ui
 			// $scope.GPS_Discovery = $scope.GPS_Discovery.filter(item => item.Name != device.Name)
 			var newsettings = {
-				"BleDiscovery": $scope.BleDiscovery
+				"BleGPSAllowedDevices": $scope.BleGPSAllowedDevices
 			};
 			// console.log(angular.toJson(newsettings));
 			setSettings(angular.toJson(newsettings));

@@ -373,13 +373,14 @@
 
                     <div class="form-group reset-flow" ng-show="BleGPSEnabled">
                         <label class="control-label col-xs-5">Devices:</label>
-                        <div class="col-xs-7">
-                            <div ng-repeat="d in GPS_Discovery">
-                                <div ng-show="d.GPSSource == 2">{{d.Name}}&nbsp;&nbsp;
-                                    <span ng-show="d.Connected">&nbsp;&#x2705;</span>
-                                    <button class="btn btn-primary btn-sm2" ng-show="isPlainObject(BleDiscovery[d.Name])" ng-click="deleteFromBle(d)" >Delete</button>&nbsp;
-                                    <button class="btn btn-primary btn-sm2" ng-show="!isPlainObject(BleDiscovery[d.Name])" ng-click="addToBle(d)" >Add</button>&nbsp;
-                                </div>
+                        <div class="col-xs-7" style="display: table;">
+                            <div ng-repeat="d in GPS_Discovery"  ng-show="d.GPSSource == 2" style="display: table-row;" >
+                                <div style="display:table-cell;">{{d.Name}}</div>
+                                <div style="display:table-cell;width:55px">
+                                    <button ng-show="isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="deleteFromBle(d)" >Delete</button>
+                                    <button ng-show="!isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="addToBle(d)" >Add</button>
+                                </div>    
+                                <div style="display:table-cell;width:25px"><span ng-show="d.Connected">&#x2705;</span></div>
                             </div>
                            
                         </div>

@@ -902,7 +902,9 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 
 		// Get the current GPSDevice, if any..
 		currentGPSDevice, ok := s.gpsDeviceStatus.Get(gpsName)
+		reason := "No GPS device"
 		if !ok {
+			reason = "No device"
 			gpsName = ""
 		}
 
@@ -911,8 +913,10 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 		if !currentGPSDevice.hasValidFix() {
 			if otherGPSDevice, ok := s.anyGpsDeviceWithFix(GPSPreferredSource); ok {
 				gpsName = otherGPSDevice.name
+				reason = "Found a device with fix"
 			} else if currentGPSName == "" {
 				if anyDevice, ok := s.anyGpsDevice(GPSPreferredSource); ok {
+					reason = "Selected best from connected devices"
 					gpsName = anyDevice.name
 				}
 			}
@@ -923,11 +927,17 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 		if currentGPSDevice.gpsSource != GPSPreferredSource {
 			if preferredDevice, ok := s.gpsDeviceWithFix(GPSPreferredSource); ok {
 				gpsName = preferredDevice.name
+				reason = "Selected best device from preferred source"
 			}
 		}
 
 		// When we have a new GPS device, we configure it
 		if currentGPSName != gpsName {
+			whatGPS := currentGPSName
+			if currentGPSName == "" {
+				whatGPS = "no Device"
+			}
+			log.Printf("GPS device changed from [%s] to [%s]: %s", whatGPS, gpsName, reason)
 			resetGPSGlobalStatus()
 			s.currentGPSNameCh <- gpsName
 		}
@@ -1120,12 +1130,11 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 		n := s.settingsCopy.NetworkGPSEnabled != globalSettings.NetworkGPSEnabled
 		y := s.settingsCopy.GPSPreferredSource != globalSettings.GPSPreferredSource
 		d := s.settingsCopy.DEBUG != globalSettings.DEBUG
-		b := !reflect.DeepEqual(s.settingsCopy.BleDiscovery, globalSettings.BleDiscovery)
+		b := !reflect.DeepEqual(s.settingsCopy.BleGPSAllowedDevices, globalSettings.BleGPSAllowedDevices)
 
 		reInit := g || x || n || y || d || b
 
 		if reInit {
-
 			s.eh.Exit()
 			s.settingsCopy = globalSettings
 
@@ -1165,9 +1174,10 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 		bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh)
 		s.deviceList = append(s.deviceList, &bleGPSDevice)
 		defer func() {
-			// globalSettings.BleDiscovery = bleGPSDevice.GetConfig()
+			// There is no need to read the settings back
+			// globalSettings.BleGPSAllowedDevices = bleGPSDevice.GetConfig()
 		}()
-		go bleGPSDevice.Run(globalSettings.BleDiscovery)
+		go bleGPSDevice.Run(globalSettings.BleGPSAllowedDevices)
 	}
 
 	if globalSettings.GPS_Enabled {
