@@ -45,3 +45,10 @@ test/uatsummary
 .DS_Store
 #.vscode/*.log
 
+#Ignore indeed vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets

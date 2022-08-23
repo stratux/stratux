@@ -349,7 +349,7 @@
                                 ui-state="gpSourceDropDown"
                                 ui-turn-off="gpSourceDropDown">                                
                                 <li ng-click="updateGpsPrefSource(1)"><a>{{GPSPreferredSources[1]}}</a></li>
-                                <li ng-click="updateGpsPrefSource(2)"><a>{{GPSPreferredSources[2]}}</a></li>
+                                <li ng-click="updateGpsPrefSource(2)" ng-show="BleGPSEnabled"><a>{{GPSPreferredSources[2]}}</a></li>
                                 <li ng-click="updateGpsPrefSource(3)"><a>{{GPSPreferredSources[3]}}</a></li>
                               </ul>
                         </div>
@@ -373,20 +373,18 @@
 
                     <div class="form-group reset-flow" ng-show="BleGPSEnabled">
                         <label class="control-label col-xs-5">Devices:</label>
-                        <div class="col-xs-7" style="display: table;">
-                            <div ng-repeat="d in GPS_Discovery"  ng-show="d.GPSSource == 2" style="display: table-row;" >
-                                <div style="display:table-cell;">{{d.Name}}</div>
+                        <div class="col-xs-12" style="display: table;">
+                            <div ng-repeat="d in GPS_Discovery"  ng-show="d.GPSSource == 2" style="display: table-row;">
+                                <div style="display:table-cell;padding:5px">{{d.Name}}</div>
                                 <div style="display:table-cell;width:55px">
                                     <button ng-show="isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="deleteFromBle(d)" >Delete</button>
                                     <button ng-show="!isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="addToBle(d)" >Add</button>
                                 </div>    
                                 <div style="display:table-cell;width:25px"><span ng-show="d.Connected">&#x2705;</span></div>
-                            </div>
-                           
+                            </div>                           
                         </div>
                     </div>
-                    <br />
-                    <hr />
+                    <hr>
 
                     <div class="form-group reset-flow">
                         <label class="control-label col-xs-5">978 Mhz (UAT)</label>

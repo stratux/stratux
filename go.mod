@@ -14,7 +14,7 @@ require (
 	github.com/kellydunn/golang-geo v0.7.0
 	github.com/kidoman/embd v0.0.0-20170508013040-d3d8c0c5c68d
 	github.com/mattn/go-sqlite3 v1.14.6
-	github.com/orcaman/concurrent-map v1.0.0
+	github.com/orcaman/concurrent-map/v2 v2.0.0
 	github.com/prometheus/client_golang v1.10.0
 	github.com/ricochet2200/go-disk-usage v0.0.0-20150921141558-f0d1b743428f
 	github.com/stianeikeland/go-rpio/v4 v4.5.1-0.20210920090620-2ab4c0432c52
@@ -27,7 +27,6 @@ require (
 	go.uber.org/ratelimit v0.2.0
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 	gonum.org/v1/plot v0.9.0
-	tinygo.org/x/bluetooth v0.5.0
 )
 
 require (
@@ -53,7 +52,6 @@ require (
 	github.com/lib/pq v1.10.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/muka/go-bluetooth v0.0.0-20210812063148-b6c83362e27d // indirect
-	github.com/orcaman/concurrent-map/v2 v2.0.0 // indirect
 	github.com/phpdave11/gofpdf v1.4.2 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.18.0 // indirect
@@ -66,4 +64,5 @@ require (
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/text v0.3.6 // indirect
 	google.golang.org/protobuf v1.23.0 // indirect
+	tinygo.org/x/bluetooth v0.5.0 // indirect
 )
