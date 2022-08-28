@@ -263,12 +263,9 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
-<<<<<<< HEAD
-	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'BleGPSEnabled', 'IMU_Sensor_Enabled',
-=======
-	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'Ping_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'BleGPSEnabled', 'NetworkGPSEnabled', 'IMU_Sensor_Enabled',
->>>>>>> dfb8a27 (Added network GPS switch)
-		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
+	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
+	'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode',
+    'BleGPSEnabled', 'NetworkGPSEnabled'];
 
 	var settings = {};
 	for (var i = 0; i < toggles.length; i++) {
