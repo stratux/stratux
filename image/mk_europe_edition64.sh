@@ -10,7 +10,7 @@ BASE_IMAGE_URL="https://downloads.raspberrypi.org/raspios_lite_arm64/images/rasp
 ZIPNAME="2022-04-04-raspios-bullseye-arm64-lite.img.xz"
 IMGNAME="$(basename $ZIPNAME .xz)"
 TMPDIR="$HOME/stratux-tmp"
-
+REMOTE_ORIGIN=$(git config --get remote.origin.url)
 
 die() {
     echo $1
@@ -60,13 +60,12 @@ mkdir -p mnt
 mount -t ext4 ${lo}p2 mnt/ || die "root-mount failed"
 mount -t vfat ${lo}p1 mnt/boot || die "boot-mount failed"
 
-
 cd mnt/root/
 if [ "$1" == "dev" ]; then
     rsync -av --progress --exclude=ogn/esp-idf $SRCDIR ./
     cd stratux && git checkout $2 && cd ..
 else
-    git clone --recursive -b $2 https://github.com/b3nn0/stratux.git
+    git clone --recursive -b $2 $REMOTE_ORIGIN
 fi
 cd ../../
 
