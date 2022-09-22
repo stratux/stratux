@@ -23,8 +23,11 @@ mkdir -p /proc/sys/vm/
 apt update
 apt clean
 
-PATH=/root/fake:$PATH apt install --yes libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
+PATH=/root/fake:$PATH apt install --yes pi-bluetooth bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
     libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables
+
+# Add bluetooth group to pi user so it can use the bluetoothstack
+usermod -G bluetooth -a pi
 
 # Downgrade to older brcm wifi firmware - the new one seems to be buggy in AP+Client mode
 # see https://github.com/raspberrypi/firmware/issues/1463
