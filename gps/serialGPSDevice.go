@@ -96,13 +96,20 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		timeOffsetPPS: 100 * time.Millisecond,
 		deviceType: GPS_TYPE_PROLIFIC,
 		afterConnectFunc: writeProlificConfigCommands})
-	// all = append(all, SerialDiscoveryConfig{
-	// 	serialPort: "/dev/ttyUSB0", 
-	// 	name: "ttyUSB0", 
-	// 	baudRate: []int{115200, 9600, 38400}, 
-	// 	timeOffsetPPS: 100 * time.Millisecond,
-	// 	deviceType: GPS_TYPE_SERIAL,
-	// 	afterConnectFunc: writeSerialInConfigCommands})
+	all = append(all, SerialDiscoveryConfig{
+		serialPort: "/dev/ttyUSB0", 
+		name: "ttyUSB0", 
+		baudRate: []int{115200, 9600, 38400}, 
+		timeOffsetPPS: 100 * time.Millisecond,
+		deviceType: GPS_TYPE_SERIAL,
+		afterConnectFunc: writeSerialInConfigCommands})
+	all = append(all, SerialDiscoveryConfig{
+		serialPort: "/dev/ttyUSB1", 
+		name: "ttyUSB1", 
+		baudRate: []int{115200, 9600, 38400}, 
+		timeOffsetPPS: 100 * time.Millisecond,
+		deviceType: GPS_TYPE_SERIAL,
+		afterConnectFunc: writeSerialInConfigCommands})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/serialin", 
 		name: "serialIn", 
