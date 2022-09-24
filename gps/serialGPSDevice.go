@@ -110,13 +110,13 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		timeOffsetPPS: 100 * time.Millisecond,
 		deviceType: GPS_TYPE_SERIAL,
 		afterConnectFunc: writeSerialInConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/serialin", 
-		name: "serialIn", 
-		baudRate: []int{115200, 9600, 38400}, 
-		timeOffsetPPS: 100 * time.Millisecond,
-		deviceType: GPS_TYPE_SERIAL,
-		afterConnectFunc: writeSerialInConfigCommands})
+	// all = append(all, SerialDiscoveryConfig{
+	// 	serialPort: "/dev/serialin", 
+	// 	name: "serialIn", 
+	// 	baudRate: []int{115200, 9600, 38400}, 
+	// 	timeOffsetPPS: 100 * time.Millisecond,
+	// 	deviceType: GPS_TYPE_SERIAL,
+	// 	afterConnectFunc: writeSerialInConfigCommands})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/softrf_dongle", 
 		name: "softrf_dongle", 
