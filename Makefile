@@ -59,6 +59,7 @@ optinstall: www ogn/ddb.json
 	mkdir -p $(STRATUX_HOME)/bin
 	mkdir -p $(STRATUX_HOME)/www
 	mkdir -p $(STRATUX_HOME)/ogn
+	mkdir -p $(STRATUX_HOME)/SoftRF
 	mkdir -p $(STRATUX_HOME)/cfg
 	mkdir -p $(STRATUX_HOME)/lib
 	mkdir -p $(STRATUX_HOME)/mapdata
@@ -80,6 +81,9 @@ optinstall: www ogn/ddb.json
 
 	# OGN stuff
 	cp -f ogn/ddb.json ogn/esp32-ogn-tracker-bin-*.zip ogn/install-ogntracker-firmware-pi.sh ogn/fetch_ddb.sh $(STRATUX_HOME)/ogn
+
+	# SoftRF stuff
+	cp -f SoftRF/esptool.py SoftRF/install-SoftRF-Stratux-firmware.sh $(STRATUX_HOME)/SoftRF
 
 	# Scripts
 	cp __opt__stratux__bin__stratux-pre-start.sh $(STRATUX_HOME)/bin/stratux-pre-start.sh
