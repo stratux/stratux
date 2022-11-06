@@ -383,9 +383,9 @@ func parseNMEALine_PSOFT(x []string, tmpSituation SituationData) (SituationData,
 
 	// SOFTRF Tracker time/date
 	// $POGNB,<time>,<date>,<GPS type>*6B
-	// $POGNB,AT65*6B
-	if len(x) < 2 {
-		return EMPTY_SITUATION, errors.New("Length < 2")
+	// $PSOFT,AT65,00ABCD12*6B
+	if len(x) < 3 {
+		return EMPTY_SITUATION, errors.New("Length < 3")
 	}
 
 	return tmpSituation, nil

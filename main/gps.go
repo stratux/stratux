@@ -583,15 +583,39 @@ func (s *GPSDeviceManager) processNMEALine(l string, deviceDiscovery gps.Discove
 		if err == nil {
 			mySituation = data
 
+			// Detect GPS type
 			if x[1] == "AT65" && deviceDiscovery.GPSSource == gps.GPS_SOURCE_BLUETOOTH {
 				gps.GetServiceDiscovery().Send(gps.DiscoveredDevice{
 					Name:             deviceDiscovery.Name,
 					Content:          gps.CONTENT_OFFSET_PPS | gps.CONTENT_TYPE,
 					GPSDetectedType:  gps.GPS_TYPE_SOFTRF_AT65,
-					GPSTimeOffsetPPS: 250 * time.Millisecond, // RVT Calibrated for AT65 SOftRF
+					GPSTimeOffsetPPS: 250 * time.Millisecond,
+				})
+			} else {
+				gps.GetServiceDiscovery().Send(gps.DiscoveredDevice{
+					Name:             deviceDiscovery.Name,
+					Content:          gps.CONTENT_TYPE,
+					GPSDetectedType:  gps.GPS_TYPE_SOFTRF_DONGLE,
 				})
 			}
 
+			// Detect HW configuration and modify Address if different from Stratux
+			requiredAddr, _ := strconv.ParseUint(globalSettings.OGNAddr, 16, 32)
+			softRfAddr, _ := strconv.ParseUint(x[2], 16, 32)			
+			if requiredAddr != softRfAddr {
+				log.Printf("WARNING: SOFTRF address %s does not match required address %s, reconfiguring", x[2], globalSettings.OGNAddr)
+				// SoftRF only supports BT and USB, defaults to USB
+				gpsSource := 4 // 5 BT 4 USB
+				if deviceDiscovery.GPSSource == gps.GPS_SOURCE_BLUETOOTH {
+					gpsSource = 5
+				}
+				protocol := 0 // 0 Legacy(FLARM), 1 OGN, 2 P3I, 3 FANET, 4 UAT
+				sentence := common.MakeNMEACmd(fmt.Sprintf("PSRFC,1,0,%d,1,%d,1,0,2,2,1,0,1,1,%d,0,0,0,0,0,%06X", protocol, globalSettings.OGNAcftType, gpsSource, requiredAddr))
+				s.configureGPS(gps.TXMessage{
+					Message: []byte(sentence),
+					Name:    deviceDiscovery.Name,
+				})
+			}
 		}
 		return err == nil
 		// ############################################# POGNR #############################################
@@ -978,6 +1002,7 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 
 /**
 Maintain a list of configured and found GPS devices and set the list in globalStatus
+Also start a go routine that will send messages to GPS devices
 */
 func (s *GPSDeviceManager) handleDeviceDiscovery() {
 	handleDeviceDiscovery := func(discoveredDevice gps.DiscoveredDevice) {
@@ -1007,8 +1032,7 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 		if entry, ok := s.discoveredDevices.Get(message.Name); ok {
 			if entry.Connected && entry.CanTX() {
 				entry.TXChannel <- []byte(message.Message)
-			}
-			if globalSettings.DEBUG {
+			} else if globalSettings.DEBUG {
 				log.Printf("Device %s does not have an TX Channel", entry.Name)
 			}
 		}

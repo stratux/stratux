@@ -434,7 +434,7 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 		// Watchdog time is user to detect any GPS that is not communicating, When no data was received for 5000ms it will request to stop
 		// this serial port and bail out.
 		readerWatchdog := common.NewWatchDog(5000 * time.Millisecond)
-		TXChannel := make(chan []byte, 10) // Create a unblocking channel to receive XT messages on
+		TXChannel := make(chan []byte, 10) // Create a unblocking channel to receive TX messages on to send to GPS
 		defer func() {
 			readerWatchdog.Stop()
 			GetServiceDiscovery().Connected(device.name, false)
@@ -442,11 +442,12 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 
 		GetServiceDiscovery().Send(DiscoveredDevice{
 			Name:               device.name,
-			Content:			CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
+			Content:			CONTENT_TX_CHANNEL | CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS | CONTENT_CONNECTED,
 			Connected: 			true,
 			GPSDetectedType:    device.deviceType,
 			GPSSource:          GPS_SOURCE_SERIAL,
-			GPSTimeOffsetPPS: device.timeOffsetPPS,
+			TXChannel:          TXChannel,
+			GPSTimeOffsetPPS:   device.timeOffsetPPS,
 		})
 
 		// Blocking function that reads serial data
@@ -523,9 +524,9 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 				select {
 				case <-localQh.C:
 					return
-				case txChannel := <-TXChannel:
+				case txMessage := <-TXChannel:
 					rl.Take()
-					serialPort.Write(txChannel)
+					serialPort.Write(txMessage)
 					serialPort.Flush()
 				}
 			}
