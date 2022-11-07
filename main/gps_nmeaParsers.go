@@ -115,7 +115,6 @@ func parseNMEALine_GNGGA_GPGGA(x []string, tmpSituation SituationData) (Situatio
 	tmpSituation.GPSFixQuality = uint8(q) // 1 = 3D GPS; 2 = DGPS (SBAS /WAAS)
 
 	// Time only for GGA/NGGA
-	// Time only for GGA/NGGA
 	GPSLastFixSinceMidnightUTC, _, err := parse_timeDate(x, 1, 0)
 	if err != nil {
 		return EMPTY_SITUATION, err

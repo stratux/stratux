@@ -305,11 +305,16 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			var status = JSON.parse(msg.data)
 			$scope.GPS_Discovery = status.GPS_Discovery
 			$scope.GPS_Scanning = status.GPS_Scanning
-			var OGNGPSDevices = status.GPS_Discovery.filter(item => item.GPSDetectedType == 3) // 3 is a OGN Device
-			if (OGNGPSDevices.length>0 || status.OGN_tx_enabled)
-				$scope.hasOgnTracker = true;
-			else
-				$scope.hasOgnTracker = false;
+			var TrackerDevices = status.GPS_Discovery.filter(
+				item => item.GPSDetectedType == 3 || 
+				item.GPSDetectedType == 11  || 
+				item.GPSDetectedType == 14) // 3 is a OGN Device, SoftRF Dongle or AT65
+			var OGNGPSDevices = status.GPS_Discovery.filter(
+				item => item.GPSDetectedType == 3) // 3 
+
+			$scope.hasTrackers = TrackerDevices.length>0 || status.OGN_tx_enabled
+			$scope.hasOgnTracker = OGNGPSDevices.length>0 || status.OGN_tx_enabled
+
 			$scope.$apply()
 		};
 	}
