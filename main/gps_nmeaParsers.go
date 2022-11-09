@@ -390,6 +390,19 @@ func parseNMEALine_PSOFT(x []string, tmpSituation SituationData) (SituationData,
 	return tmpSituation, nil
 }
 
+func parseNMEALine_PSRFC(x []string, tmpSituation SituationData) (SituationData, error) {
+	if !(x[0] == "PSRFC") {
+		return tmpSituation, errors.New("Not PSRFC")
+	}
+
+	// $PSRFC,1,0,1,1,1,1,0,2,2,1,0,1,1,4,0,0,0,0,0,ABCD45*65
+	if len(x) < 21 {
+		return EMPTY_SITUATION, errors.New("Length < 21")
+	}
+
+	return tmpSituation, nil
+}
+
 func parseNMEALine_POGNB(x []string, tmpSituation SituationData) (SituationData, error) {
 	if !(x[0] == "POGNB") {
 		return tmpSituation, errors.New("Not POGNB")

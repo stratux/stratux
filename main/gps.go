@@ -599,26 +599,58 @@ func (s *GPSDeviceManager) processNMEALine(l string, deviceDiscovery gps.Discove
 				})
 			}
 
+			// Request config
+			s.configureGPS(gps.TXMessage{
+				Message: common.MakeNMEACmd(fmt.Sprintf("PSRFC,?")),
+				Name:    deviceDiscovery.Name,
+			})
+			
+		}
+		return err == nil
+		} else if x[0] == "PSRFC" {
+		// ############################################# PSRFC #############################################} else if x[0] == "PSOFT" {
+		// When PSRFC we nee dto validate it's configuration and if needed modify for stratux usage
+		data, err := parseNMEALine_PSRFC(x, mySituation)
+		if err == nil {
+			mySituation = data
+
 			// Detect HW configuration and modify Address if different from Stratux
 			requiredAddr, _ := strconv.ParseUint(globalSettings.OGNAddr, 16, 32)
-			softRfAddr, _ := strconv.ParseUint(x[2], 16, 32)			
-			if requiredAddr != softRfAddr {
-				log.Printf("WARNING: SOFTRF address %s does not match required address %s, reconfiguring", x[2], globalSettings.OGNAddr)
-				// SoftRF only supports BT and USB, defaults to USB
-				gpsSource := 4 // 5 BT 4 USB
-				if deviceDiscovery.GPSSource == gps.GPS_SOURCE_BLUETOOTH {
-					gpsSource = 5
-				}
-				protocol := 0 // 0 Legacy(FLARM), 1 OGN, 2 P3I, 3 FANET, 4 UAT
-				sentence := common.MakeNMEACmd(fmt.Sprintf("PSRFC,1,0,%d,1,%d,1,0,2,2,1,0,1,1,%d,0,0,0,0,0,%06X", protocol, globalSettings.OGNAcftType, gpsSource, requiredAddr))
+
+			protocol := 0 // 0 Legacy(FLARM), 1 OGN, 2 P3I, 3 FANET, 4 UAT
+			sentence := fmt.Sprintf("PSRFC,%s,%s,%d,%s,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%06X",
+				x[1],  // Version
+				x[2],  // Mode
+				protocol, 
+				x[4],  // Region
+				globalSettings.OGNAcftType, // Aircraft type
+				x[6],  // Alarm
+				x[7],  // txPower
+				x[8],  // Volume
+				x[9],  // Pointer
+				x[10], // NMEA GNSS
+				x[11], // Private
+				x[12], // NMEA Legacy
+				x[13], // NMEA Sensors
+				x[14], // gps source 5 BT 4 USB // NMEA Output
+				x[15], // GDL90 Out
+				x[16], // D1090 Out
+				x[17], // Stealth
+				x[18], // noTrack
+				x[19], // Power Save
+				requiredAddr)
+
+			if (sentence != l) {
+				log.Printf("WARNING: SoftRF incorrect for stratux, reconfiguring with %s", sentence)
 				s.configureGPS(gps.TXMessage{
-					Message: []byte(sentence),
+					Message: common.MakeNMEACmd(sentence),
 					Name:    deviceDiscovery.Name,
 				})
 			}
+
 		}
 		return err == nil
-		// ############################################# POGNR #############################################
+		// ############################################# POGNR #############################################		
 	} else if x[0] == "POGNR" {
 		// Only sent by OGN tracker. We use this to detect that OGN tracker is connected and configure it as needed
 		if !s.ognTrackerConfigured {
