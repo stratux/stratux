@@ -198,7 +198,7 @@ rm -r /root/stratux
 # Uninstall packages we don't need, clean up temp stuff
 rm -r /root/go /root/go_path /root/.cache
 
-PATH=/root/fake:$PATH apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf bluez bluez-firmware cifs-utils cmake cmake-data \
+PATH=/root/fake:$PATH apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf cifs-utils cmake cmake-data \
     v4l-utils rsync pigz pi-bluetooth perl cpp cpp-10
 
 PATH=/root/fake:$PATH apt autoremove --purge --yes
