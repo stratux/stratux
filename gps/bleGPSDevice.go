@@ -10,7 +10,6 @@
 package gps
 
 import (
-	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -66,37 +65,28 @@ var (
 func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	leh.Add()
 	defer func() {
-		b.adapter.StopScan()
 		leh.Done()
 	}()
-	executeScan := func() error {
-		err := b.adapter.Scan(
-			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-				// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
-				if leh.IsExit() {
-					b.adapter.StopScan()
-				} else if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && result.Address != nil {
-					b.adapter.StopScan()
-					b.scanInfoCh <- scanInfoResult{result.Address.String(), result.LocalName()}
-				}
-			})
-		if err != nil {
-			return errors.New("Error from adapter.Scan: " + err.Error())
-		}
-		return nil
-	}
 
-	timer := time.NewTimer(1000 * time.Millisecond)
-	for {
-		select {
-		case <-leh.C:
-			return
-		case <-timer.C:
-			if err := executeScan(); err != nil {
-				log.Printf("Error from ble scanner: %s", err.Error())
+	// Scan is blocking, keep that in mind
+	err := b.adapter.Scan(
+		func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+			// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
+			if leh.IsExit() {
+				b.adapter.StopScan()
+			} else if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && 
+				result.Address != nil &&
+				strings.TrimSpace(result.LocalName()) != "" {
+				// LocalName is the (complete or shortened) local name of the device.
+				// Please note that many devices do not broadcast a local name, but may
+				// broadcast other data (e.g. manufacturer data or service UUIDs) with which
+				// they may be identified.
+				b.scanInfoCh <- scanInfoResult{result.Address.String(), result.LocalName()}
 			}
-			timer.Reset(1000 * time.Millisecond)
-		}
+		})
+
+	if err != nil {
+		log.Printf("Error from ble scanner: %s", err.Error())
 	}
 }
 
