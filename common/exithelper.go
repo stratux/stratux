@@ -12,7 +12,11 @@ import (
 
 	"github.com/tevino/abool/v2"
 )
- 
+
+/**
+* ExitHelper is a small helper to make sure that one or more go routines are exited correctly
+* by signalling them to exit and waiting for them to exit
+*/
 type ExitHelper struct {
     C chan struct{}
     w *sync.WaitGroup
@@ -20,6 +24,9 @@ type ExitHelper struct {
     b *abool.AtomicBool
 }
  
+/**
+* Create a new ExitHelper
+*/
 func NewExitHelper() *ExitHelper {
     return &ExitHelper{
         C: make(chan struct{}),
@@ -32,7 +39,8 @@ func NewExitHelper() *ExitHelper {
 /**
 * Tell the exitHelper that that there is a new function that needs to be called
 * to be notified of exits
-/func (a *ExitHelper) Add() {
+*/
+func (a *ExitHelper) Add() {
     a.m.Lock()
     a.w.Add(1)
     a.m.Unlock()
@@ -41,7 +49,7 @@ func NewExitHelper() *ExitHelper {
 /**
 * Call this function when you are done with your function
 * only call Done() once and only when you have called Add() Once
-/*
+*/
 func (a *ExitHelper) Done() {
     a.w.Done()
 }
