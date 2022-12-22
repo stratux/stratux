@@ -165,7 +165,7 @@ type gpsDevice interface {
 }
 
 type GPSDeviceManager struct {
-	gpsDeviceStatus  cmap.ConcurrentMap[GPSDeviceStatus] // Map of device status when they are sending us message
+	gpsDeviceStatus  cmap.ConcurrentMap[string, GPSDeviceStatus] // Map of device status when they are sending us message
 	settingsCopy     settings                            // Copy of the global Settings to help decide if some varas are changed
 	currentGPSNameCh chan string                         // name of the current GPS device we receive location data from
 	eh               *common.ExitHelper                  // Helper to quick various routines during reconfiguratios
@@ -174,7 +174,7 @@ type GPSDeviceManager struct {
 	txMessageCh chan gps.TXMessage // Channel used to send a any device a message
 
 	systemTimeSetter  *gps.OSTimeSetter
-	discoveredDevices cmap.ConcurrentMap[gps.DiscoveredDevice]
+	discoveredDevices cmap.ConcurrentMap[string, gps.DiscoveredDevice]
 
 	ognTrackerConfigured bool
 
