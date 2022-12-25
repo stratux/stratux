@@ -10,6 +10,7 @@
 package gps
 
 import (
+	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -76,7 +77,7 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 				// Only allow names we see in our list in our allowed list
 				added := b.discoveredDeviceList.SetIfAbsent(address.MAC, discoveredDeviceInfo{Connected: false, Allowed: false, MAC: address.MAC, name: address.name})
 				if added {
-					log.Printf("BLE device %s found", address.name)
+					log.Printf("bleGPSDevice: Device %s found", address.name)
 	
 					GetServiceDiscovery().Send(DiscoveredDevice{
 						Name:             address.name,
@@ -112,21 +113,22 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 		})		
 
 	if err != nil {
-		log.Printf("Error from ble scanner: %s", err.Error())
+		log.Printf("bleGPSDevice: Error from scanner: %s", err.Error())
 	}
 }
 
 /**
 Coonect to our bluetooth device and listen on the RX channel for NMEA sentences
 **/
-func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) error {
+func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 	b.eh.Add()
 	defer b.eh.Done()
 
-	address, _ := bluetooth.ParseMAC(discoveredDeviceInfo.MAC)
+	address, _ := bluetooth.ParseMAC(ddi.MAC)
 	btAddress := bluetooth.MACAddress{MAC: address}
 
 	// Connect to device
+	// bluetooth.ConnectionParams{} is not even used in the Connect function
 	device, err := b.adapter.Connect(bluetooth.Address{MACAddress: btAddress}, bluetooth.ConnectionParams{})
 	if err != nil {
 		return err
@@ -146,23 +148,29 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 		return err
 	}
 
-	log.Printf("Connected to : %s", discoveredDeviceInfo.name)
+	log.Printf("bleGPSDevice: Connected to : %s", ddi.name)
 
 	// Create a TX Channel and send a connect discovery
 	TXChannel := make(chan []byte, 1)
 
 	GetServiceDiscovery().Send(DiscoveredDevice{
-		Name:      discoveredDeviceInfo.name,
+		Name:      ddi.name,
 		Content:   CONTENT_TX_CHANNEL | CONTENT_CONNECTED,
 		TXChannel: TXChannel,
 		Connected: true,
 	})
-	defer GetServiceDiscovery().Connected(discoveredDeviceInfo.name, false)
+	defer GetServiceDiscovery().Connected(ddi.name, false)
 
 	// Mutex + condition to sync the write/read routines
 	mutex := sync.Mutex{}
 	condition := sync.NewCond(&mutex)
 	defer condition.Signal() // This to give the below go routine a chance to exit when it's waiting for the condition
+
+	// Callback from the enable notification function
+	// This might (depends on underlaying implementation) run in a interrupt where we cannot allocate any heap
+	// we use a mutex with signal to copy the received dataset into a existing byte array for further processing
+	watchdogTimer := common.NewWatchDog(1000 * time.Millisecond)
+	defer watchdogTimer.Stop()
 
 	// variables for the NMEA parser
 	var receivedData []byte
@@ -176,8 +184,8 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 		for {
 			mutex.Lock()
 			condition.Wait()
-			if b.eh.IsExit() {
-				log.Printf("Exiting rxListener")
+			if watchdogTimer.IsTriggered() {
+				log.Printf("bleGPSDevice: watchdogTimer triggered, exiting")
 				return
 			}
 			for i := 0; i < len(receivedData); i++ {
@@ -196,11 +204,11 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 					thisOne := strings.Clone(string(byteArray[0:charPosition]))
 					select {
 					case b.rxMessageCh <- RXMessage{
-						Name:     discoveredDeviceInfo.name,
+						Name:     ddi.name,
 						NmeaLine: thisOne,
 					}:
 					default:
-						log.Printf("BLE rxMessageCh Full")
+						log.Printf("bleGPSDevice: rxMessageCh Full")
 					}
 				}
 
@@ -215,12 +223,6 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 			mutex.Unlock()
 		}
 	}()
-
-	// Callback from the enable notification function
-	// This might (depends on underlaying implementation) run in a interrupt where we cannot allocate any heap
-	// we use a mutex with signal to copy the received dataset into a existing byte array for further processing
-	watchdogTimer := common.NewWatchDog(1000 * time.Millisecond)
-	defer watchdogTimer.Stop()
 
 	// Listen for incomming traffic
 	enaNotifyErr := tx.EnableNotifications(func(value []byte) {
@@ -242,7 +244,7 @@ func (b *BleGPSDevice) rxListener(discoveredDeviceInfo discoveredDeviceInfo) err
 	case <-b.eh.C:
 		return nil
 	case <-watchdogTimer.C:
-		return nil
+		return errors.New("Watchdog timed out")
 	}
 }
 
@@ -253,7 +255,7 @@ func (b *BleGPSDevice) connectionMonitor() {
 	b.eh.Add()
 	defer b.eh.Done()
 
-	ticker := time.NewTicker(15000 * time.Millisecond)
+	ticker := time.NewTicker(15 * time.Second)
 	for {
 		select {
 		case <-b.eh.C:
@@ -263,20 +265,24 @@ func (b *BleGPSDevice) connectionMonitor() {
 				info := entry.Val
 
 				// When the device is not connected, we attemt to connect it again
-				if !info.Connected && info.Allowed {
-					info.Connected = true
-					b.discoveredDeviceList.Set(entry.Key, info)
-					go func(deviceToStart discoveredDeviceInfo) {
-						// Attempt to connect to a bluetooth device
-						err := b.rxListener(deviceToStart)
-						if err != nil {
-							// log.Printf("BLE device error : %s : %s", info.name, err.Error())
-						} else {
-							log.Printf("BLE device was finished %s", deviceToStart.name)
-						}
-						deviceToStart.Connected = false
-						b.discoveredDeviceList.Set(deviceToStart.MAC, deviceToStart)
-					}(info)
+				if info.Allowed {
+
+					if !info.Connected {
+						info.Connected = true
+						b.discoveredDeviceList.Set(entry.Key, info)
+						go func(deviceToStart discoveredDeviceInfo) {
+							// Attempt to connect to a bluetooth device
+							log.Printf("bleGPSDevice: connection attempt %s", deviceToStart.name)
+							err := b.rxListener(deviceToStart)
+							if err != nil {
+								log.Printf("bleGPSDevice: Device error : device:%s error=%s ", deviceToStart.name, err.Error())
+							} else {
+								log.Printf("bleGPSDevice: Device was finished %s", deviceToStart.name)
+							}
+							deviceToStart.Connected = false
+							b.discoveredDeviceList.Set(deviceToStart.MAC, deviceToStart)
+						}(info)
+					}
 				}
 			}
 		}
@@ -324,9 +330,9 @@ func (b *BleGPSDevice) GetConfig( ) map[string]interface{} {
 Put the Bluetooth controller in scanning mode and scan for comaptible devices
 */
 func (b *BleGPSDevice) Scan(leh *common.ExitHelper) {	
-	log.Printf("Start scanning Bluetooth LE devices")
+	log.Printf("bleGPSDevice: Start scanning Bluetooth LE devices")
 	b.startScanningBluetoothLEDevices(leh)
-	log.Printf("Stop scanning Bluetooth LE devices")
+	log.Printf("bleGPSDevice: Stop scanning Bluetooth LE devices")
 }
 
 /**
@@ -334,7 +340,7 @@ func (b *BleGPSDevice) Scan(leh *common.ExitHelper) {
 */
 func (b *BleGPSDevice) Run(deviceList map[string]interface{}) {
 	if err := b.adapter.Enable(); err != nil {
-		log.Printf("Failed to enable bluetooth LE adapter : %s", err.Error())
+		log.Printf("bleGPSDevice: Failed to enable bluetooth LE adapter : %s", err.Error())
 		return
 	}
 	b.setInitialConfiguration(deviceList)

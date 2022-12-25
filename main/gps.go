@@ -22,6 +22,7 @@ import (
 	"github.com/b3nn0/stratux/v2/common"
 	"github.com/b3nn0/stratux/v2/gps"
 	cmap "github.com/orcaman/concurrent-map/v2"
+	"golang.org/x/exp/slices"
 )
 
 // Array of NMEA lines we would always want to process from any attached GPS device
@@ -1131,7 +1132,7 @@ func (s *GPSDeviceManager) rxMessageHandler() {
 		ognPublishNmea(rxMessage.NmeaLine)
 
 		nmeaSlice := strings.Split(l_valid, ",")
-		if common.StringInSlice(nmeaSlice[0], alwaysProcessTheseNMEAs()) {
+		if slices.Contains(alwaysProcessTheseNMEAs(), nmeaSlice[0]) {
 			// Some commands that do not affect GPS location/time services can always and should be processed
 			processFlarmNmeaMessage(nmeaSlice)
 			if ok := s.processNMEALine(l_valid, discoveredDevice); ok {
