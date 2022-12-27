@@ -172,7 +172,6 @@ type GPSDeviceManager struct {
 	eh               *common.ExitHelper                  // Helper to quick various routines during reconfiguratios
 
 	rxMessageCh chan gps.RXMessage // Channel used by all GPS devices to receive NMEA data from
-	txMessageCh chan gps.TXMessage // Channel used to send a any device a message
 
 	systemTimeSetter  *gps.OSTimeSetter
 	discoveredDevices cmap.ConcurrentMap[string, gps.DiscoveredDevice]
@@ -196,7 +195,6 @@ func NewGPSDeviceManager() GPSDeviceManager {
 		eh:               common.NewExitHelper(),
 
 		rxMessageCh: make(chan gps.RXMessage, 20),
-		txMessageCh: make(chan gps.TXMessage, 20),
 
 		systemTimeSetter:  gps.GetOSTimeSetter(),
 		discoveredDevices: cmap.New[gps.DiscoveredDevice](),
@@ -601,10 +599,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, deviceDiscovery gps.Discove
 			}
 
 			// Request config
-			s.configureGPS(gps.TXMessage{
-				Message: common.MakeNMEACmd(fmt.Sprintf("PSRFC,?")),
-				Name:    deviceDiscovery.Name,
-			})
+			s.configureGPS(common.MakeNMEACmd(fmt.Sprintf("PSRFC,?")), deviceDiscovery.Name)
 			
 		}
 		return err == nil
@@ -643,10 +638,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, deviceDiscovery gps.Discove
 
 			if (sentence != l) {
 				log.Printf("WARNING: SoftRF incorrect for stratux, reconfiguring with %s", sentence)
-				s.configureGPS(gps.TXMessage{
-					Message: common.MakeNMEACmd(sentence),
-					Name:    deviceDiscovery.Name,
-				})
+				s.configureGPS(common.MakeNMEACmd(sentence), deviceDiscovery.Name)
 			}
 
 		}
@@ -818,16 +810,10 @@ func isTempPressValid2(mySitu SituationData) bool {
 func (s *GPSDeviceManager) requestOgnTrackerConfiguration(name string) {
 
 	// Request navrate of 5Hz
-	s.configureGPS(gps.TXMessage{
-		Message: []byte(common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n"),
-		Name:    name,
-	})
+	s.configureGPS([]byte(common.AppendNmeaChecksum("$POGNS,NavRate=5") + "\r\n"), name)
 
 	// Request stored OGN tracker configuration to be send back to us
-	s.configureGPS(gps.TXMessage{
-		Message: []byte(s.getOgnTrackerConfigQueryString()),
-		Name:    name,
-	})
+	s.configureGPS([]byte(s.getOgnTrackerConfigQueryString()), name)
 }
 
 // Get OGN string to configure OGN connected device with our settings
@@ -848,15 +834,9 @@ func (s *GPSDeviceManager) configureOgnTrackerFromSettings(name string) {
 	cfg := getOgnTrackerConfigString()
 	log.Printf("GPS: Configuring OGN Tracker: %s ", cfg)
 
-	s.configureGPS(gps.TXMessage{
-		Message: []byte(cfg),
-		Name:    name,
-	})
+	s.configureGPS([]byte(cfg), name)
 
-	s.configureGPS(gps.TXMessage{
-		Message: []byte(s.getOgnTrackerConfigQueryString()),
-		Name:    name,
-	})
+	s.configureGPS([]byte(s.getOgnTrackerConfigQueryString()), name)
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -939,11 +919,13 @@ func (s *GPSDeviceManager) anyGpsDevice(gpsSource uint16) (v GPSDeviceStatus, ok
 /**
 Send a message to an attached GPS
 */
-func (s *GPSDeviceManager) configureGPS(txMessage gps.TXMessage) {
-	select {
-	case s.txMessageCh <- txMessage:
-	default:
-		log.Printf("GPSDeviceManager: Failed to send message to GPS %s", txMessage.Name)
+func (s *GPSDeviceManager) configureGPS(message []byte , name string) {
+	if entry, ok := s.discoveredDevices.Get(name); ok {
+		if entry.Connected && entry.CanTX() {
+			entry.TXChannel <- message
+		} else if globalSettings.DEBUG {
+			log.Printf("Device %s does not have an TX Channel", name)
+		}
 	}
 }
 
@@ -1026,7 +1008,6 @@ func (s *GPSDeviceManager) maintainPreferredGPSDevice() {
 		select {
 		case <-decideTimer.C:
 			decidePreferredGPSDevice()
-			continue
 		case <-removeTimer.C:
 			removeOutdatedGPSDevices()
 		}
@@ -1038,7 +1019,8 @@ Maintain a list of configured and found GPS devices and set the list in globalSt
 Also start a go routine that will send messages to GPS devices
 */
 func (s *GPSDeviceManager) handleDeviceDiscovery() {
-	handleDeviceDiscovery := func(discoveredDevice gps.DiscoveredDevice) {
+	for {
+		discoveredDevice := <-gps.GetServiceDiscovery().C
 
 		if previous, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
 			discoveredDevice = gps.GetServiceDiscovery().Merge(previous, discoveredDevice)
@@ -1059,27 +1041,6 @@ func (s *GPSDeviceManager) handleDeviceDiscovery() {
 			})
 		}
 		globalStatus.GPS_Discovery = deviceList
-	}
-
-	sendGPSAMessage := func(message *gps.TXMessage) {
-		if entry, ok := s.discoveredDevices.Get(message.Name); ok {
-			if entry.Connected && entry.CanTX() {
-				entry.TXChannel <- []byte(message.Message)
-			} else if globalSettings.DEBUG {
-				log.Printf("Device %s does not have an TX Channel", entry.Name)
-			}
-		}
-	}
-
-	for {
-		select {
-		case discoveredDevice := <-gps.GetServiceDiscovery().C:
-			handleDeviceDiscovery(discoveredDevice)
-			break
-		case txConfig := <-s.txMessageCh:
-			sendGPSAMessage(&txConfig)
-			break
-		}
 	}
 }
 
@@ -1203,7 +1164,7 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 		}
 	}
 
-	timer := time.NewTicker(2000 * time.Millisecond)
+	timer := time.NewTicker(1000 * time.Millisecond)
 	for {
 		<-timer.C
 		checkAndReInit()
@@ -1254,7 +1215,11 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 }
 
 func (s *GPSDeviceManager) ScanDevices() {
-	s.scanMutex.Lock()
+	// Since this is called from the UI, we prevent multiple requests to scan for devices
+	if !s.scanMutex.TryLock() {
+		return
+	}
+
 	s.eh.Add()
 	leh := common.NewExitHelper();
 	defer func() {
@@ -1271,8 +1236,7 @@ func (s *GPSDeviceManager) ScanDevices() {
 	}
 	// Ticker to update the interface
 	ticker := time.NewTicker(1 * time.Second)
-	globalStatus.GPS_Scanning = TOTAL_SCAN_TIME_SEC
-	for globalStatus.GPS_Scanning > 0 {
+	for globalStatus.GPS_Scanning = TOTAL_SCAN_TIME_SEC; globalStatus.GPS_Scanning > 0; {
 		select {
 		case <- s.eh.C:
 			return
@@ -1293,6 +1257,5 @@ func (s *GPSDeviceManager) Run() {
 	go s.handleDeviceDiscovery()
 	for {
 		s.configureGPSSubsystems()
-		time.Sleep(10 * time.Millisecond)
 	}
 }

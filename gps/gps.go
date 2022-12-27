@@ -50,14 +50,6 @@ type RXMessage struct {
 	NmeaLine string // Received NMEA Line
 }
 
-/**
-Structure to be use to send a message to a GPS device, for example to configure it
-*/
-type TXMessage struct {
-	Message []byte // Message to send
-	Name    string // Unique name, for example SoftRF, uBlox9, or serial port name.. Used for display/logging
-}
-
 type DiscoveredDeviceDTO struct {
 	Name            string // Name of the device
 	MAC             string // MAC address of the device

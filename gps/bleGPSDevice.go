@@ -47,6 +47,7 @@ func NewBleGPSDevice(rxMessageCh chan<- RXMessage) BleGPSDevice {
 	}
 }
 
+const STARTUP_BLE_SCAN_TIME = 300	// Time to search for BLE devices after
 var (
 	HM_10_CONF, _ = bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
 	BLE_RX, _     = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
@@ -57,6 +58,8 @@ var (
 func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	leh.Add()
 	defer leh.Done()
+	b.eh.Add()
+	defer b.eh.Done()
 
 	type scanInfoResult struct {
 		MAC  string
@@ -70,6 +73,8 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	go func() {
 		for {
 			select {
+			case <-leh.C:
+				return
 			case <-b.eh.C:
 				b.adapter.StopScan()
 				return
@@ -345,6 +350,23 @@ func (b *BleGPSDevice) Run(deviceList map[string]interface{}) {
 	}
 	b.setInitialConfiguration(deviceList)
 	go b.connectionMonitor()
+	// Scan for any bluetooth for 5 minutes. We do this because when the BT did not 'see'any devices, it's impossible to connect
+	go func() {
+		b.eh.Add()
+		defer b.eh.Done()
+		log.Printf("bleGPSDevice: Scan BLE on startup for %d seconds", STARTUP_BLE_SCAN_TIME)
+		leh := common.NewExitHelper();
+		defer leh.Exit()
+		go b.startScanningBluetoothLEDevices(leh)
+		scanTime := time.NewTimer(STARTUP_BLE_SCAN_TIME * time.Second)
+		select {
+		case <- scanTime.C:
+			break
+		case <- b.eh.C:
+			break
+		}
+		log.Printf("bleGPSDevice: Start scanning Bluetooth LE devices")
+	}()
 }
 
 /**

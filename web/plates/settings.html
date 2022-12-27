@@ -370,12 +370,12 @@
                         <label class="control-label col-xs-5"></label>
                         <div class="col-xs-7">
                             <button ng-show="GPS_Scanning > 0" ng-disabled="true" class="btn btn-primary btn-sm">Scanning: {{GPS_Scanning}}</button>
-                            <button ng-show="GPS_Scanning == 0" ng-click="startScanning()" class="btn btn-primary btn-sm">Start Scanning</button>
+                            <button ng-show="GPS_Scanning == 0" ng-click="startScanning()" class="btn btn-primary btn-sm">Scan for BLE devices and connected allowed devices</button>
                         </div>
                     </div>
 
                     <div class="form-group reset-flow" ng-show="BleGPSEnabled">
-                        <label class="control-label col-xs-5">Devices:</label>
+                        <label class="control-label col-xs-5">Found devices:</label>
                         <div class="col-xs-12" style="display: table;">
                             <div ng-repeat="d in GPS_Discovery"  ng-show="d.GPSSource == 2" style="display: table-row;">
                                 <div style="display:table-cell;padding:5px">{{d.Name}}</div>
