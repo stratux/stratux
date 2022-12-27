@@ -173,8 +173,11 @@ cp -f rtl-sdr-blacklist.conf /etc/modprobe.d/
 #system tweaks
 cp -f modules.txt /etc/modules
 
-#bthelper 
+#bthelper needs a small modification in startup order
 cp -f bthelper@.service /lib/systemd/system
+
+# Disable caching that seems to really mess up connecting and service discovery
+sed -i 's/^Cache[ ]\{0,\}=.*$/Cache = no/g' /etc/bluetooth/main.conf
 
 #boot settings
 cp -f config.txt /boot/
