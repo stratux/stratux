@@ -1218,7 +1218,7 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 	<-s.eh.C
 }
 
-func (s *GPSDeviceManager) ScanDevices() {
+func (s *GPSDeviceManager) ScanDevices(totalScanTime uint) {
 	// Since this is called from the UI, we prevent multiple requests to scan for devices
 	if !s.scanMutex.TryLock() {
 		return
@@ -1233,14 +1233,13 @@ func (s *GPSDeviceManager) ScanDevices() {
 		log.Printf("GPS: ScanDevices: Done")
 		s.scanMutex.Unlock()
 	}()
-	const TOTAL_SCAN_TIME_SEC = 30
 	log.Printf("GPS: ScanDevices: Started")
-	for _, o := range s.deviceList {
-		go o.Scan(leh)
+	for _, device := range s.deviceList {
+		go device.Scan(leh)
 	}
 	// Ticker to update the interface
 	ticker := time.NewTicker(1 * time.Second)
-	for globalStatus.GPS_Scanning = TOTAL_SCAN_TIME_SEC; globalStatus.GPS_Scanning > 0; {
+	for globalStatus.GPS_Scanning = totalScanTime; globalStatus.GPS_Scanning > 0; {
 		select {
 		case <- s.eh.C:
 			return
@@ -1259,6 +1258,15 @@ func (s *GPSDeviceManager) Run() {
 	go s.rxMessageHandler()
 	go s.maintainPreferredGPSDevice()
 	go s.handleDeviceDiscovery()
+
+	// Scan for any devices for 5 minutes. We do this because when the BT did not 'see'any devices, it's impossible to connect
+	// Possible other devices might require this aswell	
+	go func() {
+		time.Sleep(1*time.Second)
+		log.Printf("gps: Startup GPS scan for devices")
+		s.ScanDevices(300)
+	}()
+
 	for {
 		s.configureGPSSubsystems()
 	}

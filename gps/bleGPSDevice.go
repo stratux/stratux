@@ -346,23 +346,6 @@ func (b *BleGPSDevice) Run(deviceList map[string]interface{}) {
 	}
 	b.setInitialConfiguration(deviceList)
 	go b.connectionMonitor()
-	// Scan for any bluetooth for 5 minutes. We do this because when the BT did not 'see'any devices, it's impossible to connect
-	go func() {
-		b.eh.Add()
-		defer b.eh.Done()
-		log.Printf("bleGPSDevice: Scan BLE on startup for %d seconds", STARTUP_BLE_SCAN_TIME)
-		leh := common.NewExitHelper();
-		defer leh.Exit()
-		go b.startScanningBluetoothLEDevices(leh)
-		scanTime := time.NewTimer(STARTUP_BLE_SCAN_TIME * time.Second)
-		select {
-		case <- scanTime.C:
-			break
-		case <- b.eh.C:
-			break
-		}
-		log.Printf("bleGPSDevice: Stop Scan BLE on startup")
-	}()
 }
 
 /**

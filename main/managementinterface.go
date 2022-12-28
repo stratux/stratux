@@ -721,7 +721,7 @@ func handleDownloadLogRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleScanDevices(w http.ResponseWriter, r *http.Request) {
-	go gpsDeviceManager.ScanDevices()
+	go gpsDeviceManager.ScanDevices(30)
 }	
 
 func handleDownloadAHRSLogsRequest(w http.ResponseWriter, r *http.Request) {
