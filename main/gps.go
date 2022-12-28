@@ -922,7 +922,11 @@ Send a message to an attached GPS
 func (s *GPSDeviceManager) configureGPS(message []byte , name string) {
 	if entry, ok := s.discoveredDevices.Get(name); ok {
 		if entry.Connected && entry.CanTX() {
-			entry.TXChannel <- message
+			select {
+			case entry.TXChannel <- message:
+			default:
+				log.Printf("Device %s is not processing TXChannel messages", name)
+			}
 		} else if globalSettings.DEBUG {
 			log.Printf("Device %s does not have an TX Channel", name)
 		}

@@ -60,6 +60,7 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	defer leh.Done()
 	b.eh.Add()
 	defer b.eh.Done()
+	defer b.adapter.StopScan()
 
 	type scanInfoResult struct {
 		MAC  string
@@ -76,7 +77,6 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 			case <-leh.C:
 				return
 			case <-b.eh.C:
-				b.adapter.StopScan()
 				return
 			case address := <- scanInfoCh:
 				// Only allow names we see in our list in our allowed list
@@ -155,13 +155,9 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 
 	log.Printf("bleGPSDevice: Connected to : %s", ddi.name)
 
-	// Create a TX Channel and send a connect discovery
-	TXChannel := make(chan []byte, 1)
-
 	GetServiceDiscovery().Send(DiscoveredDevice{
 		Name:      ddi.name,
-		Content:   CONTENT_TX_CHANNEL | CONTENT_CONNECTED,
-		TXChannel: TXChannel,
+		Content:   CONTENT_CONNECTED,
 		Connected: true,
 	})
 	defer GetServiceDiscovery().Connected(ddi.name, false)
@@ -365,7 +361,7 @@ func (b *BleGPSDevice) Run(deviceList map[string]interface{}) {
 		case <- b.eh.C:
 			break
 		}
-		log.Printf("bleGPSDevice: Start scanning Bluetooth LE devices")
+		log.Printf("bleGPSDevice: Stop Scan BLE on startup")
 	}()
 }
 
