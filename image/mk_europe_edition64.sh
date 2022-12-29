@@ -6,9 +6,9 @@
 # Run this script as root.
 # Run with argument "dev" to not clone the stratux repository from remote, but instead copy this current local checkout onto the image
 set -x
-BASE_IMAGE_URL="https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2022-04-07/2022-04-04-raspios-bullseye-arm64-lite.img.xz"
-ZIPNAME="2022-04-04-raspios-bullseye-arm64-lite.img.xz"
-IMGNAME="$(basename $ZIPNAME .xz)"
+BASE_IMAGE_URL="https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2022-09-26/2022-09-22-raspios-bullseye-arm64-lite.img.xz"
+ZIPNAME="$(basename $BASE_IMAGE_URL)"
+IMGNAME="$(basename $BASE_IMAGE_URL .xz)"
 TMPDIR="$HOME/stratux-tmp"
 REMOTE_ORIGIN=$(git config --get remote.origin.url)
 
@@ -44,7 +44,7 @@ bootoffset=$(( 512*bootoffset ))
 
 # Original image partition is too small to hold our stuff.. resize it to 2.5gb
 # Append one GB and truncate to size
-truncate -s 3500M $IMGNAME || die "Image resize failed"
+truncate -s 3000M $IMGNAME || die "Image resize failed"
 lo=$(losetup -f)
 losetup $lo $IMGNAME
 partprobe $lo

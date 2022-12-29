@@ -177,7 +177,7 @@ cp -f modules.txt /etc/modules
 cp -f bthelper@.service /lib/systemd/system
 
 # Disable caching that seems to really mess up connecting and service discovery
-sed -i 's/^#\{0,1\}Cache[ ]\{0,\}=.*$/Cache = no/g' /etc/bluetooth/main.conf
+sed -i 's/^#\{0,1\}Cache[ ]\{0,1\}=.*$/Cache = no/g' /etc/bluetooth/main.conf
 
 #boot settings
 cp -f config.txt /boot/
