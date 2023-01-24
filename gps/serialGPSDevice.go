@@ -125,11 +125,32 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		deviceType: GPS_TYPE_SOFTRF_DONGLE,
 		afterConnectFunc: writeSoftRFDongleConfigCommands})
 	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/ttyAMA0", 
+		serialPort: "/dev/ttyAMA0", // t-beam appears on these
 		name: "ttyAMA0", 
 		baudRate: []int{115200, 9600, 38400}, 
 		timeOffsetPPS: 100 * time.Millisecond, 
 		deviceType: GPS_TYPE_UART,
+		afterConnectFunc: writeUARTConfigCommands})
+	all = append(all, SerialDiscoveryConfig{
+		serialPort: "/dev/ttyAMA1", // t-beam appears on these
+		name: "ttyAMA1", 
+		baudRate: []int{115200, 9600, 38400}, 
+		timeOffsetPPS: 100 * time.Millisecond, 
+		deviceType: GPS_TYPE_UART,
+		afterConnectFunc: writeUARTConfigCommands})
+		all = append(all, SerialDiscoveryConfig{
+		serialPort: "/dev/ttyACM0",  // Arduino and alike appears here
+		name: "ttyACM0", 
+		baudRate: []int{115200, 9600, 38400}, 
+		timeOffsetPPS: 100 * time.Millisecond, 
+		deviceType: GPS_TYPE_SERIAL,
+		afterConnectFunc: writeUARTConfigCommands})
+	all = append(all, SerialDiscoveryConfig{
+		serialPort: "/dev/ttyACM1",  // Arduino and alike appears here
+		name: "ttyACM1", 
+		baudRate: []int{115200, 9600, 38400}, 
+		timeOffsetPPS: 100 * time.Millisecond, 
+		deviceType: GPS_TYPE_SERIAL,
 		afterConnectFunc: writeUARTConfigCommands})
 	return all
 }
