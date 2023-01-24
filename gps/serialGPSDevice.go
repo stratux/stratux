@@ -13,6 +13,7 @@ package gps
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -82,34 +83,6 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		deviceType: GPS_TYPE_UBX6,
 		reOpenPort: true,
 		afterConnectFunc: writeUblox6_7ConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/prolific0", 
-		name: "prolific0", 
-		baudRate: []int{4800, 38400, 9600}, 
-		timeOffsetPPS: 100 * time.Millisecond, 
-		deviceType: GPS_TYPE_PROLIFIC,
-		afterConnectFunc: writeProlificConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/prolific1", 
-		name: "prolific1", 
-		baudRate: []int{4800, 38400, 9600}, 
-		timeOffsetPPS: 100 * time.Millisecond,
-		deviceType: GPS_TYPE_PROLIFIC,
-		afterConnectFunc: writeProlificConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/ttyUSB0", 
-		name: "ttyUSB0", 
-		baudRate: []int{115200, 9600, 38400}, 
-		timeOffsetPPS: 100 * time.Millisecond,
-		deviceType: GPS_TYPE_SERIAL,
-		afterConnectFunc: writeSerialInConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/ttyUSB1", 
-		name: "ttyUSB1", 
-		baudRate: []int{115200, 9600, 38400}, 
-		timeOffsetPPS: 100 * time.Millisecond,
-		deviceType: GPS_TYPE_SERIAL,
-		afterConnectFunc: writeSerialInConfigCommands})
 	// all = append(all, SerialDiscoveryConfig{
 	// 	serialPort: "/dev/serialin", 
 	// 	name: "serialIn", 
@@ -124,34 +97,46 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 		timeOffsetPPS: 100 * time.Millisecond,
 		deviceType: GPS_TYPE_SOFTRF_DONGLE,
 		afterConnectFunc: writeSoftRFDongleConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/ttyAMA0", // t-beam appears on these
-		name: "ttyAMA0", 
-		baudRate: []int{115200, 9600, 38400}, 
-		timeOffsetPPS: 100 * time.Millisecond, 
-		deviceType: GPS_TYPE_UART,
-		afterConnectFunc: writeUARTConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/ttyAMA1", // t-beam appears on these
-		name: "ttyAMA1", 
-		baudRate: []int{115200, 9600, 38400}, 
-		timeOffsetPPS: 100 * time.Millisecond, 
-		deviceType: GPS_TYPE_UART,
-		afterConnectFunc: writeUARTConfigCommands})
+	for i := 0; i < 2; i++ {
+		port := fmt.Sprintf("prolific%d", i)
 		all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/ttyACM0",  // Arduino and alike appears here
-		name: "ttyACM0", 
-		baudRate: []int{115200, 9600, 38400}, 
-		timeOffsetPPS: 100 * time.Millisecond, 
-		deviceType: GPS_TYPE_SERIAL,
-		afterConnectFunc: writeUARTConfigCommands})
-	all = append(all, SerialDiscoveryConfig{
-		serialPort: "/dev/ttyACM1",  // Arduino and alike appears here
-		name: "ttyACM1", 
-		baudRate: []int{115200, 9600, 38400}, 
-		timeOffsetPPS: 100 * time.Millisecond, 
-		deviceType: GPS_TYPE_SERIAL,
-		afterConnectFunc: writeUARTConfigCommands})
+			serialPort: "/dev/"+port, 
+			name: port, 
+			baudRate: []int{4800, 38400, 9600}, 
+			timeOffsetPPS: 100 * time.Millisecond,
+			deviceType: GPS_TYPE_PROLIFIC,
+			afterConnectFunc: writeProlificConfigCommands})
+	}
+	for i := 0; i < 10; i++ {
+		port := fmt.Sprintf("ttyUSB%d", i)
+		all = append(all, SerialDiscoveryConfig{
+			serialPort: "/dev/"+port, 
+			name: port, 
+			baudRate: []int{115200, 9600, 38400}, 
+			timeOffsetPPS: 100 * time.Millisecond,
+			deviceType: GPS_TYPE_SERIAL,
+			afterConnectFunc: writeSerialInConfigCommands})
+	}
+	for i := 0; i < 10; i++ {
+		port := fmt.Sprintf("ttyAMA%d", i)
+		all = append(all, SerialDiscoveryConfig{
+			serialPort: "/dev/"+port,  // Arduino and alike appears here
+			name: port, 
+			baudRate: []int{115200, 9600, 38400}, 
+			timeOffsetPPS: 100 * time.Millisecond, 
+			deviceType: GPS_TYPE_UART,
+			afterConnectFunc: writeUARTConfigCommands})
+	}		
+	for i := 0; i < 10; i++ {
+		port := fmt.Sprintf("ttyACM%d", i)
+		all = append(all, SerialDiscoveryConfig{
+			serialPort: "/dev/"+port,  // Arduino and alike appears here
+			name: port, 
+			baudRate: []int{115200, 9600, 38400}, 
+			timeOffsetPPS: 100 * time.Millisecond, 
+			deviceType: GPS_TYPE_SERIAL,
+			afterConnectFunc: writeUARTConfigCommands})
+	}
 	return all
 }
 
