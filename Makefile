@@ -84,7 +84,8 @@ optinstall: www ogn/ddb.json
 	# OGN stuff
 	cp -f ogn/ddb.json ogn/esp32-ogn-tracker-bin-*.zip ogn/install-ogntracker-firmware-pi.sh ogn/fetch_ddb.sh $(STRATUX_HOME)/ogn
 
-	# SoftRF stuff
+	# SoftRF stuff	
+	curl -L https://github.com/rvt/SoftRF/releases/latest/download/SoftRF-esp32.zip --output $(STRATUX_HOME)/SoftRF/SoftRF-esp32.zip
 	cp -f SoftRF/esptool.py SoftRF/install-SoftRF-Stratux-firmware.sh $(STRATUX_HOME)/SoftRF
 
 	# Scripts
