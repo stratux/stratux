@@ -26,10 +26,6 @@ apt clean
 PATH=/root/fake:$PATH apt install --yes pi-bluetooth bluetooth bluez bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
     libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables
 
-#PATH=/root/fake:$PATH apt install --yes pi-bluetooth bluetooth bluez bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
-#    libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables \
-#    libglib2.0-dev libdbus-1-dev libudev-dev libical-dev libreadline-dev python3-docutils
-
 # Add bluetooth group to pi user so it can use the bluetoothstack
 usermod -G bluetooth -a pi
 
@@ -105,14 +101,6 @@ make -j8
 make install
 cd /root && rm -rf kalibrate-rtl
 
-# Install bluez 5.65
-# https://github.com/muka/go-bluetooth
-#wget http://www.kernel.org/pub/linux/bluetooth/bluez-5.65.tar.xz
-#tar xvf bluez-5.65.tar.xz
-#cd bluez-5.65
-#./configure --exec_prefix=/usr --disable-static
-#make -j4
-#make install
 
 # Prepare wiringpi for ogn trx via GPIO
 cd /root && git clone https://github.com/WiringPi/WiringPi.git
@@ -172,12 +160,6 @@ cp -f rtl-sdr-blacklist.conf /etc/modprobe.d/
 
 #system tweaks
 cp -f modules.txt /etc/modules
-
-#bthelper needs a small modification in startup order
-cp -f bthelper@.service /lib/systemd/system
-
-# Disable caching that seems to really mess up connecting and service discovery
-sed -i 's/^#\{0,1\}Cache[ ]\{0,1\}=.*$/Cache = no/g' /etc/bluetooth/main.conf
 
 #boot settings
 cp -f config.txt /boot/

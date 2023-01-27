@@ -11,8 +11,6 @@ endif
 
 ifeq ($(debug),true)
 	BUILDINFO := -gcflags '-N -l' $(BUILDINFO)
-else
-	BUILDINFO := -ldflags='-s -w' $(BUILDINFO)
 endif
 
 ARCH=$(shell arch)

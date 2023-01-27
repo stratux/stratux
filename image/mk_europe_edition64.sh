@@ -60,6 +60,7 @@ mkdir -p mnt
 mount -t ext4 ${lo}p2 mnt/ || die "root-mount failed"
 mount -t vfat ${lo}p1 mnt/boot || die "boot-mount failed"
 
+
 cd mnt/root/
 if [ "$1" == "dev" ]; then
     rsync -av --progress --exclude=ogn/esp-idf $SRCDIR ./
