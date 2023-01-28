@@ -107,7 +107,9 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 }
 
 func (n *NetworkDevice) Stop() {
+	log.Printf("Stopping Network service")
 	n.eh.Exit()
+	log.Printf("... Network service stopped")
 }
 
 func (n *NetworkDevice) Scan(leh *common.ExitHelper) {

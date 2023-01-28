@@ -352,5 +352,7 @@ func (b *BleGPSDevice) Run(deviceList map[string]interface{}) {
 * Stop the BLE Service and all go routines
 */
 func (b *BleGPSDevice) Stop() {
+	log.Printf("Stopping BLE service")
 	b.eh.Exit()
+	log.Printf("... BLE service stopped")
 }

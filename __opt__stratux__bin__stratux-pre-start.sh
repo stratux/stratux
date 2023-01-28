@@ -2,6 +2,9 @@
 
 #echo powersave >/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
+
+
+
 #Logging Function
 SCRIPT=`basename ${BASH_SOURCE[0]}`
 STX_LOG="/var/log/stratux.log"
@@ -9,6 +12,16 @@ function wLog () {
 	echo "$(date +"%Y/%m/%d %H:%M:%S")  - $SCRIPT - $1" >> ${STX_LOG}
 }
 wLog "Running Stratux Updater Script."
+
+
+# Fix for https://github.com/RPi-Distro/pi-bluetooth/issues/8
+# This is a workaround for the bluetooth stack not starting properly
+BleGPSEnabled=$(cat /boot/stratux.conf | jq '.BleGPSEnabled // false')
+if [ "$BleGPSEnabled" = "true" ]; then
+        wLog "Restarting bluetooth stack"
+        hciconfig hci0 down
+		systemctl restart bluetooth
+fi
 
 SCRIPT_MASK="update*stratux*v*.sh"
 TEMP_LOCATION="/boot/StratuxUpdates/$SCRIPT_MASK"

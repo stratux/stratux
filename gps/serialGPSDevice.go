@@ -593,7 +593,9 @@ func (s *SerialGPSDevice) deviceDiscovery() {
 Request to stop all goroutines and stop serial/GPS
 */
 func (s *SerialGPSDevice) Stop() {
+	log.Printf("Stopping Serial service")
 	s.eh.Exit()
+	log.Printf("... Serial service stopped")
 }
 
 func (n *SerialGPSDevice) Scan(leh *common.ExitHelper) {
