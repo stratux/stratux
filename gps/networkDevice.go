@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/b3nn0/stratux/v2/common"
+	"go.uber.org/ratelimit"
 )
 
 type NetworkDevice struct {
@@ -48,6 +49,7 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 		ln.Close()
 	}()
 
+	rl := ratelimit.New(1, ratelimit.Per(4*time.Second))
 	for {
 		conn, err := ln.Accept()
 		if n.eh.IsExit() {
@@ -58,7 +60,7 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 		} else {
 			go n.handleNmeaInConnection(conn)
 		}
-		time.Sleep(250 * time.Millisecond)
+		rl.Take()
 	}	
 }
 
@@ -66,8 +68,13 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 	n.eh.Add()
 	defer n.eh.Done()
 
-	reader := bufio.NewReader(c)
+	go func() {
+		<- n.eh.C
+		c.Close()
+	}()
+
 	remoteAddress := c.RemoteAddr().String()
+	log.Printf("Connecting network GPS device : %s\n", remoteAddress)
 
 	GetServiceDiscovery().Send(DiscoveredDevice{
 		Name:               remoteAddress,
@@ -78,24 +85,17 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 		GPSTimeOffsetPPS:   100.0 * time.Millisecond,
 	})
 
-	log.Printf("Connecting network GPS device : %s\n", c.RemoteAddr().String())
-
-	go func() {
-		<- n.eh.C
-		c.Close()
-	}()
-
+	reader := bufio.NewReader(c)
 	for {
 		line, err := reader.ReadString('\r')
 		if err != nil {
 			break
 		}
-		trimedLine := strings.TrimSpace(line)
-		if len(trimedLine) > 0 {
+		if line = strings.TrimSpace(line); len(line) > 0 {
 			select {
 			case n.rxMessageCh <- RXMessage{
 				Name:     remoteAddress,
-				NmeaLine: trimedLine,
+				NmeaLine: line,
 			}:
 			default:
 				log.Printf("Network rxMessageCh Full")
@@ -103,7 +103,7 @@ func (n *NetworkDevice) handleNmeaInConnection(c net.Conn) {
 		}
 	}
 	GetServiceDiscovery().Connected(remoteAddress, false)
-	log.Printf("Disconnecting network GPS device : %s\n", c.RemoteAddr().String())
+	log.Printf("Disconnecting network GPS device : %s\n", remoteAddress)
 }
 
 func (n *NetworkDevice) Stop() {

@@ -77,7 +77,7 @@ func (s *OSTimeSetter) setSystemTime(gpsTime time.Time, o time.Duration, i strin
 
 	// Set OS time, other option could be using a syscall, but might not awlays work on all systems?
 	setStr := gpsTime.Add(o).Format("20060102 15:04:05.000") + " UTC"
-	if (i != "Calibration") { // Just so we do not full ip the log
+	if (i != "Calibration") { // Just so we do not full up the log
 		log.Printf("%s is changing system time from %s to: '%s' difference %s\n", i, time.Now().UTC().Format("20060102 15:04:05.000"), gpsTime.UTC().Format("20060102 15:04:05.000"), time.Since(gpsTime))
 	}
 	var err error

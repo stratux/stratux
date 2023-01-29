@@ -85,6 +85,8 @@ optinstall: www ogn/ddb.json
 	# SoftRF stuff	
 	curl -L https://github.com/rvt/SoftRF/releases/latest/download/SoftRF-esp32.zip --output $(STRATUX_HOME)/SoftRF/SoftRF-esp32.zip
 	cp -f SoftRF/esptool.py SoftRF/install-SoftRF-Stratux-firmware.sh $(STRATUX_HOME)/SoftRF
+	# We do not use uart for bluetooth
+	systemctl disable hciuart
 
 	# Scripts
 	cp __opt__stratux__bin__stratux-pre-start.sh $(STRATUX_HOME)/bin/stratux-pre-start.sh

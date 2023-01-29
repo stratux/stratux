@@ -89,7 +89,7 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 	// 	baudRate: []int{115200, 9600, 38400}, 
 	// 	timeOffsetPPS: 100 * time.Millisecond,
 	// 	deviceType: GPS_TYPE_SERIAL,
-	// 	afterConnectFunc: writeSerialInConfigCommands})
+	// 	afterConnectFunc: writeSerialNOPCommands})
 	all = append(all, SerialDiscoveryConfig{
 		serialPort: "/dev/softrf_dongle", 
 		name: "softrf_dongle", 
@@ -115,7 +115,7 @@ func deviceDiscoveryConfig() []SerialDiscoveryConfig {
 			baudRate: []int{115200, 9600, 38400}, 
 			timeOffsetPPS: 100 * time.Millisecond,
 			deviceType: GPS_TYPE_SERIAL,
-			afterConnectFunc: writeSerialInConfigCommands})
+			afterConnectFunc: writeSerialNOPCommands})
 	}
 	for i := 0; i < 10; i++ {
 		port := fmt.Sprintf("ttyAMA%d", i)
@@ -194,17 +194,26 @@ func makeUBXCFG(class, id byte, msglen uint16, msg []byte) []byte {
 }
 
 func (s *SerialGPSDevice) detectAndOpenSerialPort(device SerialDiscoveryConfig) (*(serial.Port)) {
+	rl := ratelimit.New(1, ratelimit.Per(2*time.Second))
 	for _, baud := range device.baudRate {
+		// test if serial port exists on OS level
+		if _, err := os.Stat(device.serialPort); err != nil { 
+			continue
+		}
+
+		rl.Take()
+
+		// If it exists, try to use it
 		serialConfig := serial.Config{Name: device.serialPort, Baud: baud, ReadTimeout: time.Millisecond * 2500}
 		p, err := serial.OpenPort(&serialConfig)
 		if err != nil {
 			continue
 		}
-		time.Sleep(2 * time.Second)
+		// If it works, try to read NMEA data from it if we find NEMA we are connected
 		buffer := make([]byte, 10000)
 		n, err := p.Read(buffer)
 		if (n!=0 && err==nil) {
-			splitted := strings.Split(string(buffer), "\n")
+			splitted := strings.Split(string(buffer), "\n")			
 			for _, line := range splitted {
 				_, validNMEAcs := common.ValidateNMEAChecksum(line)
 				if validNMEAcs {
@@ -214,12 +223,11 @@ func (s *SerialGPSDevice) detectAndOpenSerialPort(device SerialDiscoveryConfig) 
 			}
 		}
 		p.Close()
-		time.Sleep(250 * time.Millisecond)
 	}
 	return nil
 }
 
-func writeSerialInConfigCommands(p * serial.Port) {
+func writeSerialNOPCommands(p * serial.Port) {
 	// NOP
 }
 
@@ -410,40 +418,32 @@ and will send out discovery messages
 When a OGN tracker is detecdted it will configure as ublox8
 */
 func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
-	s.eh.Add()
-	defer s.eh.Done()
-	// test if serial port exists on OS level
-	if _, err := os.Stat(device.serialPort); err != nil { 
-		// log.Printf("Serial port does not exist: %s", device.serialPort)
-		return nil // errors.New("Serial port does not exist")
-	}
 
 	serialPort := s.detectAndOpenSerialPort(device)
 	if serialPort != nil {
+
+		// Close and Re-Open if requested
+		// The GPS might have been configured on a different baudrate after calling afterConnectFunc
 		if device.afterConnectFunc!=nil && device.reOpenPort {
 			device.afterConnectFunc(serialPort)
-			// Close and Re-Open, the GPS might have been configured on a different baudrate after calling afterConnectFunc
 			serialPort.Close()
 			serialPort = s.detectAndOpenSerialPort(device)
 			if (serialPort == nil) {
 				return errors.New("Failed to detect serial port after initialisation")
 			}
 		}
+		s.eh.Add()
+		defer s.eh.Done()
+
 		go func() {
 			<- s.eh.C
 			serialPort.Close()
+			GetServiceDiscovery().Connected(device.name, false)
 		}()
 
 		log.Printf("Found GPS device %s\n", device.name)
 
 		ognTrackerConfigured := false
-		// Watchdog time is user to detect any GPS that is not communicating, When no data was received for 5000ms it will request to stop
-		// this serial port and bail out.
-		readerWatchdog := common.NewWatchDog(5000 * time.Millisecond)
-		defer func() {
-			readerWatchdog.Stop()
-			GetServiceDiscovery().Connected(device.name, false)
-		}()
 
 		TXChannel := make(chan []byte, 10) // Create a unblocking channel to receive TX messages on to send to GPS
 		GetServiceDiscovery().Send(DiscoveredDevice{
@@ -460,8 +460,12 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 		serialReader := func() {
 			i := 0 //debug monitor
 			scanner := bufio.NewScanner(serialPort)
-			for scanner.Scan() && !s.eh.IsExit() && !readerWatchdog.IsTriggered() {
-				readerWatchdog.Poke()
+			for scanner.Scan() {
+				
+				if scanner.Err() != nil {
+					return
+				}
+				
 				i++
 				if s.DEBUG && i%100 == 0 {
 					log.Printf("scanner loop iteration i=%d\n", i) // debug monitor
@@ -505,9 +509,6 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 					log.Printf("Serial rxMessageCh Full")
 				}
 			}
-			if err := scanner.Err(); err != nil {
-				log.Printf("reading standard input: %s\n", err.Error())
-			}
 
 			if s.DEBUG {
 				log.Printf("Exiting serialGPSReader() after i=%d loops\n", i) // debug monitor
@@ -520,12 +521,10 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 
 		serialWriter := func() {
 			localQh.Add()
-			defer func() {
-				localQh.Done()
-			}()
+			defer localQh.Done()
 			// Rate limited to ensure we only do 2 messages per second over serial port
 			// We currently assume we will never send a lot of commands to any serial device
-			rl := ratelimit.New(1, ratelimit.Per(2*time.Second))
+			rl := ratelimit.New(1, ratelimit.Per(4*time.Second))
 			for {
 				select {
 				case <-localQh.C:
