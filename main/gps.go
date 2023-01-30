@@ -1183,7 +1183,7 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 	defer s.eh.Done()
 	s.ognTrackerConfigured = false // Bit of a hack to reset OGN detection here...
 	defer func() {
-		log.Printf("GPS: configureGPSSubsystems stopping")
+		log.Printf("GPS: configureGPSSubsystems Stopping")
 		for _, o := range s.deviceList {
 			o.Stop()
 		}
@@ -1258,14 +1258,6 @@ func (s *GPSDeviceManager) Run() {
 	go s.rxMessageHandler()
 	go s.maintainPreferredGPSDevice()
 	go s.handleDeviceDiscovery()
-
-	// Scan for any devices for 5 minutes. We do this because when the BT did not 'see'any devices, it's impossible to connect
-	// Possible other devices might require this aswell	
-	go func() {
-		time.Sleep(1*time.Second)
-		log.Printf("gps: Startup GPS scan for devices")
-		s.ScanDevices(300)
-	}()
 
 	for {
 		s.configureGPSSubsystems()

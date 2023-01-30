@@ -56,10 +56,10 @@ var (
 // startScanningBluetoothLEDevices will scan for any nearby devices add notifies them on the scanInfoResult for any found devices
 // Sometimes we get CRC errors from a attached GPS device that will look like this :GPS error. Invalid NMEA string: Checksum failed. Calculated 0X7F; expected 0X68 $GPGSV,3,1,10,01,15,256,,08,72,282,,10,50*68
 func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
-	leh.Add()
-	defer leh.Done()
 	b.eh.Add()
 	defer b.eh.Done()
+	leh.Add()
+	defer leh.Done()
 	defer b.adapter.StopScan()
 
 	type scanInfoResult struct {
@@ -70,55 +70,63 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	// These BlueTooth callback functions are sensetive to memry allocations so we use a scannel for it
 	scanInfoCh := make(chan scanInfoResult, 5)
 
-	// Start a go routine to listen for scan results
-	go func() {
-		for {
-			select {
-			case <-leh.C:
-				return
-			case <-b.eh.C:
-				return
-			case address := <- scanInfoCh:
-				// Only allow names we see in our list in our allowed list
-				added := b.discoveredDeviceList.SetIfAbsent(address.MAC, discoveredDeviceInfo{Connected: false, Allowed: false, MAC: address.MAC, name: address.name})
-				if added {
-					log.Printf("bleGPSDevice: Device %s found", address.name)
 	
-					GetServiceDiscovery().Send(DiscoveredDevice{
-						Name:             address.name,
-						MAC:			  address.MAC,
-						Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
-						GPSDetectedType:  GPS_TYPE_BLUETOOTH,
-						GPSSource:        GPS_SOURCE_BLUETOOTH,
-						GPSTimeOffsetPPS: 200 * time.Millisecond,
-					})
+	// Start a go routine to listen for scan results
+	scanner := func (done chan bool) {
+		// Scan is blocking, keep that in mind so we do not exit this function
+		err := b.adapter.Scan(
+			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {						
+				select {
+				case <-done:
+					adapter.StopScan()
+					break
+				default:
+					// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
+					if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && 
+						result.Address != nil {
+
+						// LocalName is the (complete or shortened) local name of the device.
+						// many devices do not broadcast a local name, but may
+						// broadcast other data (e.g. manufacturer data or service UUIDs) with which
+						// they may be identified.
+						var name = result.LocalName()
+						if (strings.TrimSpace(result.LocalName()) == "" ) {
+							name = result.Address.String()
+						}
+
+						scanInfoCh <- scanInfoResult{result.Address.String(), name}
+					}
 				}
+			})		
+		if err != nil {
+			log.Printf("bleGPSDevice: Error from scanner: %s", err.Error())
+		}
+	}
+
+	done := make(chan bool)
+	defer close(done)
+	go scanner(done)
+	for {
+		select {
+		case <-b.eh.C:
+		case <-leh.C:
+			return
+		case address := <- scanInfoCh:
+			// Only allow names we see in our list in our allowed list
+			added := b.discoveredDeviceList.SetIfAbsent(address.MAC, discoveredDeviceInfo{Connected: false, Allowed: false, MAC: address.MAC, name: address.name})
+			if added {
+				log.Printf("bleGPSDevice: Device %s found", address.name)
+
+				GetServiceDiscovery().Send(DiscoveredDevice{
+					Name:             address.name,
+					MAC:			  address.MAC,
+					Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
+					GPSDetectedType:  GPS_TYPE_BLUETOOTH,
+					GPSSource:        GPS_SOURCE_BLUETOOTH,
+					GPSTimeOffsetPPS: 200 * time.Millisecond,
+				})
 			}
 		}
-	}()
-
-	// Scan is blocking, keep that in mind so we do not exit this function
-	err := b.adapter.Scan(
-		func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-			// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
-			if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && 
-				result.Address != nil {
-
-				// LocalName is the (complete or shortened) local name of the device.
-				// Please note that many devices do not broadcast a local name, but may
-				// broadcast other data (e.g. manufacturer data or service UUIDs) with which
-				// they may be identified.
-				var name = result.LocalName()
-				if (strings.TrimSpace(result.LocalName()) == "" ) {
-					name = result.Address.String()
-				}
-
-				scanInfoCh <- scanInfoResult{result.Address.String(), name}
-			}
-		})		
-
-	if err != nil {
-		log.Printf("bleGPSDevice: Error from scanner: %s", err.Error())
 	}
 }
 
@@ -129,27 +137,60 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 	b.eh.Add()
 	defer b.eh.Done()
 
-	address, _ := bluetooth.ParseMAC(ddi.MAC)
-	btAddress := bluetooth.MACAddress{MAC: address}
+	// Start scanner and wait for the adapter 
+	ch := make(chan bluetooth.ScanResult, 1)
+	var err error
 
-	// Connect to device
-	// bluetooth.ConnectionParams{} is not even used in the Connect function
-	device, err := b.adapter.Connect(bluetooth.Address{MACAddress: btAddress}, bluetooth.ConnectionParams{})
-	if err != nil {
-		return err
+	scanner := func (done chan bool) {
+		err := b.adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+			select {
+			case <-done:
+				adapter.StopScan()
+			default:
+				if result.Address.String() == ddi.MAC {
+					adapter.StopScan()
+					ch <- result
+				}
+			}
+		})
+		if err != nil {
+			log.Printf("bleGPSDevice: Error from scanner: %s", err.Error())
+		}
 	}
+
+	// Metadology is to scan and connect..
+	done := make(chan bool)
+	defer close(done)
+	go scanner(done)
+	var device *bluetooth.Device
+	select {
+		case result := <-ch:
+			device, err = b.adapter.Connect(result.Address, bluetooth.ConnectionParams{})
+			if err != nil {
+				return err
+			}
+		// Based on https://bluetoothle.wiki/advertising
+		case <-time.After(10 * time.Second):
+			select {
+			case done <- true:
+			default:
+				b.adapter.StopScan()
+				log.Printf("bleGPSDevice: Timeout looking for device " + ddi.name)
+				return nil
+			}
+	}
+
 	defer device.Disconnect()
 
 	// Find the service
-	services, err := device.DiscoverServices([]bluetooth.UUID{HM_10_CONF})
-	if err != nil {
+	var services[] bluetooth.DeviceService
+	if services, err = device.DiscoverServices([]bluetooth.UUID{HM_10_CONF}); err != nil {
 		return err
 	}
-	service := services[0]
 
 	// Get the two characteristics present in this service.
-	chars, err := service.DiscoverCharacteristics([]bluetooth.UUID{BLE_RX})
-	if err != nil {
+	var chars[] bluetooth.DeviceCharacteristic
+	if chars, err = services[0].DiscoverCharacteristics([]bluetooth.UUID{BLE_RX}); err != nil {
 		return err
 	}
 
@@ -170,7 +211,8 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 	// Callback from the enable notification function
 	// This might (depends on underlaying implementation) run in a interrupt where we cannot allocate any heap
 	// we use a mutex with signal to copy the received dataset into a existing byte array for further processing
-	watchdogTimer := common.NewWatchDog(1000 * time.Millisecond)
+	// Increased from 1000 to 2500 to avoid watchdog timer triggering
+	watchdogTimer := common.NewWatchDog(2500 * time.Millisecond)
 	defer watchdogTimer.Stop()
 
 	// variables for the NMEA parser
@@ -263,27 +305,24 @@ func (b *BleGPSDevice) connectionMonitor() {
 			return
 		case <-ticker.C:
 			for entry := range b.discoveredDeviceList.IterBuffered() {
-				info := entry.Val
+				deviceFromList := entry.Val
 
 				// When the device is not connected, we attemt to connect it again
-				if info.Allowed {
-
-					if !info.Connected {
-						info.Connected = true
-						b.discoveredDeviceList.Set(entry.Key, info)
-						go func(deviceToStart discoveredDeviceInfo) {
-							// Attempt to connect to a bluetooth device
-							log.Printf("bleGPSDevice: connection attempt %s", deviceToStart.name)
-							err := b.rxListener(deviceToStart)
-							if err != nil {
-								log.Printf("bleGPSDevice: Device error : device:%s error=%s ", deviceToStart.name, err.Error())
-							} else {
-								log.Printf("bleGPSDevice: Device was finished %s", deviceToStart.name)
-							}
-							deviceToStart.Connected = false
-							b.discoveredDeviceList.Set(deviceToStart.MAC, deviceToStart)
-						}(info)
-					}
+				if deviceFromList.Allowed && !deviceFromList.Connected {
+					deviceFromList.Connected = true
+					b.discoveredDeviceList.Set(deviceFromList.MAC, deviceFromList)
+					go func(thisDevice discoveredDeviceInfo) {
+						// Attempt to connect to a bluetooth device
+						log.Printf("bleGPSDevice: connection attempt %s", thisDevice.name)
+						err := b.rxListener(thisDevice)
+						if err != nil {
+							log.Printf("bleGPSDevice: Device error : device:%s error=%s ", thisDevice.name, err.Error())
+						} else {
+							log.Printf("bleGPSDevice: Device was finished %s", thisDevice.name)
+						}
+						thisDevice.Connected = false
+						b.discoveredDeviceList.Set(thisDevice.MAC, thisDevice)
+					}(deviceFromList)
 				}
 			}
 		}
