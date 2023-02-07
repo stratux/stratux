@@ -2,9 +2,6 @@
 
 #echo powersave >/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
-
-
-
 #Logging Function
 SCRIPT=`basename ${BASH_SOURCE[0]}`
 STX_LOG="/var/log/stratux.log"
@@ -16,16 +13,17 @@ wLog "Running Stratux Updater Script."
 
 # Fix for https://github.com/RPi-Distro/pi-bluetooth/issues/8
 # This is a workaround for the bluetooth stack not starting properly
-BleGPSEnabled=$(cat /boot/stratux.conf | jq '.BleGPSEnabled // false')
+#BleGPSEnabled=$(cat /boot/stratux.conf | jq '.BleGPSEnabled // false')
 #if [ "$BleGPSEnabled" = "true" ]; then
-        wLog "Restarting bluetooth stack"
+#        wLog "Restarting bluetooth stack"
 		# hciconfig hci0 to check status
-        hciconfig hci0 down
-		bluetoothctl power on
-		rfkill unblock all
+#		hciconfig hci0 down
+#		rfkill unblock all
 		# https://stackoverflow.com/questions/24945620/excessive-bluetooth-le-timeouts-on-linux
-		echo 2000 > /sys/kernel/debug/bluetooth/hci0/supervision_timeout
-		systemctl restart bluetooth
+#		systemctl restart bluetooth
+#		bluetoothctl power on
+#		bluetoothctl discoverable on
+#        hciconfig hci0 noauth
 #fi
 
 SCRIPT_MASK="update*stratux*v*.sh"

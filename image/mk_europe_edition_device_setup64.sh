@@ -23,7 +23,7 @@ mkdir -p /proc/sys/vm/
 apt update
 apt clean
 
-PATH=/root/fake:$PATH apt install --yes pi-bluetooth bluetooth bluez bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
+PATH=/root/fake:$PATH apt install --yes bluez libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
     libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables
 
 # Add bluetooth group to pi user so it can use the bluetoothstack
@@ -187,6 +187,14 @@ sed -i /boot/cmdline.txt -e "s/console=serial0,[0-9]\+ /systemd.restore_state=0 
 #Set the keyboard layout to US.
 sed -i /etc/default/keyboard -e "/^XKBLAYOUT/s/\".*\"/\"us\"/"
 
+# /var/lib/bluetooth is very low write, but we want to keep bluetooth setting for much quicker lookup and connect
+BLECACHEFILE=/boot/bluetooth/ble-cache
+dd if=/dev/zero of=$BLECACHEFILE bs=1M count=1
+mkfs.ext3 $BLECACHEFILE
+rm -rf /var/lib/bluetooth/
+mkdir -p /var/lib/bluetooth
+echo -e "\n$BLECACHEFILE    /var/lib/bluetooth   ext3   loop    0   0" >> /etc/fstab
+
 # Set hostname
 echo "stratux" > /etc/hostname
 sed -i /etc/hosts -e "s/raspberrypi/stratux/g"
@@ -199,7 +207,7 @@ rm -r /root/stratux
 rm -r /root/go /root/go_path /root/.cache
 
 PATH=/root/fake:$PATH apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf cifs-utils cmake cmake-data \
-    v4l-utils rsync pigz perl cpp cpp-10
+    v4l-utils rsync pigz perl cpp cpp-10 bluetooth pi-bluetooth bluez-firmware
 
 PATH=/root/fake:$PATH apt autoremove --purge --yes
 
