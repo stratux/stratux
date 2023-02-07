@@ -189,6 +189,7 @@ sed -i /etc/default/keyboard -e "/^XKBLAYOUT/s/\".*\"/\"us\"/"
 
 # /var/lib/bluetooth is very low write, but we want to keep bluetooth setting for much quicker lookup and connect
 BLECACHEFILE=/boot/bluetooth/ble-cache
+mkdir -p /boot/bluetooth/
 dd if=/dev/zero of=$BLECACHEFILE bs=1M count=1
 mkfs.ext3 $BLECACHEFILE
 rm -rf /var/lib/bluetooth/
