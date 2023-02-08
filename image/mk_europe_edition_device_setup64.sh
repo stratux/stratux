@@ -23,8 +23,11 @@ mkdir -p /proc/sys/vm/
 apt update
 apt clean
 
-PATH=/root/fake:$PATH apt install --yes bluez bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
+apt list --installed
+PATH=/root/fake:$PATH apt install --yes libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake rfkill \
     libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables
+    @ Do not install any recommended, we just need bluez
+PATH=/root/fake:$PATH apt --no-install-recommends install --yes bluez bluez-tools 
 
 # Add bluetooth group to pi user so it can use the bluetoothstack
 usermod -G bluetooth -a pi
