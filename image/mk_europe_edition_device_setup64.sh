@@ -200,21 +200,18 @@ mkdir -p /var/lib/bluetooth
 echo "stratux" > /etc/hostname
 sed -i /etc/hosts -e "s/raspberrypi/stratux/g"
 
-# Don't exit on error, do the work on best efford
-set +x 
-
 # Clean up source tree - we don't need it at runtime
-rm -r /root/stratux
+rm -rf /root/stratux
 
 # Uninstall packages we don't need, clean up temp stuff
-rm -r /root/go /root/go_path /root/.cache
+rm -rf /root/go /root/go_path /root/.cache
 
 PATH=/root/fake:$PATH apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf cifs-utils cmake cmake-data \
     v4l-utils rsync pigz perl cpp cpp-10 bluetooth pi-bluetooth bluez-firmware
 PATH=/root/fake:$PATH apt autoremove --purge --yes
 
 apt clean
-rm -r /var/cache/apt
+rm -rf /var/cache/apt
 
-rm -r /proc/*
-rm -r /root/fake
+rm -rf /proc/*
+rm -rf /root/fake
