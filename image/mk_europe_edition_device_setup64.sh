@@ -194,7 +194,7 @@ dd if=/dev/zero of=$BLECACHEFILE bs=1M count=1
 mkfs.ext2 -F $BLECACHEFILE
 rm -rf /var/lib/bluetooth/
 mkdir -p /var/lib/bluetooth
-echo -e "\n$BLECACHEFILE    /var/lib/bluetooth   auto   defaults,loop,nofail,noatime    0   2" >> /etc/fstab
+# echo -e "\n$BLECACHEFILE    /var/lib/bluetooth   auto   defaults,loop,nofail,noatime,x-systemd.requires-mounts-for=/boot    0   2" >> /etc/fstab
 
 # Set hostname
 echo "stratux" > /etc/hostname
