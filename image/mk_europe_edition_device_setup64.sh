@@ -200,9 +200,11 @@ mkdir -p /var/lib/bluetooth
 echo "stratux" > /etc/hostname
 sed -i /etc/hosts -e "s/raspberrypi/stratux/g"
 
+# Don't exit on error, do the work on best efford
+set +x 
+
 # Clean up source tree - we don't need it at runtime
 rm -r /root/stratux
-
 
 # Uninstall packages we don't need, clean up temp stuff
 rm -r /root/go /root/go_path /root/.cache
