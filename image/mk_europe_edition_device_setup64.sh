@@ -23,7 +23,8 @@ mkdir -p /proc/sys/vm/
 apt update
 apt clean
 
-PATH=/root/fake:$PATH apt install --yes bluez libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
+PATH=/root/fake:$PATH 
+apt install --yes bluez bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
     libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables
 
 # Add bluetooth group to pi user so it can use the bluetoothstack
@@ -191,10 +192,10 @@ sed -i /etc/default/keyboard -e "/^XKBLAYOUT/s/\".*\"/\"us\"/"
 BLECACHEFILE=/boot/bluetooth/ble-cache
 mkdir -p /boot/bluetooth/
 dd if=/dev/zero of=$BLECACHEFILE bs=1M count=1
-mkfs.ext3 $BLECACHEFILE
+mkfs.ext2 -F $BLECACHEFILE
 rm -rf /var/lib/bluetooth/
 mkdir -p /var/lib/bluetooth
-echo -e "\n$BLECACHEFILE    /var/lib/bluetooth   ext3   loop    0   0" >> /etc/fstab
+echo -e "\n$BLECACHEFILE    /var/lib/bluetooth   auto   defaults,loop,nofail,noatime    0   2" >> /etc/fstab
 
 # Set hostname
 echo "stratux" > /etc/hostname
@@ -207,10 +208,9 @@ rm -r /root/stratux
 # Uninstall packages we don't need, clean up temp stuff
 rm -r /root/go /root/go_path /root/.cache
 
-PATH=/root/fake:$PATH apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf cifs-utils cmake cmake-data \
+apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf cifs-utils cmake cmake-data \
     v4l-utils rsync pigz perl cpp cpp-10 bluetooth pi-bluetooth bluez-firmware
-
-PATH=/root/fake:$PATH apt autoremove --purge --yes
+apt autoremove --purge --yes
 
 apt clean
 rm -r /var/cache/apt
