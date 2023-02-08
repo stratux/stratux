@@ -23,8 +23,7 @@ mkdir -p /proc/sys/vm/
 apt update
 apt clean
 
-PATH=/root/fake:$PATH 
-apt install --yes bluez bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
+PATH=/root/fake:$PATH apt install --yes bluez bluez-tools libjpeg62-turbo-dev libconfig9 rpi-update dnsmasq git cmake \
     libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables
 
 # Add bluetooth group to pi user so it can use the bluetoothstack
@@ -208,9 +207,9 @@ rm -r /root/stratux
 # Uninstall packages we don't need, clean up temp stuff
 rm -r /root/go /root/go_path /root/.cache
 
-apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf cifs-utils cmake cmake-data \
+PATH=/root/fake:$PATH apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-topology-conf cifs-utils cmake cmake-data \
     v4l-utils rsync pigz perl cpp cpp-10 bluetooth pi-bluetooth bluez-firmware
-apt autoremove --purge --yes
+PATH=/root/fake:$PATH apt autoremove --purge --yes
 
 apt clean
 rm -r /var/cache/apt
