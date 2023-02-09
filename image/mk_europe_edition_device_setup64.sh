@@ -15,6 +15,7 @@ ln -s /bin/true /root/fake/start
 ln -s /bin/true /root/fake/stop
 ln -s /bin/true /root/fake/start-stop-daemon
 ln -s /bin/true /root/fake/service
+ln -s /bin/true /root/fake/locale
 ln -s /bin/true /root/fake/deb-systemd-helper
 
 # Fake a proc FS for raspberrypi-sys-mods_20170519_armhf... Extend me as needed
@@ -28,6 +29,7 @@ PATH=/root/fake:$PATH apt install --yes libjpeg62-turbo-dev libconfig9 rpi-updat
     libusb-1.0-0-dev build-essential autoconf libtool i2c-tools libfftw3-dev libncurses-dev python3-serial jq ifplugd iptables
 # Do not install any recommended, we just need bluez
 PATH=/root/fake:$PATH apt --no-install-recommends install --yes bluez bluez-tools 
+PATH=/root/fake:$PATH apt-mark manual bluez
 
 # Add bluetooth group to pi user so it can use the bluetoothstack
 usermod -G bluetooth -a pi
@@ -213,7 +215,7 @@ PATH=/root/fake:$PATH apt remove --purge --yes alsa-utils alsa-ucm-conf alsa-top
     v4l-utils rsync pigz perl cpp cpp-10 bluetooth pi-bluetooth bluez-firmware
 PATH=/root/fake:$PATH apt autoremove --purge --yes
 
-apt clean
+PATH=/root/fake:$PATH apt clean
 rm -rf /var/cache/apt
 
 rm -rf /proc/*
