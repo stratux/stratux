@@ -10,10 +10,9 @@
 package gps
 
 import (
-	"errors"
+	"bytes"
 	"log"
 	"strings"
-	"sync"
 
 	"time"
 
@@ -29,7 +28,6 @@ type discoveredDeviceInfo struct {
 	name      string	// Name of this device, taken from LocalName or MAC if not available
 	Allowed   bool		// Indicate if this device is allowed to be used as a GPS source
 }
-
 
 type BleGPSDevice struct {
 	adapter              bluetooth.Adapter
@@ -60,20 +58,19 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	defer b.eh.Done()
 	leh.Add()
 	defer leh.Done()
-	defer b.adapter.StopScan()
 
 	type scanInfoResult struct {
 		MAC  string
 		name string
 	}
 
-	// These BlueTooth callback functions are sensetive to memry allocations so we use a scannel for it
+	// BlueTooth callback functions are sensetive to memory allocations so we use a scannel for it
 	scanInfoCh := make(chan scanInfoResult, 5)
-
 	
 	// Start a go routine to listen for scan results
 	scanner := func (done chan bool) {
-		// Scan is blocking, keep that in mind so we do not exit this function
+		// Scan is blocking, so we need a signal to stop
+		defer b.adapter.StopScan()
 		err := b.adapter.Scan(
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {						
 				select {
@@ -81,16 +78,14 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 					adapter.StopScan()
 					break
 				default:
-					// This test for exit needed otherwise if there is no bluetooth device at all, we keep scanning forever
+					// Test for capability we require
 					if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && 
 						result.Address != nil {
 
 						// LocalName is the (complete or shortened) local name of the device.
-						// many devices do not broadcast a local name, but may
-						// broadcast other data (e.g. manufacturer data or service UUIDs) with which
-						// they may be identified.
+						// many devices do not broadcast a local name, s
 						var name = result.LocalName()
-						if (strings.TrimSpace(result.LocalName()) == "" ) {
+						if (strings.TrimSpace(name) == "" ) {
 							name = result.Address.String()
 						}
 
@@ -141,7 +136,7 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 	ch := make(chan bluetooth.ScanResult, 1)
 	var err error
 
-	scanner := func (done chan bool) {
+	bleScanner := func (done chan bool) {
 		err := b.adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
 			select {
 			case <-done:
@@ -161,7 +156,7 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 	// Metadology is to scan and connect..
 	done := make(chan bool)
 	defer close(done)
-	go scanner(done)
+	go bleScanner(done)
 	var device *bluetooth.Device
 	select {
 		case result := <-ch:
@@ -179,7 +174,6 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 				return nil
 			}
 	}
-
 	defer device.Disconnect()
 
 	// Find the service
@@ -195,99 +189,94 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 	}
 
 	log.Printf("bleGPSDevice: Connected to : %s", ddi.name)
-
 	GetServiceDiscovery().Send(DiscoveredDevice{
 		Name:      ddi.name,
 		Content:   CONTENT_CONNECTED,
 		Connected: true,
 	})
-	defer GetServiceDiscovery().Connected(ddi.name, false)
 
-	// Mutex + condition to sync the write/read routines
-	mutex := sync.Mutex{}
-	condition := sync.NewCond(&mutex)
-	defer condition.Signal() // This to give the below go routine a chance to exit when it's waiting for the condition
-
-	// Callback from the enable notification function
-	// This might (depends on underlaying implementation) run in a interrupt where we cannot allocate any heap
-	// we use a mutex with signal to copy the received dataset into a existing byte array for further processing
-	// Increased from 1000 to 2500 to avoid watchdog timer triggering
-	watchdogTimer := common.NewWatchDog(2500 * time.Millisecond)
-	defer watchdogTimer.Stop()
-
-	// variables for the NMEA parser
-	var receivedData []byte
-
-	tx := chars[0]
-	go func() {
-		const MAX_NMEA_LENGTH = 79
-		var charPosition int
-		byteArray := [MAX_NMEA_LENGTH + 1]byte{} // One extra for zero termination
-		sentenceStarted := false
-		for {
-			mutex.Lock()
-			condition.Wait()
-			if watchdogTimer.IsTriggered() {
-				log.Printf("bleGPSDevice: watchdogTimer triggered, exiting")
-				return
-			}
-			for i := 0; i < len(receivedData); i++ {
-				c := receivedData[i]
-				// Within NMEA sentence?
-				if sentenceStarted &&
-					c >= 0x20 && c <= 0x7e && // NMEA Characters that we expect
-					charPosition < MAX_NMEA_LENGTH {
-					byteArray[charPosition] = c
-					charPosition++
-				}
-
-				// End of a NMEA sentence
-				if c == 0x0d && sentenceStarted && charPosition < MAX_NMEA_LENGTH {
-					sentenceStarted = false
-					thisOne := strings.Clone(string(byteArray[0:charPosition]))
-					select {
-					case b.rxMessageCh <- RXMessage{
-						Name:     ddi.name,
-						NmeaLine: thisOne,
-					}:
-					default:
-						log.Printf("bleGPSDevice: rxMessageCh Full")
-					}
-				}
-
-				// Start of a new NMEA sentence
-				if c == '$' {
-					sentenceStarted = true
-					byteArray[0] = c
-					charPosition = 1
-				}
-			}
-			receivedData = receivedData[:0]
-			mutex.Unlock()
-		}
+	defer func() {
+		GetServiceDiscovery().Connected(ddi.name, false)
 	}()
 
-	// Listen for incomming traffic
-	enaNotifyErr := tx.EnableNotifications(func(value []byte) {
-		// Reset the watchdog
-		watchdogTimer.Poke()
+	// Shared receivedData byte array
+	dataChannel := make(chan []byte)
 
-		// Copy received data
-		mutex.Lock()
-		receivedData = append(receivedData, value...)
-		condition.Signal()
-		mutex.Unlock()
+	// Listen for incomming traffic
+	enaNotifyErr := chars[0].EnableNotifications(func(value []byte) {		
+		dataChannel <- value
 	})
 
 	if enaNotifyErr != nil {
 		return enaNotifyErr
 	}
 
-	select {
-	case <-b.eh.C:
-		return nil
-	case <-watchdogTimer.C:
-		return errors.New("Watchdog timed out")
+	bufferPosition := 0		
+	bufferData := make([]byte, 512)
+	dataProcess := func(process []byte) {
+		copy(bufferData[bufferPosition:], process) 
+        bufferPosition = bufferPosition + len(process)
+
+		for {
+
+			// Trim to start of NMEA
+			startPos := bytes.IndexRune(bufferData, '$')
+			if (startPos==-1) {
+				// If we do not have the $, there is no point in keeping the data because it will always be invalid
+				// this ensures that the buffer is always empty without dirty data
+				bufferPosition = 0
+				break
+			} else if(startPos > 0) {
+				// Trim that $ is at start of the line
+				copy(bufferData, bufferData[startPos:])
+			}
+
+			// Validate if it has an end, if not we wait for more characters
+			endPosn := bytes.IndexRune(bufferData, '\n')
+			if endPosn == -1 {
+				break
+			}
+
+			// Also cope with \r, if we also have that then use that as the end
+			// This will help to avoid a strings.Trim that might be expensive
+			endPosr := bytes.IndexRune(bufferData, '\r')
+			minEndPos := endPosn
+			maxEndPos := endPosn
+			if endPosr > 0 {
+				if (endPosr < endPosn) {
+					minEndPos = endPosr
+				} else {
+					maxEndPos = endPosr
+				}
+			}
+			
+			nmeaString := strings.Clone(string(bufferData[0:minEndPos]))
+			copy(bufferData, bufferData[maxEndPos+1:])
+			bufferPosition = bufferPosition - (maxEndPos + 1)
+
+			// Send it out
+			select {
+			case b.rxMessageCh <- RXMessage{
+				Name:     ddi.name,
+				NmeaLine: strings.TrimSpace(nmeaString),
+			}:
+			default:
+				log.Printf("bleGPSDevice: rxMessageCh Full")
+			}
+		}
+	}
+
+	watchdogTimer := common.NewWatchDog(2500 * time.Millisecond)
+	for {
+		select {
+		case newReceived := <- dataChannel:
+			watchdogTimer.Poke()
+			dataProcess(newReceived)
+			break
+		case <-watchdogTimer.C:
+		case <-b.eh.C:
+			return nil
+		}	
 	}
 }
 
@@ -313,12 +302,12 @@ func (b *BleGPSDevice) connectionMonitor() {
 					b.discoveredDeviceList.Set(deviceFromList.MAC, deviceFromList)
 					go func(thisDevice discoveredDeviceInfo) {
 						// Attempt to connect to a bluetooth device
-						log.Printf("bleGPSDevice: connection attempt %s", thisDevice.name)
+						log.Printf("bleGPSDevice: Connecting to %s", thisDevice.name)
 						err := b.rxListener(thisDevice)
 						if err != nil {
-							log.Printf("bleGPSDevice: Device error : device:%s error=%s ", thisDevice.name, err.Error())
+							log.Printf("bleGPSDevice: Disconnected error : device:%s error=%s ", thisDevice.name, err.Error())
 						} else {
-							log.Printf("bleGPSDevice: Device was finished %s", thisDevice.name)
+							log.Printf("bleGPSDevice: Disconnected %s", thisDevice.name)
 						}
 						thisDevice.Connected = false
 						b.discoveredDeviceList.Set(thisDevice.MAC, thisDevice)
