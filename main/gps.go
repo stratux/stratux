@@ -167,7 +167,6 @@ type gpsDevice interface {
 
 type GPSDeviceManager struct {
 	gpsDeviceStatus  cmap.ConcurrentMap[string, GPSDeviceStatus] // Map of device status when they are sending us message
-	settingsCopy     settings                            // Copy of the global Settings to help decide if some varas are changed
 	currentGPSNameCh chan string                         // name of the current GPS device we receive location data from
 	eh               *common.ExitHelper                  // Helper to quick various routines during reconfiguratios
 
@@ -190,7 +189,6 @@ func NewGPSDeviceManager() GPSDeviceManager {
 
 	return GPSDeviceManager{
 		gpsDeviceStatus:  cmap.New[GPSDeviceStatus](),
-		settingsCopy:     globalSettings,
 		currentGPSNameCh: make(chan string),
 		eh:               common.NewExitHelper(),
 
@@ -1024,12 +1022,12 @@ Also start a go routine that will send messages to GPS devices
 */
 func (s *GPSDeviceManager) handleDeviceDiscovery() {
 	for {
-		discoveredDevice := <-gps.GetServiceDiscovery().C
+		discoveredDevice := <- gps.GetServiceDiscovery().C
 
 		if previous, ok := s.discoveredDevices.Get(discoveredDevice.Name); ok {
 			discoveredDevice = gps.GetServiceDiscovery().Merge(previous, discoveredDevice)
 		}
-		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)
+		s.discoveredDevices.Set(discoveredDevice.Name, discoveredDevice)	
 
 		// Build list of GPS_Discovery source for the UI
 		deviceList := []gps.DiscoveredDeviceDTO{}
@@ -1145,26 +1143,22 @@ when any of the globalSettings that are monitored are modified
 */
 func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 	log.Printf("GPS: globalConfigChangeWatcher: Started")
+	settingsCopy := globalSettings
 
 	checkAndReInit := func() {
-		g := s.settingsCopy.GPS_Enabled != globalSettings.GPS_Enabled
-		x := s.settingsCopy.BleGPSEnabled != globalSettings.BleGPSEnabled
-		n := s.settingsCopy.NetworkGPSEnabled != globalSettings.NetworkGPSEnabled
-		y := s.settingsCopy.GPSPreferredSource != globalSettings.GPSPreferredSource
-		d := s.settingsCopy.DEBUG != globalSettings.DEBUG
-		b := !reflect.DeepEqual(s.settingsCopy.BleGPSAllowedDevices, globalSettings.BleGPSAllowedDevices)
+		g := settingsCopy.GPS_Enabled != globalSettings.GPS_Enabled
+		x := settingsCopy.BleGPSEnabled != globalSettings.BleGPSEnabled
+		n := settingsCopy.NetworkGPSEnabled != globalSettings.NetworkGPSEnabled
+		y := settingsCopy.GPSPreferredSource != globalSettings.GPSPreferredSource
+		d := settingsCopy.DEBUG != globalSettings.DEBUG
+		b := !reflect.DeepEqual(settingsCopy.BleGPSAllowedDevices, globalSettings.BleGPSAllowedDevices)
 
 		reInit := g || x || n || y || d || b
 
 		if reInit {
-			s.eh.Exit()
-			s.settingsCopy = globalSettings
-
-			// At this point new threads can start all adapters, but we assume here
-			// that we will be faster resetting the GPS device
-			s.gpsDeviceStatus.Clear()
-			s.discoveredDevices.Clear()
-			resetGPSGlobalStatus()
+			settingsCopy = globalSettings
+			// Do not clear the list, this might look odd on the FE
+			s.ReInit(false)
 		}
 	}
 
@@ -1195,10 +1189,6 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 		log.Printf("GPS: configureGPSSubsystems: Enable Bluetooth devices")
 		bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh)
 		s.deviceList = append(s.deviceList, &bleGPSDevice)
-		defer func() {
-			// There is no need to read the settings back
-			// globalSettings.BleGPSAllowedDevices = bleGPSDevice.GetConfig()
-		}()
 		go bleGPSDevice.Run(globalSettings.BleGPSAllowedDevices)
 	}
 
@@ -1246,6 +1236,17 @@ func (s *GPSDeviceManager) ScanDevices(totalScanTime uint) {
 		case <- ticker.C:
 			globalStatus.GPS_Scanning--	
 		}
+	}
+}
+
+func (s *GPSDeviceManager) ReInit(clearGPSDiscovery bool) {
+	s.eh.Exit()
+	s.gpsDeviceStatus.Clear()
+	s.discoveredDevices.Clear()
+	resetGPSGlobalStatus()
+	// If we add a device and clear GPS_Discovery, then it just looks odd... best hack I could find without a lot of re-organising
+	if clearGPSDiscovery {
+		globalStatus.GPS_Discovery = []gps.DiscoveredDeviceDTO{}
 	}
 }
 

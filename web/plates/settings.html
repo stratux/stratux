@@ -370,7 +370,7 @@
                         <label class="control-label col-xs-5"></label>
                         <div class="col-xs-7">
                             <button ng-show="GPS_Scanning > 0" ng-disabled="true" class="btn btn-primary btn-sm">Scanning: {{GPS_Scanning}}</button>
-                            <button ng-show="GPS_Scanning == 0" ng-click="startScanning()" class="btn btn-primary btn-sm">Scan for BLE devices and connected allowed devices</button>
+                            <button ng-show="GPS_Scanning == 0" ng-click="startScanning()" class="btn btn-primary btn-sm">Scan for BLE</button>
                         </div>
                     </div>
 
@@ -380,8 +380,8 @@
                             <div ng-repeat="d in GPS_Discovery"  ng-show="d.GPSSource == 2" style="display: table-row;">
                                 <div style="display:table-cell;padding:5px">{{d.Name}}</div>
                                 <div style="display:table-cell;width:55px">
-                                    <button ng-show="isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="deleteFromBle(d)" >Delete</button>
-                                    <button ng-show="!isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="addToBle(d)" >Add</button>
+                                    <button ng-show="isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="removeBleDevice(d, true)" >Remove</button>
+                                    <button ng-show="!isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="addToBle(d, false)" >Add</button>
                                 </div>    
                                 <div style="display:table-cell;width:25px"><span ng-show="d.Connected">&#x2705;</span></div>
                             </div>                           

@@ -501,11 +501,11 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		}
 	};
 
-	$scope.addToBle = function (device) {
+	$scope.addToBle = function (device, deviceAdded) {
 		if (!$scope.BleGPSAllowedDevices[device.Name]) {
 			$scope.BleGPSAllowedDevices[device.Name] = device
 			var newsettings = {
-				"BleGPSAllowedDevices": $scope.BleGPSAllowedDevices
+				"BleGPSAllowedDevices_added": $scope.BleGPSAllowedDevices
 			};
 			// console.log(angular.toJson(newsettings));
 			setSettings(angular.toJson(newsettings));
@@ -516,15 +516,12 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		return !(value instanceof Date) && !Array.isArray(value) && !Object.is(value, null) && !Object.is(value, undefined) && !(value instanceof Function)
 	}
 
-	$scope.deleteFromBle = function (device) {
+	$scope.removeBleDevice = function (device) {
 		if ($scope.BleGPSAllowedDevices[device.Name]) {
 			delete $scope.BleGPSAllowedDevices[device.Name]
-			// Directly remove from GPS_Discovery so it will get removed quickly from the ui
-			// $scope.GPS_Discovery = $scope.GPS_Discovery.filter(item => item.Name != device.Name)
 			var newsettings = {
-				"BleGPSAllowedDevices": $scope.BleGPSAllowedDevices
+				"BleGPSAllowedDevices_removed": $scope.BleGPSAllowedDevices
 			};
-			// console.log(angular.toJson(newsettings));
 			setSettings(angular.toJson(newsettings));
 		}
 	}

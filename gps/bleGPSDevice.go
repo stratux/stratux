@@ -302,7 +302,7 @@ func (b *BleGPSDevice) connectionMonitor() {
 					b.discoveredDeviceList.Set(deviceFromList.MAC, deviceFromList)
 					go func(thisDevice discoveredDeviceInfo) {
 						// Attempt to connect to a bluetooth device
-						log.Printf("bleGPSDevice: Connecting to %s", thisDevice.name)
+						log.Printf("bleGPSDevice: Connecting to %s / %s", thisDevice.name, thisDevice.MAC)
 						err := b.rxListener(thisDevice)
 						if err != nil {
 							log.Printf("bleGPSDevice: Disconnected error : device:%s error=%s ", thisDevice.name, err.Error())

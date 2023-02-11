@@ -88,7 +88,7 @@ func (s *serviceDiscovery) Send(d DiscoveredDevice) {
 	s.C <- d
 }
 
-// Merge the previous and current DiscoveredDevice based on it's content
+// Merge the previous and current DiscoveredDevice settings
 func (s *serviceDiscovery) Merge(previous, new DiscoveredDevice) DiscoveredDevice {
 	if new.Content&CONTENT_TX_CHANNEL == 0x00 {
 		new.TXChannel = previous.TXChannel
