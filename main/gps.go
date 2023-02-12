@@ -586,7 +586,7 @@ func (s *GPSDeviceManager) processNMEALine(l string, deviceDiscovery gps.Discove
 					Name:             deviceDiscovery.Name,
 					Content:          gps.CONTENT_OFFSET_PPS | gps.CONTENT_TYPE,
 					GPSDetectedType:  gps.GPS_TYPE_SOFTRF_AT65,
-					GPSTimeOffsetPPS: 250 * time.Millisecond,
+					GPSTimeOffsetPPS: 200 * time.Millisecond,
 				})
 			} else {
 				gps.GetServiceDiscovery().Send(gps.DiscoveredDevice{
@@ -1151,14 +1151,13 @@ func (s *GPSDeviceManager) globalConfigChangeWatcher() {
 		n := settingsCopy.NetworkGPSEnabled != globalSettings.NetworkGPSEnabled
 		y := settingsCopy.GPSPreferredSource != globalSettings.GPSPreferredSource
 		d := settingsCopy.DEBUG != globalSettings.DEBUG
-		b := !reflect.DeepEqual(settingsCopy.BleGPSAllowedDevices, globalSettings.BleGPSAllowedDevices)
+		b := !reflect.DeepEqual(settingsCopy.GPSAllowedDevices, globalSettings.GPSAllowedDevices)
 
 		reInit := g || x || n || y || d || b
 
 		if reInit {
 			settingsCopy = globalSettings
-			// Do not clear the list, this might look odd on the FE
-			s.ReInit(false)
+			s.ReInit()
 		}
 	}
 
@@ -1186,21 +1185,18 @@ func (s *GPSDeviceManager) configureGPSSubsystems() {
 	}()
 
 	if globalSettings.BleGPSEnabled {
-		log.Printf("GPS: configureGPSSubsystems: Enable Bluetooth devices")
 		bleGPSDevice := gps.NewBleGPSDevice(s.rxMessageCh)
 		s.deviceList = append(s.deviceList, &bleGPSDevice)
-		go bleGPSDevice.Run(globalSettings.BleGPSAllowedDevices)
+		go bleGPSDevice.Run(globalSettings.GPSAllowedDevices)
 	}
 
 	if globalSettings.GPS_Enabled {
-		log.Printf("GPS: configureGPSSubsystems: Enable USB/Serial devices")
 		serialGPSDevice := gps.NewSerialGPSDevice(s.rxMessageCh, globalSettings.DEBUG)
 		s.deviceList = append(s.deviceList, &serialGPSDevice)	
 		go serialGPSDevice.Run()
 	}
 
 	if globalSettings.NetworkGPSEnabled {
-		log.Printf("GPS: configureGPSSubsystems: Enable Network devices")
 		networkGPSDevice := gps.NewNetworkGPSDevice(s.rxMessageCh)
 		s.deviceList = append(s.deviceList, &networkGPSDevice)	
 		go networkGPSDevice.Run()
@@ -1239,13 +1235,15 @@ func (s *GPSDeviceManager) ScanDevices(totalScanTime uint) {
 	}
 }
 
-func (s *GPSDeviceManager) ReInit(clearGPSDiscovery bool) {
+func (s *GPSDeviceManager) ReInit() {
 	s.eh.Exit()
 	s.gpsDeviceStatus.Clear()
 	s.discoveredDevices.Clear()
 	resetGPSGlobalStatus()
-	// If we add a device and clear GPS_Discovery, then it just looks odd... best hack I could find without a lot of re-organising
-	if clearGPSDiscovery {
+
+	// Delete this list directly otherwhise it will always show at least one device
+	// due to service discovery not updating
+	if len(globalSettings.GPSAllowedDevices) == 0 {
 		globalStatus.GPS_Discovery = []gps.DiscoveredDeviceDTO{}
 	}
 }

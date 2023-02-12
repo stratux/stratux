@@ -495,7 +495,7 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 							Name:               device.name,
 							Content:			CONTENT_TYPE | CONTENT_OFFSET_PPS,
 							GPSDetectedType:    GPS_TYPE_OGNTRACKER,
-							GPSTimeOffsetPPS:   149 * time.Millisecond, // RVT Calibrated
+							GPSTimeOffsetPPS:   150 * time.Millisecond,
 						})
 					}()
 				}
@@ -607,4 +607,5 @@ Main tasks is configure the GPS/Location services and maintain a stable serial/U
 */
 func (s *SerialGPSDevice) Run() {
 	go s.deviceDiscovery()
+	log.Printf("serialGPSDevice: Run: Enabled USB/Serial devices")
 }

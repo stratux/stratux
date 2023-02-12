@@ -325,20 +325,23 @@ func (b *BleGPSDevice) setInitialConfiguration( data map[string]interface{}) {
 	// loop over map to create discoery
 	for key, value := range data {
 		m := value.(map[string]interface{})
- 		b.discoveredDeviceList.Set(m["MAC"].(string), discoveredDeviceInfo{
-			Connected: false,
-			MAC: m["MAC"].(string), 
-			Allowed: true,
-			name: key})
 
-			// Send out a discovery so the GPS subsystem know's about this device
-			GetServiceDiscovery().Send(DiscoveredDevice{
-				Name:             key,
-				Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
-				GPSDetectedType:  GPS_TYPE_BLUETOOTH,
-				GPSSource:        GPS_SOURCE_BLUETOOTH,
-				GPSTimeOffsetPPS: 200 * time.Millisecond,
-			})			
+		if (int(m["GPSSource"].(float64)) == GPS_SOURCE_BLUETOOTH) {
+			b.discoveredDeviceList.Set(m["MAC"].(string), discoveredDeviceInfo{
+				Connected: false,
+				MAC: m["MAC"].(string), 
+				Allowed: true,
+				name: key})
+	
+				// Send out a discovery so the GPS subsystem know's about this device
+				GetServiceDiscovery().Send(DiscoveredDevice{
+					Name:             key,
+					Content:          CONTENT_TYPE | CONTENT_SOURCE | CONTENT_OFFSET_PPS,
+					GPSDetectedType:  GPS_TYPE_BLUETOOTH,
+					GPSSource:        GPS_SOURCE_BLUETOOTH,
+					GPSTimeOffsetPPS: 200 * time.Millisecond,
+				})
+		}
 	}
 }
 
@@ -374,6 +377,7 @@ func (b *BleGPSDevice) Run(deviceList map[string]interface{}) {
 	}
 	b.setInitialConfiguration(deviceList)
 	go b.connectionMonitor()
+	log.Printf("bleGPSDevice: Run: Enabled Bluetooth devices")
 }
 
 /**

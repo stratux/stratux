@@ -1184,7 +1184,7 @@ type settings struct {
 	OGNTxPower           int
 
 	BleGPSEnabled		 bool
-	BleGPSAllowedDevices map[string]interface{}
+	GPSAllowedDevices map[string]interface{}
 	GPSPreferredSource   int
 	NetworkGPSEnabled    bool
 
@@ -1301,7 +1301,7 @@ func defaultSettings() {
 	globalSettings.BleGPSEnabled = false
 	globalSettings.NetworkGPSEnabled = true
 	globalSettings.GPSPreferredSource = gps.GPS_SOURCE_SERIAL
-	globalSettings.BleGPSAllowedDevices = make(map[string]interface{})
+	globalSettings.GPSAllowedDevices = make(map[string]interface{})
 }
 
 func readSettings() {

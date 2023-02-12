@@ -121,5 +121,6 @@ func (n *NetworkDevice) Run() {
 	for _, port := range ports {
 		go n.tcpNMEAInListener(port)
 	}
+	log.Printf("networkDevice: Run: Enabled Network devices")
 }
 

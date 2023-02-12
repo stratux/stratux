@@ -380,8 +380,8 @@
                             <div ng-repeat="d in GPS_Discovery"  ng-show="d.GPSSource == 2" style="display: table-row;">
                                 <div style="display:table-cell;padding:5px">{{d.Name}}</div>
                                 <div style="display:table-cell;width:55px">
-                                    <button ng-show="isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="removeBleDevice(d, true)" >Remove</button>
-                                    <button ng-show="!isPlainObject(BleGPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="addToBle(d, false)" >Add</button>
+                                    <button ng-show="isPlainObject(GPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="removeBleDevice(d)" >Remove</button>
+                                    <button ng-show="!isPlainObject(GPSAllowedDevices[d.Name])" class="btn btn-primary btn-sm2" ng-click="addToBle(d)" >Add</button>
                                 </div>    
                                 <div style="display:table-cell;width:25px"><span ng-show="d.Connected">&#x2705;</span></div>
                             </div>                           
