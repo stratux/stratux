@@ -199,10 +199,9 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 		GetServiceDiscovery().Connected(ddi.name, false)
 	}()
 
-	// Shared receivedData byte array
-	dataChannel := make(chan []byte)
 
 	// Listen for incomming traffic
+	dataChannel := make(chan []byte, 5)
 	enaNotifyErr := chars[0].EnableNotifications(func(value []byte) {		
 		dataChannel <- value
 	})
@@ -227,32 +226,20 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 				bufferPosition = 0
 				break
 			} else if(startPos > 0) {
-				// Trim that $ is at start of the line
+				// Trim such that $ is at start
 				copy(bufferData, bufferData[startPos:])
+				bufferPosition = bufferPosition - startPos
 			}
 
 			// Validate if it has an end, if not we wait for more characters
 			endPosn := bytes.IndexRune(bufferData, '\n')
 			if endPosn == -1 {
 				break
-			}
-
-			// Also cope with \r, if we also have that then use that as the end
-			// This will help to avoid a strings.Trim that might be expensive
-			endPosr := bytes.IndexRune(bufferData, '\r')
-			minEndPos := endPosn
-			maxEndPos := endPosn
-			if endPosr > 0 {
-				if (endPosr < endPosn) {
-					minEndPos = endPosr
-				} else {
-					maxEndPos = endPosr
-				}
-			}
+			}		
 			
-			nmeaString := strings.Clone(string(bufferData[0:minEndPos]))
-			copy(bufferData, bufferData[maxEndPos+1:])
-			bufferPosition = bufferPosition - (maxEndPos + 1)
+			nmeaString := strings.Clone(string(bufferData[0:endPosn]))
+			copy(bufferData, bufferData[endPosn+1:])
+			bufferPosition = bufferPosition - (endPosn + 1)
 
 			// Send it out
 			select {
