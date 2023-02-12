@@ -16,7 +16,7 @@ import (
 /**
 * ExitHelper is a small helper to make sure that one or more go routines are exited correctly
 * by signalling them to exit and waiting for them to exit
-*/
+ */
 type ExitHelper struct {
     C chan struct{}
     w *sync.WaitGroup
@@ -67,10 +67,24 @@ func (a *ExitHelper) IsExit() bool {
 * and are listing to events or waiting for the IsExit() function to return true
 */
 func (a *ExitHelper) Exit() {
+   a.PreExit();
+   a.PostExit();
+}
+
+/**
+* Exit but do not allow continue of requesting new locks
+*/
+func (a *ExitHelper) PreExit() {
     a.m.Lock()
     a.b.Set()
     close(a.C)
     a.w.Wait()
+}
+
+/**
+* Continue by releaing the locks
+*/
+func (a *ExitHelper) PostExit() {
     a.C = make(chan struct{})
     a.w = new(sync.WaitGroup)
     a.b.UnSet()

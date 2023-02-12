@@ -1236,13 +1236,13 @@ func (s *GPSDeviceManager) ScanDevices(totalScanTime uint) {
 }
 
 func (s *GPSDeviceManager) ReInit() {
-	s.eh.Exit()
+	s.eh.PreExit()
+	defer s.eh.PostExit()
 	s.gpsDeviceStatus.Clear()
 	s.discoveredDevices.Clear()
 	resetGPSGlobalStatus()
 
-	// Delete this list directly otherwhise it will always show at least one device
-	// due to service discovery not updating
+	// Delete this list if GPSAllowedDevices is zero becuase service discovery will not update it anymore
 	if len(globalSettings.GPSAllowedDevices) == 0 {
 		globalStatus.GPS_Discovery = []gps.DiscoveredDeviceDTO{}
 	}

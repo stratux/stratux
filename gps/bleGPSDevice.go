@@ -261,6 +261,8 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 			dataProcess(newReceived)
 			break
 		case <-watchdogTimer.C:
+			log.Printf("bleGPSDevice: rxListener watchdog triggered")
+			return nil
 		case <-b.eh.C:
 			return nil
 		}	
@@ -330,19 +332,6 @@ func (b *BleGPSDevice) setInitialConfiguration( data map[string]interface{}) {
 				})
 		}
 	}
-}
-
-/**
-Retreive the current configuration that can be stored in the config file
-*/
-func (b *BleGPSDevice) GetConfig( ) map[string]interface{} {
-	data := make(map[string]interface{})
-	for entry := range b.discoveredDeviceList.IterBuffered() {
-		if (entry.Val.Allowed) {
-			data[entry.Val.MAC] = entry.Val
-		}
-	}
-	return data
 }
 
 /**
