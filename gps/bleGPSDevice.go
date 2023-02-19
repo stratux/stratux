@@ -10,10 +10,8 @@
 package gps
 
 import (
-	"bufio"
 	"bytes"
 	"log"
-	"os"
 	"strings"
 
 	"time"
