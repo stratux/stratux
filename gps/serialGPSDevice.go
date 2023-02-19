@@ -194,7 +194,7 @@ func makeUBXCFG(class, id byte, msglen uint16, msg []byte) []byte {
 }
 
 func (s *SerialGPSDevice) detectAndOpenSerialPort(device SerialDiscoveryConfig) (*(serial.Port)) {
-	rl := ratelimit.New(1, ratelimit.Per(2*time.Second))
+	rl := ratelimit.New(5)
 	for _, baud := range device.baudRate {
 		// test if serial port exists on OS level
 		if _, err := os.Stat(device.serialPort); err != nil { 
@@ -524,7 +524,7 @@ func (s *SerialGPSDevice) serialRXTX(device SerialDiscoveryConfig) error {
 			defer localQh.Done()
 			// Rate limited to ensure we only do 2 messages per second over serial port
 			// We currently assume we will never send a lot of commands to any serial device
-			rl := ratelimit.New(1, ratelimit.Per(4*time.Second))
+			rl := ratelimit.New(2)
 			for {
 				select {
 				case <-localQh.C:

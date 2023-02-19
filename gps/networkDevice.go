@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/b3nn0/stratux/v2/common"
-	"go.uber.org/ratelimit"
 )
 
 type NetworkDevice struct {
@@ -49,7 +48,6 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 		ln.Close()
 	}()
 
-	rl := ratelimit.New(1, ratelimit.Per(4*time.Second))
 	for {
 		conn, err := ln.Accept()
 		if n.eh.IsExit() {
@@ -60,7 +58,6 @@ func (n *NetworkDevice) tcpNMEAInListener(port int) {
 		} else {
 			go n.handleNmeaInConnection(conn)
 		}
-		rl.Take()
 	}	
 }
 

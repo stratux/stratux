@@ -10,8 +10,10 @@
 package gps
 
 import (
+	"bufio"
 	"bytes"
 	"log"
+	"os"
 	"strings"
 
 	"time"
@@ -203,47 +205,62 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 	// Listen for incomming traffic
 	dataChannel := make(chan []byte, 5)
 	enaNotifyErr := chars[0].EnableNotifications(func(value []byte) {		
-		dataChannel <- value
+			dataChannel <- value
 	})
 
 	if enaNotifyErr != nil {
 		return enaNotifyErr
 	}
 
-	bufferPosition := 0		
-	bufferData := make([]byte, 512)
+	const MAX_NMEA_LENGTH = 128
+	bufferData := make([]byte, MAX_NMEA_LENGTH * 3)
+	insertPosition := 0	// Position where we next insert the data
+	endPosition := -1   // Position of last byte of valid data
 	dataProcess := func(process []byte) {
-		copy(bufferData[bufferPosition:], process) 
-        bufferPosition = bufferPosition + len(process)
+		if (insertPosition + len(process)) > len(bufferData) {
+			insertPosition = 0
+			endPosition = -1
+			return
+		}
+
+		copy(bufferData[insertPosition:], process) 
+        insertPosition = insertPosition + len(process)
+        endPosition = endPosition + len(process)
 
 		for {
 
 			// Trim to start of NMEA
-			startPos := bytes.IndexRune(bufferData, '$')
-			if (startPos==-1) {
+			startNmea := bytes.IndexByte(bufferData, 0x24) // $
+			if (startNmea==-1) {
 				// If we do not have the $, there is no point in keeping the data because it will always be invalid
 				// this ensures that the buffer is always empty without dirty data
-				bufferPosition = 0
+				insertPosition = 0
+				endPosition = -1
 				break
-			} else if(startPos > 0) {
+			} else if(startNmea > 0) {
 				// Trim such that $ is at start
-				copy(bufferData, bufferData[startPos:])
-				bufferPosition = bufferPosition - startPos
+				copy(bufferData, bufferData[startNmea:])
+				insertPosition = insertPosition - startNmea
+				endPosition = endPosition - startNmea
 			}
 
 			// Validate if it has an end, if not we wait for more characters
-			endPosn := bytes.IndexRune(bufferData, '\n')
+			endPosn := bytes.IndexAny(bufferData, "\n\r") // \n
 			if endPosn == -1 {
 				break
-			}		
-			
+			} else if endPosn > endPosition {
+				break
+			}
+
 			nmeaString := strings.Clone(string(bufferData[0:endPosn]))
-			copy(bufferData, bufferData[endPosn+1:])
-			bufferPosition = bufferPosition - (endPosn + 1)
+			copyLength := endPosn + 1
+			copy(bufferData, bufferData[copyLength:])
+			insertPosition = insertPosition - copyLength
+			endPosition = endPosition - copyLength
 
 			// Send it out
 			select {
-			case b.rxMessageCh <- RXMessage{
+			case b.rxMessageCh <- RXMessage {
 				Name:     ddi.name,
 				NmeaLine: strings.TrimSpace(nmeaString),
 			}:
@@ -251,15 +268,14 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 				log.Printf("bleGPSDevice: rxMessageCh Full")
 			}
 		}
-	}
+	}	
 
-	watchdogTimer := common.NewWatchDog(2500 * time.Millisecond)
+	watchdogTimer := common.NewWatchDog(1000 * time.Millisecond)
 	for {
 		select {
 		case newReceived := <- dataChannel:
 			watchdogTimer.Poke()
 			dataProcess(newReceived)
-			break
 		case <-watchdogTimer.C:
 			log.Printf("bleGPSDevice: rxListener watchdog triggered")
 			return nil

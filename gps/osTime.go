@@ -18,6 +18,7 @@ import (
 )
 
 // Small go package to set the system time
+const SET_OS_TIME = true;						 // Prevent setting time. THis can be handy during debug sessions
 const SHOW_TIME_DIFFERENCE_ONLY = false                  // Use this to enable calbration mode if you want to add/test a new device pps
 const AVERAGE_OVER = 10.0                                // Average over 10 seconds to to determine the average time difference
 const ACCEPTABLE_TIME_OFFSET = 40 * time.Millisecond     // Number of ms we still accept as difference between GPS and OS time
@@ -70,6 +71,10 @@ func (s *OSTimeSetter) SetTime(t time.Time, o time.Duration, i string) {
 }
 
 func (s *OSTimeSetter) setSystemTime(gpsTime time.Time, o time.Duration, i string) {
+	if !SET_OS_TIME {
+		return
+	}
+
 	// Protect against setting weird years, this might happen during startup
 	if gpsTime.Year() < 2022 {
 		return
