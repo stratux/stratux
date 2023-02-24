@@ -12,13 +12,17 @@ package gps
 import (
 	"bytes"
 	"log"
+	"reflect"
 	"strings"
+	"unsafe"
 
 	"time"
 
 	"github.com/b3nn0/stratux/v2/common"
 	cmap "github.com/orcaman/concurrent-map/v2"
 	"tinygo.org/x/bluetooth"
+
+	"github.com/muka/go-bluetooth/bluez/profile/gatt"
 )
 
 // Holds information about a device that is currently within a list of discovered devices
@@ -44,8 +48,7 @@ func NewBleGPSDevice(rxMessageCh chan<- RXMessage) BleGPSDevice {
 		rxMessageCh:          rxMessageCh,
 	}
 }
-
-const STARTUP_BLE_SCAN_TIME = 300	// Time to search for BLE devices after
+const MAX_NMEA_LENGTH = 128
 var (
 	HM_10_CONF, _ = bluetooth.ParseUUID("0000ffe0-0000-1000-8000-00805f9b34fb")
 	BLE_RX, _     = bluetooth.ParseUUID("0000ffe1-0000-1000-8000-00805f9b34fb")
@@ -70,13 +73,11 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	// Start a go routine to listen for scan results
 	scanner := func (done chan bool) {
 		// Scan is blocking, so we need a signal to stop
-		defer b.adapter.StopScan()
 		err := b.adapter.Scan(
 			func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {						
 				select {
 				case <-done:
 					adapter.StopScan()
-					break
 				default:
 					// Test for capability we require
 					if result.AdvertisementPayload.HasServiceUUID(HM_10_CONF) && 
@@ -104,6 +105,7 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 	for {
 		select {
 		case <-b.eh.C:
+			return
 		case <-leh.C:
 			return
 		case address := <- scanInfoCh:
@@ -123,6 +125,42 @@ func (b *BleGPSDevice) startScanningBluetoothLEDevices(leh *common.ExitHelper) {
 			}
 		}
 	}
+}
+
+// This is a modified copy from the original EnableNotifications on DeviceCharacteristic
+// that version did not call UnwatchProperties and this leads to when re-enabling bluetooth the callback of the origional
+// callback get's called this can lead to memory leaks and undesired behaviour
+// The below function does call UnwatchProperties(..) on the GattCharacteristic1 to ensure we are not keep getting called
+// when we stop the BleServices
+func (b *BleGPSDevice) enableNotifications(characteristic *gatt.GattCharacteristic1, callback func(buf []byte)) error {
+	ch, err := characteristic.WatchProperties()
+	if err != nil {
+		return err
+	}
+	done := make(chan bool)
+	go func() {
+		b.eh.Add()	
+		defer b.eh.Done()
+		for {
+			select {
+			case update := <- ch:
+				if update.Interface == "org.bluez.GattCharacteristic1" && update.Name == "Value" {
+					callback(update.Value.([]byte))
+				}
+			case <- b.eh.C:
+				done <- true
+				return
+			}
+		}
+	}()
+
+	go func() {
+		<- done
+		characteristic.StopNotify()
+		characteristic.UnwatchProperties(ch)
+	}()	
+
+	return characteristic.StartNotify()
 }
 
 /**
@@ -153,9 +191,7 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 		}
 	}
 
-	// Metadology is to scan and connect..
 	done := make(chan bool)
-	defer close(done)
 	go bleScanner(done)
 	var device *bluetooth.Device
 	select {
@@ -166,13 +202,9 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 			}
 		// Based on https://bluetoothle.wiki/advertising
 		case <-time.After(10 * time.Second):
-			select {
-			case done <- true:
-			default:
-				b.adapter.StopScan()
-				log.Printf("bleGPSDevice: Timeout looking for device " + ddi.name)
-				return nil
-			}
+			done <- true
+			log.Printf("bleGPSDevice: Timeout looking for device " + ddi.name)
+			return nil
 	}
 	defer device.Disconnect()
 
@@ -202,15 +234,21 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 
 	// Listen for incomming traffic
 	dataChannel := make(chan []byte, 5)
-	enaNotifyErr := chars[0].EnableNotifications(func(value []byte) {		
-			dataChannel <- value
+	cValue := reflect.ValueOf(&chars[0]).Elem().FieldByName("characteristic")
+	characteristic := reflect.NewAt(cValue.Type(), unsafe.Pointer(cValue.UnsafeAddr())).Elem().Interface().(*gatt.GattCharacteristic1)
+	enaNotifyErr := b.enableNotifications(characteristic, func(value []byte) {		
+		select {
+		case dataChannel <- value:
+		default:
+			// Disabled because during shutdown this potentially can lead to a log getting filled for a few seconds during shutdown 
+			// log.Printf("bleGPSDevice: Dropping data from %s", ddi.name)
+		}
 	})
 
 	if enaNotifyErr != nil {
 		return enaNotifyErr
 	}
 
-	const MAX_NMEA_LENGTH = 128
 	bufferData := make([]byte, MAX_NMEA_LENGTH * 3)
 	insertPosition := 0	// Position where we next insert the data
 	endPosition := -1   // Position of last byte of valid data
@@ -235,7 +273,7 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 				insertPosition = 0
 				endPosition = -1
 				break
-			} else if(startNmea > 0) {
+			} else if(startNmea > 0 && startNmea < endPosition) {
 				// Trim such that $ is at start
 				copy(bufferData, bufferData[startNmea:])
 				insertPosition = insertPosition - startNmea
@@ -244,9 +282,7 @@ func (b *BleGPSDevice) rxListener(ddi discoveredDeviceInfo) error {
 
 			// Validate if it has an end, if not we wait for more characters
 			endPosn := bytes.IndexAny(bufferData, "\n\r") // \n
-			if endPosn == -1 {
-				break
-			} else if endPosn > endPosition {
+			if endPosn == -1 || endPosn > endPosition {
 				break
 			}
 
