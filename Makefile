@@ -24,7 +24,7 @@ endif
 
 
 
-all: libdump978.so xdump1090 xrtlais gen_gdl90 $(PLATFORMDEPENDENT)
+all: libdump978.so xdump1090 xrtlais gen_gdl90 librtlsdr $(PLATFORMDEPENDENT)
 
 gen_gdl90: main/*.go common/*.go libdump978.so
 	LIBRARY_PATH=$(CURDIR) CGO_CFLAGS_ALLOW="-L$(CURDIR)" go build $(BUILDINFO) -o gen_gdl90 -p 4 ./main/
@@ -42,6 +42,9 @@ libdump978.so: dump978/*.c dump978/*.h
 xrtlais:
 	git submodule update --init rtl-ais
 	cd rtl-ais && sed -i 's/^LDFLAGS+=-lpthread.*/LDFLAGS+=-lpthread -lm -lrtlsdr -L \/usr\/lib\//' Makefile && make
+
+librtlsdr:
+	sudo apt install librtlsdr-dev
 
 
 .PHONY: test
