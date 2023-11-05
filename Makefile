@@ -34,6 +34,7 @@ fancontrol: fancontrol_main/*.go common/*.go
 
 xdump1090:
 	git submodule update --init dump1090
+	git submodule update --remote dump1090
 	cd dump1090 && make BLADERF=no
 
 libdump978.so: dump978/*.c dump978/*.h
