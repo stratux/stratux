@@ -92,7 +92,7 @@ make -j1
 make install
 cd /root/
 rm -r rtl-sdr
-
+PATH=/root/fake:/usr/sbin:$PATH
 ldconfig
 
 #kalibrate-rtl
