@@ -11,7 +11,7 @@ ZIPNAME="2024-03-15-raspios-bookworm-arm64-lite.img.xz"
 IMGNAME="$(basename $ZIPNAME .xz)"
 TMPDIR="$HOME/stratux-tmp"
 # REMOTE_ORIGIN=$(git config --get remote.origin.url) # would be nicer, but doesn't work with ssh clone..
-REMOTE_ORIGIN="https://github.com/b3nn0/stratux.git"
+REMOTE_ORIGIN="https://github.com/JonWilder/stratux.git"
 
 die() {
     echo $1
@@ -73,9 +73,13 @@ cd ../../
 
 # Use latest qemu-aarch64-static version, since aarch64 doesn't seem to be that stable yet..
 if [ "$(arch)" != "aarch64" ]; then
-    wget -P mnt/usr/bin/ https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/qemu-aarch64-static
-    chmod +x mnt/usr/bin/qemu-aarch64-static
-    unshare -mpfu chroot mnt qemu-aarch64-static -cpu cortex-a72 /bin/bash -c /root/stratux/image/mk_europe_edition_device_setup64.sh
+    #wget -P mnt/usr/bin/ https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/qemu-aarch64-static
+    #chmod +x mnt/usr/bin/qemu-aarch64-static
+    #unshare -mpfu chroot mnt qemu-aarch64-static -cpu cortex-a72 /bin/bash -c /root/stratux/image/mk_europe_edition_device_setup64.sh
+    # For use on Gentoo systems with Qemu
+    cp /usr/bin/qemu-aarch64 mnt/usr/bin
+    chmod +x mnt/usr/bin/qemu-aarch64
+    unshare -mpfu chroot mnt qemu-aarch64 /bin/bash -c /root/stratux/image/mk_europe_edition_device_setup64.sh
 else
     unshare -mpfu chroot mnt /bin/bash -c /root/stratux/image/mk_europe_edition_device_setup64.sh
 fi
