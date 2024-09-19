@@ -39,7 +39,6 @@ cd bluez-5.76
 cd ..
 rm -r bluez-5.76
 PATH=/root/fake:$PATH RUNLEVEL=1 apt autoremove --purge --yes libusb-dev libdbus-1-dev libglib2.0-dev libudev-dev libical-dev libreadline-dev python3-pygments
-systemctl daemon-reload
 systemctl enable bluetooth
 
 # try to reduce writing to SD card as much as possible, so they don't get bricked when yanking the power cable
@@ -93,7 +92,7 @@ make -j1
 make install
 cd /root/
 rm -r rtl-sdr
-
+PATH=/root/fake:/usr/sbin:$PATH
 ldconfig
 
 #kalibrate-rtl
