@@ -132,14 +132,6 @@ cd /root/stratux
 make clean
 make -j8
 
-# Now also prepare the update file..
-cd /root/stratux/selfupdate
-./makeupdate.sh
-mv /root/stratux/work/update-*.sh /root/
-rm -r /root/stratux/work
-cd /root/stratux
-
-
 rm -r /root/go_path/* # safe space again..
 make install
 rm -rf /root/.cache

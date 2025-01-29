@@ -78,9 +78,6 @@ else
 fi
 mkdir -p out
 
-# Move the selfupdate file out of there..
-mv mnt/root/update-*.sh out
-
 umount mnt/boot/firmware
 umount mnt
 
