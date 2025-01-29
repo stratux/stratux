@@ -19,12 +19,9 @@ fi
 
 
 #
-# Rotate logs on boot.
+# Rotate logs on boot. Ensures the log files are clean after a boot for easier
+# viewing of the current boot log from the web interface.
 #
 /usr/sbin/logrotate /etc/logrotate.conf
-
-
-# Disabled for now as it is unamintained and doesn't run correctly with python2 deprecation
-# /usr/bin/stratux-screen.py start
 
 exit 0
