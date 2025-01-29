@@ -9,3 +9,6 @@
 [submodule "ogn/ogn-tracker"]
 	path = ogn/ogn-tracker
 	url = https://github.com/pjalocha/ogn-tracker.git
+[submodule "image_build/pi-gen"]
+	path = image_build/pi-gen
+	url = https://github.com/RPi-Distro/pi-gen.git
