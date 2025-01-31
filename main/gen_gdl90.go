@@ -1639,6 +1639,8 @@ func main() {
 			STRATUX_WWW_DIR = ex + "/web/"
 		}
 		configLocation = os.Getenv("HOME") + "/.stratux.conf"
+		log.Printf("Not running as root, remapping STRATUX_WWW_DIR to %s and configLocation to %s\n",
+				STRATUX_WWW_DIR, configLocation);
 	}
 
 	// Set up mySituation, do it here so logging JSON doesn't panic
