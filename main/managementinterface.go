@@ -1201,6 +1201,7 @@ func managementInterface() {
 		addr = ":8000" // Make sure we can run without root priviledges on different port
 	}
 
+	log.Printf("web configuration console on port %s", addr);
 	if err :=http.ListenAndServe(addr, nil); err != nil {
 		log.Printf("managementInterface ListenAndServe: %s\n", err.Error())
 	}
