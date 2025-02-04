@@ -50,3 +50,7 @@ It also shows how you can modify your pre-built Stratux US version to run the EU
 
 If you want to customize beyond that, or have different needs, you can find a full list of supported hardware/attachments [here](https://github.com/stratux/stratux/wiki/Supported-Hardware).
 
+## Developing
+
+See [DEVELOPING.md](docs/DEVELOPING.md) for details and information.
+
