@@ -54,3 +54,14 @@ If you want to customize beyond that, or have different needs, you can find a fu
 
 See [DEVELOPING.md](docs/DEVELOPING.md) for details and information.
 
+## Docs in repository vs. in wiki
+
+User facing documentation is stored in the wiki because the wiki is:
+
+1. Easer to edit (via browser, without needing a PR)
+1. Automatically published
+
+Developer documentation is stored in the repository because:
+
+1. Developer documentation is typically tied tightly to code. Changes to code and developer documentation should occur together in this case. Code releases are tied to their developer documentation.
+1. In-repository markdown enables PRs and PR review, ensuring accuracy and alignment with other developers.
