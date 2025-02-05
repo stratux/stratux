@@ -20,8 +20,8 @@ If you are planning something bigger, feel free to contact us on Discord or crea
 
 ## Documentation
 Code should, whenever possible, be self documenting and not require an external document.
-External documentation only makes sense iff
-- What you are documenting is something general, not related to a specific pice of code
+Documentation external to the code makes sense if
+- What you are documenting is something general, not related to a specific piece of code
 - It requires a _lot_ of documentation
 - It is intended for people that don't interact with the code
 
