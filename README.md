@@ -1,7 +1,7 @@
 [![CI](https://github.com/stratux/stratux/actions/workflows/ci.yml/badge.svg)](https://github.com/stratux/stratux/actions/workflows/ci.yml)
 [![](https://dcbadge.limes.pink/api/server/D9NQ6xe4nF)](https://discord.gg/D9NQ6xe4nF)
 
-# Stratux
+# Stratux &#9992;
 
 ```mermaid
 mindmap
