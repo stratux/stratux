@@ -36,6 +36,24 @@ It also shows how you can modify your pre-built Stratux US version to run the EU
 
 If you want to customize beyond that, or have different needs, you can find a full list of supported hardware/attachments [here](https://github.com/stratux/stratux/wiki/Supported-Hardware).
 
+## Major vs. minor releases
+
+Stratux uses [semantic versioning](https://semver.org), versions are MAJOR.MINOR eg, 3.6.
+
+### Major versions
+
+* Are necessary due to platform library or platform configuration changes
+* OTA updates are <b>not</b> supported between major versions
+  * It is technically possible to use the OTA update process between
+major versions. However there can be significant effort to manually develop
+and test the scripts involved in that process and at present these scripts
+are not being developed.
+
+### Minor version
+
+* OTA updates are supported between minor versions
+  * Some users have Stratux units mounted in their dash or other challenging locations.
+
 ## Developing
 
 See [DEVELOPING.md](docs/DEVELOPING.md) for details and information.
