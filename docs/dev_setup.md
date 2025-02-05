@@ -9,7 +9,7 @@ You basically have two choices.
 Working remotely on a pi can also be done from Windows and has the advantage of full hardware support (e.g. AHRS module, which can't be plugged into your PC).
 Working locally on a Linux machine is a bit harder to set up and requires some creativity, but is much faster and more comfortable when doing basic work that doesn't rely on AHRS/Baro stuff.
 
-As of Stratux-EU 025, we recommend working remotely on the Pi, preferably a Pi4.
+We recommend working remotely on the Pi, preferably a Pi4.
 
 ## Remote Setup
 To work remotely on the PI, first, **make sure your Stratux is connected to the internet**. You will also have to **Enable persistent logging on the web interface** to make sure that the file system of the PI is writable.
