@@ -3,6 +3,24 @@
 
 # Stratux
 
+```mermaid
+mindmap
+  root((Raspberry PI))
+    Communication
+        Wi-Fi
+            Foreflight
+            ::icon(fa fa-tablet)
+    Sensors
+        GNSS (GPS)
+        1090-ADSB
+        978 UAT
+        AHRS
+        Barometric pressure
+    Battery
+    uSD card
+    Fan
+```
+
 ## US users
 
 https://github.com/stratux/stratux/wiki/US-configuration
