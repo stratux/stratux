@@ -13,7 +13,15 @@ mindmap
     Sensors
         GNSS (GPS)
         1090-ADSB
+            Aircraft position, altitude, heading
         978 UAT
+            METAR
+            Notams
+            CONUS Radar
+            Lightning
+            Upper winds
+            AIRMETs
+            SIGMets
         AHRS
         Barometric pressure
     Battery
