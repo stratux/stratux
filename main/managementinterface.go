@@ -773,6 +773,14 @@ func handleDownloadDBRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // Upload an update file.
+// - Update (.sh) is uploaded via the Stratux web interface (settings.js)
+// - The file is placed in /overlay/robase/root/ (managementinterface.go handleUpdatePostRequest())
+// - Stratux reboots
+// - stratux-pre-start.sh runs at boot
+// - If the update file is found, it is executed, extracting, installing and doing everything that's needed
+// - The file is deleted
+// - Stratux reboots again
+// - Updated Stratux software starts
 func handleUpdatePostRequest(w http.ResponseWriter, r *http.Request) {
 	setNoCache(w)
 	setJSONHeaders(w)
