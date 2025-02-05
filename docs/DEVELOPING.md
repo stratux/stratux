@@ -1,5 +1,19 @@
 # Development
 
+## Building
+
+NOTE: Stratux uses submodules, ensure you have run:
+
+```
+git submodule update --init --recursive
+```
+
+Prior to building with:
+
+```
+make
+```
+
 ## OTA upgrade process
 
 1. Update script file is uploaded via the Stratux web interface
