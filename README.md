@@ -25,7 +25,7 @@ mindmap
         AHRS
         Barometric pressure
     Battery
-    uSD card
+    uSD card - Stratux software
     Fan
 ```
 
