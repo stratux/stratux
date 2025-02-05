@@ -1,0 +1,57 @@
+name: Release
+
+# Controls when the workflow will run
+on:
+  push:
+    tags:
+      - "v*.*"
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build_deb:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch the full repository, necessary as the latest tag is used during the build of the deb
+
+      - name: Update submodule
+        run: git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: sudo apt-get install -y librtlsdr-dev
+
+      - name: make ddpkg
+        run: make ddpkg
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.deb
+          draft: true
+
+  build_image:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch the full repository, necessary as the latest tag is used during the build of the deb
+
+      - name: Update submodule
+        run: git submodule update --init --recursive
+
+      - name: build.sh
+        run: |
+          cd image_build
+          ./build.sh
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: image_build/pi-gen/deploy/*
+          draft: true
