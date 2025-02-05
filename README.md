@@ -21,7 +21,7 @@ This repository offers code and binaries that can help you to build your own tra
 * 1090 ADSB
 * UAT
 * OGN receiver functionality to receive several protocols on the 868Mhz frequency band, comparable to what the OpenGliderNetwork does
-* Several improvements and bug fixes to GPS handling and chip configuration (by [VirusPilot](https://github.com/VirusPilot)
+* Several improvements and bug fixes to GPS handling and chip configuration (by [VirusPilot](https://github.com/VirusPilot))
 * Support for transmitting OGN via a TTGO T-Beam
 * More robust sensor handling
 * Traffic Radar and Map
