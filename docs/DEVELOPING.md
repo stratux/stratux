@@ -32,7 +32,7 @@ Examples:
 
 # Interfacing with Stratux
 If you are a developer of a third-party software, and want to interface with Stratux and use its data?
-See [app-vendor-integration.md](https://github.com/stratux/stratux/docs/app-vendor-integration.md)
+See [app-vendor-integration.md](app-vendor-integration.md)
 
 # Building
 
