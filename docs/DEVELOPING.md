@@ -48,6 +48,9 @@ Prior to building with:
 make
 ```
 
+# Development Environment setup
+If you want to get started working on the code, see [dev_setup.md](dev_setup.md)
+
 # OTA upgrade process
 
 There are two mechanisms used for OTA updates in Stratux.
