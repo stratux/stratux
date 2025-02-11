@@ -92,6 +92,10 @@ Due to the availabilty of much larger and low cost microSD cards this constraint
 
 We recommend using a 8GB or larger microSD card for your stratux system.
 
+## Roadmap
+
+* Remove custom bluez and librtlsdr builds once Debian:13 (Trixie) is available for the Raspberry PI
+
 ## Developing
 
 See [DEVELOPING.md](docs/DEVELOPING.md) for details and information.
