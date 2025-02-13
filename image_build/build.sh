@@ -16,6 +16,9 @@ cp config pi-gen/
 # copy the stage2 10-stratux files into place
 rsync -av --delete stage2/10-stratux/ pi-gen/stage2/10-stratux/
 
+# Remove userconf-pi from export-image step
+rm -f pi-gen/export-image/01-user-rename/00-packages
+
 # clone the local git repository (and present branch) into pi-gen
 # so the files are visible to docker
 #
