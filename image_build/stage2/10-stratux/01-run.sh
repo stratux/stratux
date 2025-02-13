@@ -46,8 +46,6 @@ on_chroot << EOF
     # configure a user manually
     apt remove userconf-pi
 
-    # remove network-manager as Stratux depends on using ifupdown network interface
-    apt remove network-manager
 EOF
 
 # install esptool

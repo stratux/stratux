@@ -27,6 +27,7 @@ DEB_FILENAME_TMP=${ROOTFS_DIR}/tmp/${DEB_NAME}
 # install the stratux package
 on_chroot << EOF
     dpkg -i /tmp/${DEB_NAME}
+    dpkg -r network-manager raspberrypi-net-mods
 EOF
 
 # remove the dpkg file from tmp
