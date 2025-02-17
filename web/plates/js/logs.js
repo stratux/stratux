@@ -8,4 +8,16 @@ function LogsCtrl($scope, $state, $http) {
 	// just a couple environment variables that may bve useful for dev/debugging but otherwise not significant
 	$scope.userAgent = navigator.userAgent;
     $scope.deviceViewport = 'screen = ' + window.screen.width + ' x ' + window.screen.height;
+
+    $scope.postDownloadLog = function () {
+        $http.post(URL_DOWNLOADLOGFILE).
+        then(function (response) {
+            // do nothing
+            // $scope.$apply();
+        }, function (response) {
+        // do nothing
+        });
+    };
+
 }
+
