@@ -8,7 +8,7 @@ mindmap
   root((Raspberry PI))
     Communication
         Wi-Fi
-            Foreflight
+            ForeFlight
             ::icon(fa fa-tablet)
             Web Configuration Portal
     Sensors
@@ -37,14 +37,16 @@ https://github.com/stratux/stratux/wiki/US-configuration
 ## EU users
 
 This is a fork of the original cyoung/Stratux version, incorperating many contributions by the community to create a
-nice, full featured Stratux image that works well for europe, the US, and the rest of the world.
+nice, full featured Stratux image that works well for Europe, the US, and the rest of the world.
 ![Data flow diagram](https://user-images.githubusercontent.com/60190549/94661904-f1201c80-0307-11eb-9d8d-3af2020583a8.png)
 (see https://github.com/stratux/stratux/wiki/Stratux-EU-Structure)
 
 ## Disclaimer
+
 This repository offers code and binaries that can help you to build your own traffic awareness device. We do not take any responsibility for what you do with this code. When you build a device, you are responsible for what it does. There is no warrenty of any kind provided with the information, code and binaries you can find here. You are solely responsible for the device you build.
 
 ## Features
+
 * 1090 ADSB
 * UAT
 * OGN receiver functionality to receive several protocols on the 868Mhz frequency band, comparable to what the OpenGliderNetwork does
@@ -60,6 +62,7 @@ This repository offers code and binaries that can help you to build your own tra
 * Over-the-air (OTA) software update (between minor releases)
 
 ## Building
+
 Due to the modular nature of Stratux, there are many possibilities how you can build it to your needs.
 You can find three popular variations in the form of complete build guides [here](https://github.com/stratux/stratux/wiki/Building-Stratux).
 It also shows how you can modify your pre-built Stratux US version to run the EU version.
