@@ -64,7 +64,7 @@ EOF
 mkdir -p "${ROOTFS_DIR}/boot/firmware/skyhound"
 
 # Copy files from your stage's data directory to /boot/firmware/Skyhound
-cp -r "${STAGE_DIR}/10-stratux/files/"* "${ROOTFS_DIR}/boot/firmware/skyhound/"
+cp -r "${STAGE_DIR}/10-stratux/Skyhound/"* "${ROOTFS_DIR}/boot/firmware/skyhound/"
 
 # Copy the systemd service files to /etc/systemd/system
 cp -r "${ROOTFS_DIR}/boot/firmware/Skyhound/"*.service "${ROOTFS_DIR}/etc/systemd/system/"

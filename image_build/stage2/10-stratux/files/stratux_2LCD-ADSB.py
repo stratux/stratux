@@ -101,6 +101,8 @@ display_mode = 2
 global max_ac
 max_ac = 5
 
+global BaroPressureAltitude
+
 STRATUX_WS_URL = "ws://localhost/situation"  # Stratux WebSocket URL
 UPDATE_RATE = 0.05  # Target 20 Hz refresh rate (every 50ms)
 SMOOTHING_WINDOW = 5  # Number of frames to smooth
@@ -161,6 +163,7 @@ def parse_gps_data():
     global receiver_lat, receiver_lon, receiver_altitude, receiver_speed, receiver_track, receiver_quality
     global receiver_time, receiver_epv, receiver_ept, receiver_mode, uSat
     global GPSSatellitesSeen, GPSSatellitesTracked
+    global BaroPressureAltitude
 
 
 
@@ -170,6 +173,7 @@ def parse_gps_data():
         try:
             response = requests.get(url, verify=False)  # Set verify to True in production for SSL verification
             data = response.json()
+            print(data)
             print("Received stratux GPS data:")
             #print(json.dumps(data, indent=2))
 
@@ -186,6 +190,8 @@ def parse_gps_data():
             GPSSatellitesTracked = data.get("GPSSatellitesTracked", 0)
             GPSSatellitesSeen = data.get("GPSSatellitesSeen", 0)
             uSat = data.get("GPSSatellites", 0)
+
+            BaroPressureAltitude = data.get("BaroPressureAltitude", 0.0)
 
             gps_update_success = True if receiver_quality else False
             #print(f"GPS data: lat {receiver_lat} lon {receiver_lon} time {receiver_time} track {receiver_track} alt {receiver_altitude} sats {uSat}")
@@ -951,6 +957,23 @@ def draw_attitude_indicator():
 
         time.sleep(UPDATE_RATE)  # Keep refreshing at 20 FPS
 
+def draw_pressure():
+    global BaroPressureAltitude
+    with canvas(device) as draw:
+        draw.rectangle((0, 0, 320, 240), fill="BLACK")
+
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+            headerfont = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+        except IOError:
+            font = ImageFont.load_default()
+            headerfont = font  # fallback
+
+
+        # add a check for gps ()
+        draw.text((2, 2), "Pressure", fill="YELLOW", font=headerfont)
+        draw.text((2, 40), str(BaroPressureAltitude), fill="WHITE", font=font)
+
 
 
 def main_loop(file_path):
@@ -1006,14 +1029,11 @@ def main_loop(file_path):
             # Run attitude indicator continuously until display_mode changes
             draw_attitude_indicator()
         
+        # Now show pressure
         elif display_mode == 5: 
           oled_displays_with_arrow(file_path, receiver_lat, receiver_lon)
-          # draw something new here, just a test
           
-          unique_count = len(process_aircraft_data(file_path, receiver_lat, receiver_lon))
-          closest_aircraft = process_aircraft_data(file_path, receiver_lat, receiver_lon)
-          display_closest_aircraft_on_lcd(closest_aircraft)
-          oled_displays_with_arrow(file_path, receiver_lat, receiver_lon)
+          draw_pressure()
 
         time.sleep(.25)  # Adjust as needed
 
