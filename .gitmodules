@@ -12,3 +12,7 @@
 [submodule "image_build/pi-gen"]
 	path = image_build/pi-gen
 	url = https://github.com/RPi-Distro/pi-gen.git
+[submodule "image_build/stage2/10-stratux/Skyhound"]
+    path = image_build/stage2/10-stratux/Skyhound
+    url = https://github.com/sellenberg/Skyhound.git
+
