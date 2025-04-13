@@ -69,5 +69,14 @@ cp -r "${STAGE_DIR}/10-stratux/Skyhound/"* "${ROOTFS_DIR}/boot/firmware/skyhound
 # Copy the systemd service files to /etc/systemd/system
 cp -r "${ROOTFS_DIR}/boot/firmware/skyhound/"*.service "${ROOTFS_DIR}/etc/systemd/system/"
 
-# Set permissions (not critical for FAT32, but useful for consistency)
-chmod 755 "${ROOTFS_DIR}/boot/firmware/skyhound"
+
+# --- Grant sudo access to everything in /boot/firmware/skyhound ---
+# Create a sudoers snippet so that the 'pi' user (or any user you choose)
+# can run any program in that directory as root, without a password.
+# cat << 'EOSUDO' > "${ROOTFS_DIR}/etc/sudoers.d/skyhound"
+# Cmnd_Alias SKYHOUND = /boot/firmware/skyhound/*
+# pi ALL=(ALL) NOPASSWD: SKYHOUND
+# EOSUDO
+
+# # Secure the sudoers file
+# chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/skyhound"
