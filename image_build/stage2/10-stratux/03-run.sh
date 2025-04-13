@@ -69,14 +69,16 @@ cp -r "${STAGE_DIR}/10-stratux/Skyhound/"* "${ROOTFS_DIR}/boot/firmware/skyhound
 # Copy the systemd service files to /etc/systemd/system
 cp -r "${ROOTFS_DIR}/boot/firmware/skyhound/"*.service "${ROOTFS_DIR}/etc/systemd/system/"
 
+on_chroot << EOF
+    # Disable overlay filesystem (persist across boots)
+    overlayctl disable
 
-# --- Grant sudo access to everything in /boot/firmware/skyhound ---
-# Create a sudoers snippet so that the 'pi' user (or any user you choose)
-# can run any program in that directory as root, without a password.
-# cat << 'EOSUDO' > "${ROOTFS_DIR}/etc/sudoers.d/skyhound"
-# Cmnd_Alias SKYHOUND = /boot/firmware/skyhound/*
-# pi ALL=(ALL) NOPASSWD: SKYHOUND
-# EOSUDO
+    # Fix permissions on our custom service files
+    chmod 755 /etc/systemd/system/stratux_*
+    chmod 755 /etc/systemd/system/auto_update.service
 
-# # Secure the sudoers file
-# chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/skyhound"
+    # Enable services at boot
+    systemctl enable auto_update.service
+    systemctl enable stratux_2LCD-ADSB.service
+    systemctl enable stratux_wswrite.service
+EOF
