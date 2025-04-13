@@ -67,7 +67,7 @@ mkdir -p "${ROOTFS_DIR}/boot/firmware/skyhound"
 cp -r "${STAGE_DIR}/10-stratux/Skyhound/"* "${ROOTFS_DIR}/boot/firmware/skyhound/"
 
 # Copy the systemd service files to /etc/systemd/system
-cp -r "${ROOTFS_DIR}/boot/firmware/Skyhound/"*.service "${ROOTFS_DIR}/etc/systemd/system/"
+cp -r "${ROOTFS_DIR}/boot/firmware/skyhound/"*.service "${ROOTFS_DIR}/etc/systemd/system/"
 
 # Set permissions (not critical for FAT32, but useful for consistency)
 chmod 755 "${ROOTFS_DIR}/boot/firmware/skyhound"
