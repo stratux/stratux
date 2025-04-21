@@ -1954,15 +1954,19 @@ func gpsSerialReader() {
 		}
 
 		s := scanner.Text()
-		startIdx := strings.Index(s, "$")
-		if startIdx < 0 {
-			continue
-		}
-		s = s[startIdx:]
-
-		if !processNMEALine(s) {
-			if globalSettings.DEBUG {
-				fmt.Printf("processNMEALine() exited early -- %s\n", s)
+		// Split the line into individual NMEA messages
+		messages := strings.Split(s, "$")
+		for _, msg := range messages {
+			if len(msg) == 0 {
+				continue
+			}
+			// Add back the $ prefix that was removed by Split
+			msg = "$" + msg
+			
+			if !processNMEALine(msg) {
+				if globalSettings.DEBUG {
+					fmt.Printf("processNMEALine() exited early -- %s\n", msg)
+				}
 			}
 		}
 	}
