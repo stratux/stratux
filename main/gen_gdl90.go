@@ -1361,7 +1361,7 @@ func defaultSettings() {
 	globalSettings.AHRSLog = false
 	globalSettings.IMUMapping = [2]int{-1, 0}
 	globalSettings.OwnshipModeS = "F00000"
-	globalSettings.DeveloperMode = false
+	globalSettings.DeveloperMode = true
 	globalSettings.StaticIps = make([]string, 0)
 	globalSettings.NoSleep = false
 	globalSettings.EstimateBearinglessDist = false
@@ -1502,7 +1502,7 @@ func changeRegionSettings() {
 		case 1:	// US settings
 			globalSettings.UAT_Enabled = true
 			globalSettings.OGN_Enabled = false
-			globalSettings.DeveloperMode = false
+			globalSettings.DeveloperMode = true
 		case 2: // EU settings
 			globalSettings.UAT_Enabled = false
 			globalSettings.OGN_Enabled = true
