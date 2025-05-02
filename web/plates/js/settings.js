@@ -320,6 +320,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.GDL90MSLAlt_Enabled = settings.GDL90MSLAlt_Enabled;
 		$scope.EstimateBearinglessDist = settings.EstimateBearinglessDist;
 		$scope.OwnshipSet = settings.OwnshipSet;
+		$scope.AutoUpdate = settings.AutoUpdate;
 		$scope.StaticIps = settings.StaticIps;
 
 		$scope.WiFiCountry = settings.WiFiCountry;
