@@ -1233,6 +1233,7 @@ type settings struct {
 	EstimateBearinglessDist bool
 	OwnshipSet bool
 	AutoUpdate bool
+	UpdateAvailable bool
 
 	RadarLimits          int
 	RadarRange           int
@@ -1368,6 +1369,7 @@ func defaultSettings() {
 	globalSettings.EstimateBearinglessDist = false
 	globalSettings.OwnshipSet = false
 	globalSettings.AutoUpdate = false
+	globalSettings.UpdateAvailable = false
 
 	globalSettings.WiFiChannel = 1
 	globalSettings.WiFiIPAddress = "192.168.10.1"

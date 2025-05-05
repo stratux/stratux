@@ -569,6 +569,9 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 					case "AutoUpdate":
 						globalSettings.AutoUpdate = val.(bool)
 
+					case "UpdateAvailable":
+						globalSettings.UpdateAvailable = val.(bool)
+
 					case "OGNAddrType":
 						globalSettings.OGNAddrType = int(val.(float64))
 						reconfigureTracker = true
