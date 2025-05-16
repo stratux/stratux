@@ -566,6 +566,9 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 					case "OwnshipSet":
 						globalSettings.OwnshipSet = val.(bool)
 
+					case "OwnshipHandling":
+						globalSettings.OwnshipHandling = val.(bool)
+
 					case "AutoUpdate":
 						globalSettings.AutoUpdate = val.(bool)
 

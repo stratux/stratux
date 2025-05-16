@@ -58,6 +58,12 @@ on_chroot << EOF
     apt install -y python3-luma.lcd
     apt install -y python3-luma.oled
     apt install -y fonts-dejavu
+    apt install -y python3-flask
+    apt install -y python3-waitress
+    apt install -y build-essential python3-dev libssl-dev cargo
+    apt install -y python3-pip
+    pip install orjson --break-system-packages
+
 EOF
 
 

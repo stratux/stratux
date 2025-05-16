@@ -1232,6 +1232,7 @@ type settings struct {
 
 	EstimateBearinglessDist bool
 	OwnshipSet bool
+	OwnshipHandling bool
 	AutoUpdate bool
 	UpdateAvailable bool
 
@@ -1368,6 +1369,7 @@ func defaultSettings() {
 	globalSettings.NoSleep = false
 	globalSettings.EstimateBearinglessDist = false
 	globalSettings.OwnshipSet = false
+	globalSettings.OwnshipHandling = true
 	globalSettings.AutoUpdate = false
 	globalSettings.UpdateAvailable = false
 
