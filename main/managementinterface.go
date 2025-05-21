@@ -575,6 +575,33 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 					case "UpdateAvailable":
 						globalSettings.UpdateAvailable = val.(bool)
 
+					case "TrackUp":
+						globalSettings.TrackUp = val.(bool)
+					
+					case "SpeedType":
+						globalSettings.SpeedType = val.(string)
+					
+					case "DisplayedAltType":
+						globalSettings.DisplayedAltType = val.(string)
+
+					case "CustomVar1":
+						globalSettings.CustomVar1 = val.(bool)
+
+					case "CustomVar2":
+						globalSettings.CustomVar2 = val.(bool)
+					
+					case "CustomVar3":
+						globalSettings.CustomVar3 = val.(bool)
+
+					case "CustomVar4":
+						globalSettings.CustomVar4 = val.(string)
+
+					case "CustomVar5":
+						globalSettings.CustomVar5 = val.(string)
+
+					case "CustomVar6":
+						globalSettings.CustomVar6 = val.(string)
+
 					case "OGNAddrType":
 						globalSettings.OGNAddrType = int(val.(float64))
 						reconfigureTracker = true

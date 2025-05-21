@@ -1235,6 +1235,16 @@ type settings struct {
 	OwnshipHandling bool
 	AutoUpdate bool
 	UpdateAvailable bool
+	TrackUp bool
+	SpeedType string
+	DisplayedAltType string
+
+	CustomVar1 bool
+	CustomVar2 bool
+	CustomVar3 bool
+	CustomVar4 string
+	CustomVar5 string
+	CustomVar6 string
 
 	RadarLimits          int
 	RadarRange           int
@@ -1372,6 +1382,15 @@ func defaultSettings() {
 	globalSettings.OwnshipHandling = true
 	globalSettings.AutoUpdate = false
 	globalSettings.UpdateAvailable = false
+	globalSettings.TrackUp = true
+	globalSettings.SpeedType = "MPH"
+	globalSettings.DisplayedAltType = "GPS"
+	globalSettings.CustomVar1 = false
+	globalSettings.CustomVar2 = false
+	globalSettings.CustomVar3 = false
+	globalSettings.CustomVar4 = ""
+	globalSettings.CustomVar5 = ""
+	globalSettings.CustomVar6 = ""
 
 	globalSettings.WiFiChannel = 1
 	globalSettings.WiFiIPAddress = "192.168.10.1"

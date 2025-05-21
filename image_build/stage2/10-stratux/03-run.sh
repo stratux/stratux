@@ -61,6 +61,7 @@ on_chroot << EOF
     apt install -y python3-flask
     apt install -y python3-waitress
     apt install -y build-essential python3-dev libssl-dev cargo
+    apt install -y python3-git
     apt install -y python3-pip
     pip install orjson --break-system-packages
 
@@ -79,7 +80,6 @@ on_chroot << EOF
     # Disable overlay filesystem (persist across boots)
     overlayctl disable
 
-    # Fix permissions on our custom service files
     chmod 755 /etc/systemd/system/stratux_*
     chmod 755 /etc/systemd/system/auto_update.service
 
