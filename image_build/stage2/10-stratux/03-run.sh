@@ -64,7 +64,10 @@ on_chroot << EOF
     apt install -y python3-git
     apt install -y python3-pip
     pip install orjson --break-system-packages
-
+    
+    apt install -y python3.10
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
 EOF
 
 
