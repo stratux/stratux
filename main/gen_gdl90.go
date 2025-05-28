@@ -1238,6 +1238,7 @@ type settings struct {
 	TrackUp bool
 	SpeedType string
 	DisplayedAltType string
+	AltOffset int
 
 	CustomVar1 bool
 	CustomVar2 bool
@@ -1385,6 +1386,8 @@ func defaultSettings() {
 	globalSettings.TrackUp = true
 	globalSettings.SpeedType = "MPH"
 	globalSettings.DisplayedAltType = "GPS"
+	globalSettings.AltOffset = 0
+
 	globalSettings.CustomVar1 = false
 	globalSettings.CustomVar2 = false
 	globalSettings.CustomVar3 = false
