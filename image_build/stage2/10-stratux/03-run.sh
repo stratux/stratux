@@ -80,10 +80,8 @@ on_chroot << EOF
     overlayctl disable
 
     chmod 755 /etc/systemd/system/stratux_*
-    chmod 755 /etc/systemd/system/auto_update.service
 
     # Enable services at boot
-    systemctl enable auto_update.service
     systemctl enable stratux_2LCD-ADSB.service
     systemctl enable stratux_wswrite.service
 EOF

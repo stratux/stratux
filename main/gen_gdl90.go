@@ -1035,6 +1035,18 @@ func registerADSBTextMessageReceived(msg string, uatMsg *uatparse.UATMsg) {
 	wm.Data = strings.Join(x[3:], " ")
 	wm.LocaltimeReceived = stratuxClock.Time
 
+
+	logFile, err := os.OpenFile("/var/log/weather.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer logFile.Close()
+
+	logWriter := bufio.NewWriter(logFile)
+	logWriter.WriteString(fmt.Sprintf("%v %v %v %v\n", wm.Type, wm.Location, wm.Time, wm.Data))
+	logWriter.Flush()
+
 	// Send to weatherUpdate channel for any connected clients.
 	weatherUpdate.SendJSON(wm)
 }
