@@ -585,7 +585,7 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.DisplayedAltType = val.(string)
 
 					case "AltOffsetSkyhound":
-						globalSettings.AltOffsetSkyhound = val.(int)
+						globalSettings.AltOffsetSkyhound = val.(string)
 
 					case "CustomVar1":
 						globalSettings.CustomVar1 = val.(bool)
