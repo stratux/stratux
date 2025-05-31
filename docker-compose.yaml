@@ -1,22 +1,31 @@
-# Start the cli with:
-# MY_UID="$(id -u)" MY_GID="$(id -g)" docker compose run --service-ports --rm cli
+version: "3.9"
 
 services:
   cli:
-    image: stratux_debian
-    platform: linux/arm64/v8
+    # ─────── REMOVED “image: stratux_debian” ───────
+    # (Now Compose will only build locally and tag it automatically as <project>_cli:latest)
+
+    # ─────── REMOVE platform: so Docker picks your host’s arch (amd64) ───────
+    # platform: linux/arm64/v8
+
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+
     environment:
       GOCACHE: "/tmp/go-cache"
       GOMODCACHE: "/tmp/go/pkg/mod"
-    stdin_open: true  # docker run -i
-    tty: true         # docker run -t
+
+    stdin_open: true   # docker run -i
+    tty: true          # docker run -t
+
     entrypoint: /bin/bash
-    user: ${MY_UID}:${MY_GID}
-    build:
-      dockerfile: ./Dockerfile
+    user: "${MY_UID}:${MY_GID}"
+
     volumes:
       - type: bind
         source: ./
         target: /data
+
     ports:
       - "8000:8000"
