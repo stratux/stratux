@@ -1076,7 +1076,21 @@ func calculateNavRate() float64 {
 
  	return halfwidth
  }
-
+/*
+	injectFixedGSA injects a fixed GSA sentence for DIY GPS modules
+	that only send GGA+VTG but need GSA for Stratux validation.
+	
+	Returns true if GSA injection was successful.
+*/
+func injectFixedGSA() bool {
+	// GSA fixe avec valeurs optimales pour GPS DIY 1Hz
+	// $GPGSA,Mode,FixType,sat1-12,PDOP,HDOP,VDOP*checksum
+	// A=Auto, 3=3D fix, 8 satellites (01-08), PDOP=2.1, HDOP=1.8, VDOP=1.1
+	fixedGSALine := "$GPGSA,A,3,01,02,03,04,05,06,07,08,,,,,2.1,1.8,1.1*3B"
+	
+	// Traiter la GSA fixe en utilisant le parser NMEA existant
+	return processNMEALineLow(fixedGSALine, false)
+}
 /*
 processNMEALine parses NMEA-0183 formatted strings against several message types.
 
@@ -1265,7 +1279,13 @@ func processNMEALineLow(l string, fakeGpsTimeToCurr bool) (sentenceUsed bool) {
 			}
 			mySituation.muGPSPerformance.Unlock()
 		}
-
+		// ===== INJECTION GSA AUTOMATIQUE POUR GPS DIY =====
+		if tmpSituation.GPSFixQuality > 0 { // Si GGA indique un fix valide
+			go func() {
+				time.Sleep(50 * time.Millisecond) // Délai adapté pour 1Hz
+				injectFixedGSA() // Injecter GSA fixe avec valeurs parfaites
+			}()
+		}
 		return true
 
 	} else if (x[0] == "GNRMC") || (x[0] == "GPRMC") { // Recommended Minimum data.
