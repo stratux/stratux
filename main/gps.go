@@ -1439,7 +1439,7 @@ func processNMEALineLow(l string, fakeGpsTimeToCurr bool) (sentenceUsed bool) {
 		setDataLogTimeWithGPS(mySituation)
 		return true
 
-	} else if (x[0] == "GNGSA") || (x[0] == "GPGSA") { // Satellite data.
+	} else if (x[0] == "GNGSA_DISABLED") || (x[0] == "GPGSA_DISABLED") { // Satellite data - DISABLED
 		tmpSituation := mySituation // If we decide to not use the data in this message, then don't make incomplete changes in mySituation.
 
 		if len(x) < 18 {
