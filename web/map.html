@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stratux Aviation Map</title>
+    <script type="module" crossorigin src="/map.js"></script>
+    <link rel="stylesheet" crossorigin href="/map.css">
+  </head>
+  <body>
+    <div id="map"></div>
+  <div id="popup" class="ol-popup">
+      <a href="#" id="popup-closer" class="ol-popup-closer"><button>close</button></a>
+      <div id="popup-content">
+        <!-- Template for creating map weather popups -->
+        <div class="tplcontainer" id="tplcontainer" style="display:none;">
+          <div class="tplheader" id="tplheader">Terminal Area Forecast - ${id}</div>
+          <table class="tplbody" id="tplbody">${weatherdata}</table>
+          <div class="tplfooter" id="tplfooter">
+            <textarea class="tplrawtext" id="tplrawtext" rows="2">${rawtext}</textarea>
+            <button class="tplbutton" onclick="closePopup()">Exit</button>
+          </div>
+        </div>
+      </div>
+  </div>
+  <img class="airplane" id="airplane" src="/images/airplane.png" alt="">
+  <button id="closeBtn" class="closeBtn">Go Back to Stratux</button>
+  </body>
+</html>

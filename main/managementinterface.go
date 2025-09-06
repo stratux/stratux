@@ -53,8 +53,66 @@ type MbTileConnectionCacheEntry struct {
 	Conn *sql.DB
 	Metadata map[string]string
 	fileTime time.Time
-	
 }
+
+// Begin stratuxmap type definitions
+
+// Frequency represents a frequency list for an Airport
+type Frequency struct {
+    Frequency   float64 `json:"frequency"`
+    Description string  `json:"description"`
+}
+
+// Runway data...
+type Runway struct {
+    Length   int    `json:"length"`
+    Width    int    `json:"width"`
+    Surface  string `json:"surface"`
+    LeIdent  string `json:"le_ident"`
+    HeIdent  string `json:"he_ident"`
+}
+
+// Airport data...
+type Airport struct {
+    Ident         string      `json:"ident"`
+    Name          string      `json:"name"`
+    Type          string      `json:"type"`
+    Lon           float64     `json:"lon"`
+    Lat           float64     `json:"lat"`
+    Elevation     int         `json:"elevation"`
+    Frequencies   []Frequency `json:"frequencies"`
+    Runways       []Runway    `json:"runways"`
+}
+
+// stratuxmap Airport cache entry
+type MbAirportConnectionCacheEntry struct {
+	Path string
+	Conn *sql.DB
+	Airport map[string]Airport
+	fileTime time.Time
+}
+
+// create a mutex for the airport cache
+var mbAirportCacheLock = sync.Mutex{}
+
+// stratuxmap Airport connection cache
+var mbAirportCache = make(map[string]MbAirportConnectionCacheEntry)
+func NewAirportConnectionCacheEntry(path string, conn *sql.DB) *MbAirportConnectionCacheEntry {
+	file, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	return &MbAirportConnectionCacheEntry{path, conn, nil, file.ModTime()}
+}
+func (this *MbAirportConnectionCacheEntry) IsOutdated() bool {
+	file, err := os.Stat(this.Path)
+	if err != nil {
+		return true
+	}
+	modTime := file.ModTime()
+	return modTime != this.fileTime
+}
+//  End of stratuxmap Airport types
 
 func (this *MbTileConnectionCacheEntry) IsOutdated() bool {
 	file, err := os.Stat(this.Path)
@@ -1091,6 +1149,30 @@ func connectMbTilesArchive(path string) (*sql.DB, map[string]string, error) {
 	return conn, cacheEntry.Metadata, nil
 }
 
+func connectAirportsArchive(path string) (*sql.DB, map[string]Airport, error) {
+	mbAirportCacheLock.Lock()
+	defer mbAirportCacheLock.Unlock()
+
+	if conn, ok := mbAirportCache[path]; ok {
+		return conn.Conn, conn.Airport, nil
+	}
+
+	conn, err := sql.Open("sqlite3", "file:" + path + "?mode=ro")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cacheEntry := NewAirportConnectionCacheEntry(path, conn)
+	if cacheEntry == nil {
+		if conn != nil {
+			conn.Close()
+		}
+		return nil, nil, fmt.Errorf("failed to create airport cache entry for %s", path)
+	}
+	mbAirportCache[path] = *cacheEntry
+	return conn, cacheEntry.Airport, nil
+}
+
 func tileToDegree(z, x, y int) (lon, lat float64) {
 	// osm-like schema:
 	y = (1 << z) - y - 1
@@ -1229,6 +1311,77 @@ func handleTile(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Begin stratuxmap route handlers 
+func handleAirportRequest(id string) (Airport, error) {
+    // Get airport main info
+    sqlStmt := `
+        SELECT
+            ident,
+            name,
+            type,
+            longitude_deg AS lon,
+            latitude_deg AS lat,
+            elevation_ft AS elevation,
+        FROM airports
+        WHERE ident = ?;
+    `
+    var a Airport
+    db, err := sql.Open("sqlite3", "web/data/airports.db")
+    if err != nil {
+        return Airport{}, nil
+    }
+    defer db.Close()
+    err = db.QueryRow(sqlStmt, id).Scan(
+        &a.Ident, &a.Name, &a.Type, &a.Lon, &a.Lat, &a.Elevation,
+    )
+    if err == sql.ErrNoRows {
+        // Return empty Airport object, no error
+        return Airport{}, nil
+    } else if err != nil {
+        return Airport{}, nil
+    }
+
+	// Get frequencies
+    freqRows, err := db.Query("SELECT frequency_mhz, description FROM frequencies WHERE airport_ident = ?", id)
+    if err == nil {
+        defer freqRows.Close()
+        for freqRows.Next() {
+            var f Frequency
+            err := freqRows.Scan(&f.Frequency, &f.Description)
+            if err == nil {
+                a.Frequencies = append(a.Frequencies, f)
+            }
+        }
+    }
+
+    // Get runways
+    runwayRows, err := db.Query("SELECT length_ft, width_ft, surface, le_ident, he_ident FROM runways WHERE airport_ident = ?", id)
+    if err == nil {
+        defer runwayRows.Close()
+        for runwayRows.Next() {
+            var r Runway
+            err := runwayRows.Scan(&r.Length, &r.Width, &r.Surface, &r.LeIdent, &r.HeIdent)
+            if err == nil {
+                a.Runways = append(a.Runways, r)
+            }
+        }
+	}
+	return a, nil
+}
+
+func handleMetaDatasetsRequest(w http.ResponseWriter, r *http.Request) {
+	// Handle metadata datasets request
+}
+
+func handleGetHistoryRequest(w http.ResponseWriter, r *http.Request) {
+	// Handle get history request
+}
+
+func handleSaveHistoryRequest(w http.ResponseWriter, r *http.Request) {
+	// Handle save history request
+}
+// End of stratuxmap route handlers 
+
 func managementInterface() {
 	weatherUpdate = NewUIBroadcaster()
 	trafficUpdate = NewUIBroadcaster()
@@ -1286,6 +1439,14 @@ func managementInterface() {
 				Handler: websocket.Handler(handleJsonIo)}
 			s.ServeHTTP(w, req)
 		})
+	
+	http.HandleFunc("/airport", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		airport, _ := handleAirportRequest(id) 
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(airport)
+	})
 
 	http.HandleFunc("/getStatus", handleStatusRequest)
 	http.HandleFunc("/getSituation", handleSituationRequest)
@@ -1319,6 +1480,6 @@ func managementInterface() {
 	addr := fmt.Sprintf(":%d", ManagementAddr)
   log.Printf("web configuration console on port %s", addr);
 	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Printf("managementInterface ListenAndServe: %s\n", err.Error())
+		log.Printf("managementInterface ListenAndServe: 8500\n", err.Error())
 	}
 }

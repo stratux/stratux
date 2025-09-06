@@ -98,9 +98,7 @@ app.config(function ($stateProvider, $urlRouterProvider) {
 		})
 		.state('map', {
 			url: '/map',
-			templateUrl: 'plates/map.html',
-			controller: 'MapCtrl',
-			reloadOnSearch: false
+			reloadOnSearch: false,
 		})
         .state('developer', {
 			url: '/developer',
@@ -114,6 +112,16 @@ app.config(function ($stateProvider, $urlRouterProvider) {
 
 app.run(function ($transform) {
 	window.$transform = $transform;
+});
+
+// Redirect to standalone map.html when 'map' state is requested
+app.run(function($rootScope, $state) {
+	$rootScope.$on('$stateChangeStart', function(event, toState) {
+		if (toState.name === 'map') {
+			event.preventDefault();
+			window.location.href = '/map.html';
+		}
+	});
 });
 
 // For this app we have a MainController for whatever and individual controllers for each page

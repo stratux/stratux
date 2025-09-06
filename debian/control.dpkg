@@ -6,5 +6,5 @@ Architecture: ARCH
 Maintainer: Admin admin@stratux.me
 Vcs-Git: git@github.com:stratux/stratux.git
 Depends: libncurses6,
-         librtlsdr0
+         librtlsdr-dev
 Description: A low cost ADS-B receivers for pilots.
