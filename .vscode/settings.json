@@ -19,5 +19,11 @@
         "**/.git": true,
         "ogn/esp-idf/**": true,
         "test/**": true
+    },
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#f51707",   // Change to your desired color
+        "titleBar.activeForeground": "#ffffff",    // Text color
+        "titleBar.inactiveBackground": "#f51707",   // Change to your desired color
+        "titleBar.inactiveForeground": "#ffffff"    // Text color
     }
 }
