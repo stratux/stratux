@@ -47,9 +47,10 @@ test/uatsummary
 
 .DS_Store
 
-map.html
-map.js.map
-map.js
+web/map.css
+web/map.html
+web/map.js.map
+web/map.js
 web/data/
 web/fonts/
 web/images/
