@@ -1552,7 +1552,7 @@ func managementInterface() {
 			s.ServeHTTP(w, req)
 		})
 	
-	// stratuxmap routes for retrieving airport data and map state save & restore
+	// stratuxmap routes for retrieving airport data, map state, and position history
 	http.HandleFunc("/airport", handleAirportRequest)
 	http.HandleFunc("/savehistory", handleSaveHistoryPost)
 	http.HandleFunc("/getmapstate", handleGetMapstateRequest)
