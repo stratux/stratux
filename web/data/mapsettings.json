@@ -9,5 +9,6 @@
   "ownshipimage": "airplane.png",
   "trafficimage": "traffic.svg",
   "smallScreenHitTolerance": 40,
+  "swipeThreshold": 100,
   "usemetricunits": false
 }

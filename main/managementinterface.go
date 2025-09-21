@@ -1311,7 +1311,7 @@ func handleTile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 	} else if tileData == nil {
-		http.Error(w, "Tile not found", 404)
+		http.Error(w, "Tile not found", 200) // 404 would make the browser retry forever
 	} else {
 		w.Write(tileData)
 	}
