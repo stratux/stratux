@@ -896,7 +896,7 @@ func handleChartsExportRequest(w http.ResponseWriter, r *http.Request) {
 	// TODO: Change this part with retrieval of the stored session
 	// Workaround to download a different file:
 	if(len(charts.export.Epoch)>0){
-		sessionName = time.Unix(charts.export.Epoch[0], 0).Format(time.DateTime)
+		sessionName = time.Unix(charts.export.Epoch[0], 0).Format("2006-01-02 15:04:05")
 	}
 
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+sessionName+"."+ext+"\"")
