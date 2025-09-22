@@ -1318,6 +1318,108 @@ func handleTile(w http.ResponseWriter, r *http.Request) {
 }
 
 // Begin stratuxmap route handlers 
+func handleAirportListRequest(w http.ResponseWriter, r *http.Request) {
+	// Get bounding box parameters
+	minLatStr := r.URL.Query().Get("minLat")
+	maxLatStr := r.URL.Query().Get("maxLat")
+	minLonStr := r.URL.Query().Get("minLon")
+	maxLonStr := r.URL.Query().Get("maxLon")
+	
+	// Check if we have all required geographic bounds
+	if minLatStr == "" || maxLatStr == "" || minLonStr == "" || maxLonStr == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[]"))
+		return
+	}
+	
+	// Parse bounding box coordinates
+	minLat, err1 := strconv.ParseFloat(minLatStr, 64)
+	maxLat, err2 := strconv.ParseFloat(maxLatStr, 64)
+	minLon, err3 := strconv.ParseFloat(minLonStr, 64)
+	maxLon, err4 := strconv.ParseFloat(maxLonStr, 64)
+	
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[]"))
+		return
+	}
+	
+	db, err := connectMapArchive(STRATUX_WWW_DIR + "data/airports.db", true)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err != nil {
+		w.Write([]byte("[]"))
+		return
+	}
+
+	// Query airports within geographic bounds with full details
+	rows, err := db.Query(`SELECT ident, name, type, longitude_deg, latitude_deg, elevation_ft FROM airports 
+		WHERE latitude_deg BETWEEN ? AND ? AND longitude_deg BETWEEN ? AND ? 
+		ORDER BY name LIMIT 500;`, 
+		minLat, maxLat, minLon, maxLon)
+	if err != nil {
+		w.Write([]byte("[]"))
+		return
+	}
+
+	var airports []Airport
+	for rows.Next() {
+		var a Airport
+		var elevation int
+		if err := rows.Scan(&a.Ident, &a.Name, &a.Type, &a.Lon, &a.Lat, &elevation); err != nil {
+			continue
+		}
+		a.Elevation = elevation
+
+		// Query frequencies for this airport
+		freqRows, err := db.Query(`SELECT frequency_mhz, description FROM frequencies WHERE airport_ident = ?;`, a.Ident)
+		if err != nil {
+			a.Frequencies = []Frequency{}
+		} else {
+			defer freqRows.Close()
+			var frequencies []Frequency
+			for freqRows.Next() {
+				var f Frequency
+				err := freqRows.Scan(&f.Frequency, &f.Description)
+				if err != nil {
+					continue
+				}
+				frequencies = append(frequencies, f)
+			}
+			a.Frequencies = frequencies
+		}
+		if a.Frequencies == nil {
+			a.Frequencies = []Frequency{}
+		}
+
+		// Query runways for this airport
+		rwRows, err := db.Query(`SELECT length_ft, width_ft, surface, le_ident, he_ident FROM runways WHERE airport_ident = ?;`, a.Ident)
+		if err != nil {
+			a.Runways = []Runway{}
+		} else {
+			defer rwRows.Close()
+			var runways []Runway
+			for rwRows.Next() {
+				var r Runway
+				err := rwRows.Scan(&r.Length, &r.Width, &r.Surface, &r.LeIdent, &r.HeIdent)
+				if err != nil {
+					continue
+				}
+				runways = append(runways, r)
+			}
+			a.Runways = runways
+		}
+		if a.Runways == nil {
+			a.Runways = []Runway{}
+		}
+
+		airports = append(airports, a)
+	}
+	json.NewEncoder(w).Encode(airports)
+}
+	
 func handleAirportRequest(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	id = strings.TrimSpace(id)
@@ -1553,6 +1655,7 @@ func managementInterface() {
 		})
 	
 	// stratuxmap routes for retrieving airport data, map state, and position history
+	http.HandleFunc("/airportlist", handleAirportListRequest)
 	http.HandleFunc("/airport", handleAirportRequest)
 	http.HandleFunc("/savehistory", handleSaveHistoryPost)
 	http.HandleFunc("/getmapstate", handleGetMapstateRequest)
