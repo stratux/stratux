@@ -84,6 +84,26 @@ type Airport struct {
 	Runways       []Runway    `json:"runways"`
 }
 
+type Navaid struct {
+	Ident         		string  `json:"ident"`
+	Name          		string  `json:"name"`
+	Type          		string  `json:"type"`
+	FrequencyKhz  		int     `json:"frequency_khz"`
+	LatitudeDeg   		float64 `json:"latitude_deg"`
+	LongitudeDeg  		float64 `json:"longitude_deg"`
+	ElevationFt   		string  `json:"elevation_ft"`
+	Dme_frequency_khz 	string  `json:"dme_frequency_khz"`
+	Dme_channel 		string  `json:"dme_channel"`
+	Dme_latitude_deg 	string  `json:"dme_latitude_deg"`
+	Dme_longitude_deg 	string  `json:"dme_longitude_deg"`
+	Dme_elevation_ft 	string  `json:"dme_elevation_ft"`
+	Slaved_var_deg 		string  `json:"slaved_variation_deg"`
+	Mag_var_deg 		float64 `json:"magnetic_variation_deg"`
+	UsageType 			string  `json:"usageType"`
+	Power 				string  `json:"power"`
+	Associated_airport 	string  `json:"associated_airport"`
+}
+
 // stratuxmap Airport cache entry
 // Generic map database connection cache entry
 type MbMapConnectionCacheEntry struct {
@@ -1318,6 +1338,144 @@ func handleTile(w http.ResponseWriter, r *http.Request) {
 }
 
 // Begin stratuxmap route handlers 
+func handleNavaidsRequest(w http.ResponseWriter, r *http.Request) {
+	// Get bounding box parameters
+	minLatStr := r.URL.Query().Get("minLat")
+	maxLatStr := r.URL.Query().Get("maxLat")
+	minLonStr := r.URL.Query().Get("minLon")
+	maxLonStr := r.URL.Query().Get("maxLon")
+	
+	// Check if we have all required geographic bounds
+	if minLatStr == "" || maxLatStr == "" || minLonStr == "" || maxLonStr == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[]"))
+		return
+	}
+	
+	// Parse bounding box coordinates
+	minLat, err1 := strconv.ParseFloat(minLatStr, 64)
+	maxLat, err2 := strconv.ParseFloat(maxLatStr, 64)
+	minLon, err3 := strconv.ParseFloat(minLonStr, 64)
+	maxLon, err4 := strconv.ParseFloat(maxLonStr, 64)
+	
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[]"))
+		return
+	}
+
+	db, err := connectMapArchive(STRATUX_WWW_DIR + "data/airports.db", true)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err != nil {
+		w.Write([]byte("[]"))
+		return
+	}
+
+	// Query navaids within geographic bounds
+	rows, err := db.Query(`SELECT ident, name, type, frequency_khz, latitude_deg, longitude_deg, elevation_ft, 
+	                       dme_frequency_khz, dme_channel, dme_latitude_deg, dme_longitude_deg, slaved_variation_deg,
+						   magnetic_variation_deg, usageType, power, associated_airport FROM navaids 
+						   WHERE latitude_deg BETWEEN ? AND ? AND longitude_deg BETWEEN ? AND ? 
+						   ORDER BY name LIMIT 1000`, 
+						   minLat, maxLat, minLon, maxLon)
+	if err != nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	defer rows.Close()
+
+	var navaids []Navaid
+	for rows.Next() {
+		var n Navaid
+		var freq int
+		var elevationFt, dmeFreqKhz, dmeChannel, dmeLatDeg, dmeLonDeg, slavedVarDeg, usageType, power, assocAirport sql.NullString
+		
+		err := rows.Scan(&n.Ident, &n.Name, &n.Type, &freq, &n.LatitudeDeg, &n.LongitudeDeg, &elevationFt,
+			&dmeFreqKhz, &dmeChannel, &dmeLatDeg, &dmeLonDeg,
+			&slavedVarDeg, &n.Mag_var_deg, &usageType, &power, &assocAirport)
+		if err != nil {
+			continue
+		}
+		
+		// Handle frequency
+		if freq > 0 {
+			n.FrequencyKhz = freq
+		} else {
+			n.FrequencyKhz = 0
+		}
+		
+		// Handle nullable string fields
+		if elevationFt.Valid {
+			n.ElevationFt = elevationFt.String
+		} else {
+			n.ElevationFt = ""
+		}
+		
+		if dmeFreqKhz.Valid {
+			n.Dme_frequency_khz = dmeFreqKhz.String
+		} else {
+			n.Dme_frequency_khz = ""
+		}
+		
+		if dmeChannel.Valid {
+			n.Dme_channel = dmeChannel.String
+		} else {
+			n.Dme_channel = ""
+		}
+		
+		if dmeLatDeg.Valid {
+			n.Dme_latitude_deg = dmeLatDeg.String
+		} else {
+			n.Dme_latitude_deg = ""
+		}
+		
+		if dmeLonDeg.Valid {
+			n.Dme_longitude_deg = dmeLonDeg.String
+		} else {
+			n.Dme_longitude_deg = ""
+		}
+		
+		if slavedVarDeg.Valid {
+			n.Slaved_var_deg = slavedVarDeg.String
+		} else {
+			n.Slaved_var_deg = ""
+		}
+		
+		if usageType.Valid {
+			n.UsageType = usageType.String
+		} else {
+			n.UsageType = ""
+		}
+		
+		if power.Valid {
+			n.Power = power.String
+		} else {
+			n.Power = ""
+		}
+		
+		if assocAirport.Valid {
+			n.Associated_airport = assocAirport.String
+		} else {
+			n.Associated_airport = ""
+		}
+		
+		// Set empty dme_elevation_ft since it's not in the query
+		n.Dme_elevation_ft = ""
+		
+		navaids = append(navaids, n)
+	}
+	
+	resJson, err := json.Marshal(navaids)
+	if err != nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	w.Write(resJson)
+}
+
 func handleAirportListRequest(w http.ResponseWriter, r *http.Request) {
 	// Get bounding box parameters
 	minLatStr := r.URL.Query().Get("minLat")
@@ -1357,7 +1515,7 @@ func handleAirportListRequest(w http.ResponseWriter, r *http.Request) {
 	// Query airports within geographic bounds with full details
 	rows, err := db.Query(`SELECT ident, name, type, longitude_deg, latitude_deg, elevation_ft FROM airports 
 		WHERE latitude_deg BETWEEN ? AND ? AND longitude_deg BETWEEN ? AND ? 
-		ORDER BY name LIMIT 500;`, 
+		ORDER BY name LIMIT 200;`, 
 		minLat, maxLat, minLon, maxLon)
 	if err != nil {
 		w.Write([]byte("[]"))
@@ -1656,6 +1814,7 @@ func managementInterface() {
 	
 	// stratuxmap routes for retrieving airport data, map state, and position history
 	http.HandleFunc("/airportlist", handleAirportListRequest)
+	http.HandleFunc("/navaids", handleNavaidsRequest)
 	http.HandleFunc("/airport", handleAirportRequest)
 	http.HandleFunc("/savehistory", handleSaveHistoryPost)
 	http.HandleFunc("/getmapstate", handleGetMapstateRequest)
