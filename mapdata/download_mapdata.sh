@@ -52,17 +52,14 @@ cleanup() {
 
     echo
     echo "Cleaning up..."
-
-    # Remove temp file before remounting read-only
     if [[ -n "$tmpfile" && -f "$tmpfile" ]]; then
         echo "Removing temporary file: $tmpfile"
         rm -f "$tmpfile" || echo "Warning: Could not remove $tmpfile"
     fi
 
-    echo "Restarting stratux and remounting filesystem read-only..."
+    echo "Restarting stratux..."
     cd /
     sync
-    sudo mount -o remount,ro /overlay/robase/
     sudo overlayctl lock
     sudo systemctl daemon-reload
     sudo systemctl restart stratux
