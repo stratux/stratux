@@ -132,7 +132,7 @@ function MapCtrl($rootScope, $scope, $state, $http, $interval, craftService) {
 		})
 	});
 	$scope.map.addControl(new ol.control.LayerSwitcher());
-	$scope.map.addControl(new ol.control.FullScreen);
+	$scope.map.addControl(new ol.control.FullScreen());
 	$scope.aircraft = [];
 
 	function connect($scope) {
