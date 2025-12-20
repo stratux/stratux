@@ -1252,6 +1252,11 @@ type settings struct {
     GpsManualChip        string         // ublox8, ublox9, ublox
 	GpsManualTargetBaud  int            // default: 115200
 	RegionSelected       int			// 0 - none, 1 = US, 2 = EU
+
+	// External AIS receiver config (Daisy 2+, Daisy HAT, dAISy, etc.)
+	ExternalAIS_Enabled  bool
+	ExternalAIS_Device   string         // Serial device path, e.g., "/dev/ttyUSB0"
+	ExternalAIS_Baud     int            // Baud rate, typically 38400 for most AIS receivers
 }
 
 type status struct {
@@ -1276,6 +1281,8 @@ type status struct {
 	AIS_messages_max                           uint
 	AIS_messages_total                         uint64
 	AIS_connected                              bool
+	ExternalAIS_connected                      bool
+	ExternalAIS_messages_total                 uint64
 	UAT_traffic_targets_tracking               uint16
 	ES_traffic_targets_tracking                uint16
 	Ping_connected                             bool

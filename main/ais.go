@@ -15,10 +15,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/stratux/stratux/common"
+	"github.com/tarm/serial"
 
 	"github.com/BertoldVdb/go-ais"
 	"github.com/BertoldVdb/go-ais/aisnmea"
@@ -231,4 +233,122 @@ func importAISTrafficMessage(msg *aisnmea.VdmPacket) {
 		txt, _ := json.Marshal(ti)
 		log.Printf("AIS traffic imported: " + string(txt))
 	}
+}
+
+/*
+externalAISSerialListen handles AIS data from external serial receivers like:
+- Daisy 2+ (USB AIS receiver)
+- Daisy HAT (Raspberry Pi HAT AIS receiver)
+- dAISy (USB AIS receiver)
+- Quark-elec AIS receivers
+- Any NMEA-outputting AIS receiver
+
+These devices output standard NMEA sentences (!AIVDM, !AIVDO) over serial port.
+The function monitors for device presence and reconnects automatically.
+*/
+func externalAISSerialListen() {
+	var externalAISSerialPort *serial.Port
+	var lastDeviceCheck time.Time
+
+	for {
+		// Wait until external AIS is enabled
+		if !globalSettings.ExternalAIS_Enabled {
+			if globalStatus.ExternalAIS_connected {
+				globalStatus.ExternalAIS_connected = false
+				if externalAISSerialPort != nil {
+					externalAISSerialPort.Close()
+					externalAISSerialPort = nil
+				}
+				log.Printf("External AIS receiver disabled")
+			}
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		// Check if device exists (rate-limited to avoid excessive I/O)
+		device := globalSettings.ExternalAIS_Device
+		if device == "" {
+			device = "/dev/ttyUSB0" // Default device
+		}
+
+		if time.Since(lastDeviceCheck) > 2*time.Second {
+			lastDeviceCheck = time.Now()
+			if _, err := os.Stat(device); os.IsNotExist(err) {
+				if globalStatus.ExternalAIS_connected {
+					globalStatus.ExternalAIS_connected = false
+					if externalAISSerialPort != nil {
+						externalAISSerialPort.Close()
+						externalAISSerialPort = nil
+					}
+					log.Printf("External AIS receiver disconnected: device %s not found", device)
+				}
+				time.Sleep(2 * time.Second)
+				continue
+			}
+		}
+
+		// Open serial port if not already open
+		if externalAISSerialPort == nil {
+			baudRate := globalSettings.ExternalAIS_Baud
+			if baudRate == 0 {
+				baudRate = 38400 // Default baud rate for most AIS receivers
+			}
+
+			serialConfig := &serial.Config{
+				Name:        device,
+				Baud:        baudRate,
+				ReadTimeout: time.Second * 2,
+			}
+
+			p, err := serial.OpenPort(serialConfig)
+			if err != nil {
+				log.Printf("Error opening external AIS serial port %s at %d baud: %s", device, baudRate, err.Error())
+				time.Sleep(3 * time.Second)
+				continue
+			}
+
+			externalAISSerialPort = p
+			globalStatus.ExternalAIS_connected = true
+			log.Printf("External AIS receiver connected: %s at %d baud", device, baudRate)
+		}
+
+		// Read data from serial port
+		scanner := bufio.NewScanner(externalAISSerialPort)
+		for scanner.Scan() {
+			if !globalSettings.ExternalAIS_Enabled {
+				break
+			}
+
+			line := scanner.Text()
+			line = strings.TrimSpace(line)
+
+			// Only process AIS NMEA sentences (!AIVDM, !AIVDO)
+			if strings.HasPrefix(line, "!AIVDM") || strings.HasPrefix(line, "!AIVDO") {
+				globalStatus.ExternalAIS_messages_total++
+				TraceLog.Record(CONTEXT_AIS, []byte(line))
+				parseAisMessage(line)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			log.Printf("External AIS serial read error: %s", err.Error())
+		}
+
+		// Connection lost or disabled, cleanup
+		globalStatus.ExternalAIS_connected = false
+		if externalAISSerialPort != nil {
+			externalAISSerialPort.Close()
+			externalAISSerialPort = nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+/*
+initExternalAIS starts the external AIS serial listener goroutine.
+Called during Stratux startup.
+*/
+func initExternalAIS() {
+	go externalAISSerialListen()
+	log.Printf("External AIS listener initialized")
 }
