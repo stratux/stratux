@@ -690,6 +690,101 @@ func setTrueCourse(groundSpeed uint16, trueCourse float64) {
 }
 
 /*
+getAverageGroundSpeed calculates the average groundspeed over the last windowSecs seconds
+from the GPS performance statistics buffer. This helps filter out random jumps in GPS speed
+readings, particularly at low speeds where GPS noise is more significant.
+
+Returns the average groundspeed in knots, and the number of samples used.
+If no valid samples exist, returns 0.0 and 0.
+*/
+func getAverageGroundSpeed(windowSecs float32) (float64, int) {
+	mySituation.muGPSPerformance.Lock()
+	defer mySituation.muGPSPerformance.Unlock()
+
+	length := len(myGPSPerfStats)
+	if length == 0 {
+		return 0.0, 0
+	}
+
+	currentTime := myGPSPerfStats[length-1].nmeaTime
+	windowStart := currentTime - windowSecs
+
+	var sum float64
+	var count int
+
+	for i := length - 1; i >= 0; i-- {
+		// Only include samples within our time window
+		if myGPSPerfStats[i].nmeaTime < windowStart {
+			break
+		}
+		// Only include valid groundspeed readings (from RMC messages)
+		if myGPSPerfStats[i].gsf >= 0 {
+			sum += float64(myGPSPerfStats[i].gsf)
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0.0, 0
+	}
+
+	return sum / float64(count), count
+}
+
+/*
+getAverageCourse calculates the average true course over the last windowSecs seconds
+from the GPS performance statistics buffer. This handles the circular nature of headings
+(wrapping around 0/360 degrees) properly using vector averaging.
+
+Returns the average course in degrees (0-360), and the number of samples used.
+If no valid samples exist, returns -1.0 and 0.
+*/
+func getAverageCourse(windowSecs float32) (float64, int) {
+	mySituation.muGPSPerformance.Lock()
+	defer mySituation.muGPSPerformance.Unlock()
+
+	length := len(myGPSPerfStats)
+	if length == 0 {
+		return -1.0, 0
+	}
+
+	currentTime := myGPSPerfStats[length-1].nmeaTime
+	windowStart := currentTime - windowSecs
+
+	// Use vector averaging to handle circular nature of headings
+	var sinSum, cosSum float64
+	var count int
+
+	for i := length - 1; i >= 0; i-- {
+		// Only include samples within our time window
+		if myGPSPerfStats[i].nmeaTime < windowStart {
+			break
+		}
+		// Only include valid course readings (negative values indicate invalid)
+		if myGPSPerfStats[i].coursef >= 0 {
+			courseRad := float64(myGPSPerfStats[i].coursef) * math.Pi / 180.0
+			sinSum += math.Sin(courseRad)
+			cosSum += math.Cos(courseRad)
+			count++
+		}
+	}
+
+	if count == 0 {
+		return -1.0, 0
+	}
+
+	// Calculate average angle from vector components
+	avgCourse := math.Atan2(sinSum/float64(count), cosSum/float64(count)) * 180.0 / math.Pi
+
+	// Normalize to 0-360 range
+	if avgCourse < 0 {
+		avgCourse += 360.0
+	}
+
+	return avgCourse, count
+}
+
+/*
 calcGPSAttitude estimates turn rate, pitch, and roll based on recent GPS groundspeed, track, and altitude / vertical speed.
 
 Method uses stored performance statistics from myGPSPerfStats[]. Ideally, calculation is based on most recent 1.5 seconds of data,
@@ -1165,13 +1260,26 @@ func processNMEALineLow(l string, fakeGpsTimeToCurr bool) (sentenceUsed bool) {
 		if err != nil {
 			return false
 		}
-		if groundspeed > 3 { //TODO: use average groundspeed over last n seconds to avoid random "jumps"
+
+		// Use average groundspeed over the last 3 seconds to filter out random GPS noise/jumps
+		avgGroundSpeed, avgCount := getAverageGroundSpeed(3.0)
+		speedForThreshold := groundspeed
+		if avgCount >= 3 {
+			// Use averaged speed for threshold check if we have enough samples
+			speedForThreshold = avgGroundSpeed
+		}
+
+		if speedForThreshold > 3 {
 			trueCourse = float32(tc)
 			setTrueCourse(uint16(groundspeed), tc)
 			tmpSituation.GPSTrueCourse = trueCourse
 		} else {
-			// Negligible movement. Don't update course, but do use the slow speed.
-			//TODO: use average course over last n seconds?
+			// At low/negligible speeds, use averaged course if available to maintain stability
+			avgCourse, courseCount := getAverageCourse(3.0)
+			if courseCount >= 3 && avgCourse >= 0 {
+				tmpSituation.GPSTrueCourse = float32(avgCourse)
+			}
+			// Otherwise keep the previous course value (don't update)
 		}
 		tmpSituation.GPSLastGroundTrackTime = stratuxClock.Time
 
@@ -1408,15 +1516,30 @@ func processNMEALineLow(l string, fakeGpsTimeToCurr bool) (sentenceUsed bool) {
 		if err != nil && groundspeed > 3 { // some receivers return null COG at low speeds. Need to ignore this condition.
 			return false
 		}
-		if groundspeed > 3 { //TODO: use average groundspeed over last n seconds to avoid random "jumps"
+
+		// Use average groundspeed over the last 3 seconds to filter out random GPS noise/jumps
+		avgGroundSpeed, avgCount := getAverageGroundSpeed(3.0)
+		speedForThreshold := groundspeed
+		if avgCount >= 3 {
+			// Use averaged speed for threshold check if we have enough samples
+			speedForThreshold = avgGroundSpeed
+		}
+
+		if speedForThreshold > 3 {
 			trueCourse = float32(tc)
 			setTrueCourse(uint16(groundspeed), tc)
 			tmpSituation.GPSTrueCourse = trueCourse
 			thisGpsPerf.coursef = float32(tc)
 		} else {
-			thisGpsPerf.coursef = -999.9
-			// Negligible movement. Don't update course, but do use the slow speed.
-			//TODO: use average course over last n seconds?
+			// At low/negligible speeds, use averaged course if available to maintain stability
+			avgCourse, courseCount := getAverageCourse(3.0)
+			if courseCount >= 3 && avgCourse >= 0 {
+				tmpSituation.GPSTrueCourse = float32(avgCourse)
+				thisGpsPerf.coursef = float32(avgCourse)
+			} else {
+				thisGpsPerf.coursef = -999.9
+			}
+			// Otherwise keep the previous course value (don't update)
 		}
 		updateGPSPerf = true
 		thisGpsPerf.msgType = x[0]
