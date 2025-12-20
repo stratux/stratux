@@ -1,7 +1,21 @@
-<?xml version="1.0" encoding="UTF-8"?> 
-<svg width="11" height="25" xmlns="http://www.w3.org/2000/svg" version="1.1">
-    <g>
-    <title>Layer 1</title>
-    <path stroke="white" fill="rgb(255,255,255)" d="m0.22305,11.928l0,12.99329l10.54714,0l0,-12.99329q0,-6.49665 -5.27357,-12.45192q-5.27357,6.49665 -5.27357,12.45192" fill-rule="evenodd" id="svg_1"/>
-    </g>		   
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shipGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#005a8c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0077be;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Ship hull with pointed bow -->
+  <path d="M12 0 L22 10 L22 28 Q22 31 19 31 L5 31 Q2 31 2 28 L2 10 Z"
+        fill="url(#shipGradient)" stroke="#003d5c" stroke-width="1"/>
+  <!-- Superstructure -->
+  <rect x="6" y="12" width="12" height="10" fill="#004466" stroke="#003d5c" stroke-width="0.5"/>
+  <!-- Bridge windows -->
+  <rect x="8" y="14" width="3" height="2" fill="#66ccff" opacity="0.8"/>
+  <rect x="13" y="14" width="3" height="2" fill="#66ccff" opacity="0.8"/>
+  <!-- Mast -->
+  <line x1="12" y1="8" x2="12" y2="12" stroke="#003d5c" stroke-width="1.5"/>
+  <!-- Direction indicator (bow) -->
+  <polygon points="12,0 10,4 14,4" fill="#ffffff" opacity="0.9"/>
 </svg>

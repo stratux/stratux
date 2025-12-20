@@ -72,6 +72,12 @@ app.config(function ($stateProvider, $urlRouterProvider) {
 			controller: 'TrafficCtrl',
 			reloadOnSearch: false
 		})
+		.state('ais', {
+			url: '/ais',
+			templateUrl: 'plates/ais.html',
+			controller: 'AISCtrl',
+			reloadOnSearch: false
+		})
 		.state('gps', {
 			url: '/gps',
 			templateUrl: 'plates/gps.html',

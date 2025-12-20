@@ -1,0 +1,110 @@
+<div class="col-sm-12">
+	<div class="panel panel-default">
+		<div class="panel-heading">
+			<span class="panel_label"><i class="fa fa-ship"></i> AIS Vessels Traffic</span>
+			<span ng-show="ConnectState == 'Connected'" class="label label-success">{{ConnectState}}</span>
+			<span ng-hide="ConnectState == 'Connected'" class="label label-danger">{{ConnectState}}</span>
+			<span class="label label-info pull-right" ng-show="ExternalAIS_connected">Daisy Connected</span>
+			<span class="label label-default pull-right" ng-show="AIS_connected && !ExternalAIS_connected">SDR AIS</span>
+		</div>
+
+		<div class="panel-body traffic-page">
+			<!-- Status bar -->
+			<div class="row" ng-show="ais_list.length == 0">
+				<div class="col-sm-12 text-center text-muted">
+					<p><i class="fa fa-ship fa-3x"></i></p>
+					<p>No AIS vessels detected yet.</p>
+					<p ng-show="!AIS_connected && !ExternalAIS_connected" class="text-warning">
+						<i class="fa fa-exclamation-triangle"></i> AIS receiver not connected. Enable AIS in Settings.
+					</p>
+				</div>
+			</div>
+
+			<!-- Header row -->
+			<div class="row" ng-show="ais_list.length > 0">
+				<div class="col-sm-6">
+					<span class="col-xs-3"><strong>Vessel Name</strong></span>
+					<span class="col-xs-2"><strong>MMSI</strong></span>
+					<span class="col-xs-2"><strong>Type</strong></span>
+					<span class="col-xs-2 text-right" ng-show="GPS_connected"><strong>Distance</strong></span>
+					<span class="col-xs-3 text-right" ng-show="GPS_connected"><strong>Bearing</strong></span>
+					<span class="col-xs-5 text-right" ng-hide="GPS_connected"><strong>Position</strong></span>
+				</div>
+
+				<div class="col-sm-6">
+					<span class="col-xs-3 text-right"><strong>Speed</strong></span>
+					<span class="col-xs-3 text-right"><strong>Course</strong></span>
+					<span class="col-xs-3 text-right"><strong>Callsign</strong></span>
+					<span class="col-xs-3 text-right"><strong>Age</strong></span>
+				</div>
+			</div>
+
+			<!-- Vessel rows -->
+			<div class="row" ng-repeat="vessel in ais_list | orderBy: 'dist'">
+				<div class="separator"></div>
+				<div class="col-sm-6">
+					<span class="col-xs-3">
+						<span class="label" style="background-color: #0077be;">
+							<i class="fa fa-ship"></i>
+							<strong>&nbsp;{{vessel.name || 'Unknown'}}</strong>
+						</span>
+					</span>
+					<span class="col-xs-2" style="font-size:80%">{{vessel.mmsi}}</span>
+					<span class="col-xs-2" style="font-size:80%">{{vessel.vesselType}}</span>
+					<span class="col-xs-2 text-right" ng-show="GPS_connected">{{vessel.dist.toFixed(1)}}<span style="font-size:50%">NM</span></span>
+					<span class="col-xs-3 text-right" ng-show="GPS_connected">{{vessel.bearing.toFixed(0)}}&deg;</span>
+					<span class="col-xs-5 text-right" ng-hide="GPS_connected">{{vessel.lat.toFixed(4)}} / {{vessel.lon.toFixed(4)}}</span>
+				</div>
+				<div class="col-sm-6">
+					<span class="col-xs-3 text-right">{{vessel.speed}}<span style="font-size:50%">KTS</span></span>
+					<span class="col-xs-3 text-right">
+						<span ng-show="vessel.heading < 10">0</span>
+						<span ng-show="vessel.heading < 100">0</span>
+						{{vessel.heading}}&deg;
+					</span>
+					<span class="col-xs-3 text-right" style="font-size:80%">{{vessel.callsign || '-'}}</span>
+					<span class="col-xs-3 text-right">{{vessel.age.toFixed(0)}}<span style="font-size:50%">s</span></span>
+				</div>
+			</div>
+		</div>
+
+		<div class="panel-body traffic-footer">
+			<div class="separator"></div>
+			<div class="row">
+				<div class="col-sm-4">
+					<span class="text-muted">Total vessels: <strong>{{ais_list.length}}</strong></span>
+				</div>
+				<div class="col-sm-4">
+					<span class="text-muted" ng-show="ExternalAIS_connected">
+						<i class="fa fa-check-circle text-success"></i> External AIS (Daisy) active
+					</span>
+					<span class="text-muted" ng-show="AIS_connected && !ExternalAIS_connected">
+						<i class="fa fa-check-circle text-success"></i> SDR AIS active
+					</span>
+				</div>
+				<div class="col-sm-4 text-right">
+					<span class="text-muted">Messages: {{AIS_messages_total}}</span>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- AIS Vessel Types Legend -->
+	<div class="panel panel-default">
+		<div class="panel-heading">
+			<span class="panel_label">AIS Vessel Types</span>
+		</div>
+		<div class="panel-body">
+			<div class="row">
+				<div class="col-xs-6 col-sm-3"><small>30-39: Fishing</small></div>
+				<div class="col-xs-6 col-sm-3"><small>40-49: High Speed</small></div>
+				<div class="col-xs-6 col-sm-3"><small>50-59: Special Craft</small></div>
+				<div class="col-xs-6 col-sm-3"><small>60-69: Passenger</small></div>
+				<div class="col-xs-6 col-sm-3"><small>70-79: Cargo</small></div>
+				<div class="col-xs-6 col-sm-3"><small>80-89: Tanker</small></div>
+				<div class="col-xs-6 col-sm-3"><small>90-99: Other</small></div>
+				<div class="col-xs-6 col-sm-3"><small>0: Not available</small></div>
+			</div>
+		</div>
+	</div>
+</div>

@@ -379,9 +379,41 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="control-label col-xs-5">162 MHz (AIS)</label>
+                        <label class="control-label col-xs-5">162 MHz AIS (SDR)</label>
                         <div class="col-xs-7">
-                            <ui-switch ng-model='AIS_Enabled' settings-change></ui-switch>
+                            <ui-switch ng-model='AIS_Enabled' ng-disabled='ExternalAIS_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-xs-5">AIS External (Daisy)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='ExternalAIS_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group" ng-show="ExternalAIS_Enabled">
+                        <label class="control-label col-xs-5">AIS Serial Device</label>
+                        <div class="col-xs-7">
+                            <select class="form-control" ng-model="ExternalAIS_Device" ng-change="updateExternalAISDevice()">
+                                <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+                                <option value="/dev/ttyUSB1">/dev/ttyUSB1</option>
+                                <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+                                <option value="/dev/ttyACM1">/dev/ttyACM1</option>
+                                <option value="/dev/ttyAMA0">/dev/ttyAMA0</option>
+                                <option value="/dev/serial0">/dev/serial0</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" ng-show="ExternalAIS_Enabled">
+                        <label class="control-label col-xs-5">AIS Baud Rate</label>
+                        <div class="col-xs-7">
+                            <select class="form-control" ng-model="ExternalAIS_Baud" ng-change="updateExternalAISBaud()">
+                                <option value="4800">4800</option>
+                                <option value="9600">9600</option>
+                                <option value="19200">19200</option>
+                                <option value="38400">38400 (default)</option>
+                                <option value="57600">57600</option>
+                                <option value="115200">115200</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-group">

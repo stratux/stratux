@@ -260,7 +260,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
-	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'Pong_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
+	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'ExternalAIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'Pong_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
 		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'TraceLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
 
 	var settings = {};
@@ -295,6 +295,9 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.ES_Enabled = settings.ES_Enabled;
 		$scope.OGN_Enabled = settings.OGN_Enabled;
 		$scope.AIS_Enabled = settings.AIS_Enabled;
+		$scope.ExternalAIS_Enabled = settings.ExternalAIS_Enabled;
+		$scope.ExternalAIS_Device = settings.ExternalAIS_Device || '/dev/ttyUSB0';
+		$scope.ExternalAIS_Baud = (settings.ExternalAIS_Baud || 38400).toString();
 		$scope.APRS_Enabled = settings.APRS_Enabled;
 		$scope.Ping_Enabled = settings.Ping_Enabled;
 		$scope.Pong_Enabled = settings.Pong_Enabled;
@@ -437,6 +440,39 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			setSettings(angular.toJson(newsettings));
 		}
 	}
+
+	// External AIS (Daisy) device configuration
+	$scope.updateExternalAISDevice = function() {
+		if ($scope.ExternalAIS_Device !== undefined && $scope.ExternalAIS_Device !== null) {
+			settings['ExternalAIS_Device'] = $scope.ExternalAIS_Device;
+			var newsettings = {
+				'ExternalAIS_Device': settings['ExternalAIS_Device']
+			};
+			setSettings(angular.toJson(newsettings));
+		}
+	}
+
+	$scope.updateExternalAISBaud = function() {
+		if ($scope.ExternalAIS_Baud !== undefined && $scope.ExternalAIS_Baud !== null) {
+			settings['ExternalAIS_Baud'] = parseInt($scope.ExternalAIS_Baud);
+			var newsettings = {
+				'ExternalAIS_Baud': settings['ExternalAIS_Baud']
+			};
+			setSettings(angular.toJson(newsettings));
+		}
+	}
+
+	// Auto-disable SDR AIS when External AIS (Daisy) is enabled
+	$scope.$watch('ExternalAIS_Enabled', function(newValue, oldValue) {
+		if (newValue === true && $scope.AIS_Enabled === true) {
+			$scope.AIS_Enabled = false;
+			settings['AIS_Enabled'] = false;
+			var newsettings = {
+				'AIS_Enabled': false
+			};
+			setSettings(angular.toJson(newsettings));
+		}
+	});
 
 	$scope.updateBaud = function () {
 		settings["Baud"] = 0;
