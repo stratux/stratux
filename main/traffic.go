@@ -1727,6 +1727,6 @@ func initTraffic(isTraceReplayMode bool) {
 		go ognListen()
 		go aprsListen()
 		go aisListen()
-		go daisyAISListen() // Daisy serial AIS receiver
+		go externalAISListen() // External serial AIS receiver
 	}
 }

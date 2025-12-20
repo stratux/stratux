@@ -4,8 +4,8 @@
 	that can be found in the LICENSE file, herein included
 	as part of this header.
 
-	daisyais.go: Routines for reading AIS traffic from Daisy serial receivers
-	             (Daisy 2+ and Daisy HAT from Wegmatt)
+	externalais.go: Routines for reading AIS traffic from external serial receivers
+	                (e.g., Daisy 2+, Daisy HAT, or other NMEA AIS receivers)
 */
 
 package main
@@ -21,39 +21,39 @@ import (
 	"github.com/stratux/serial"
 )
 
-var daisySerialConfig *serial.Config
-var daisySerialPort *serial.Port
-var daisyExitChan chan bool = make(chan bool, 1)
+var externalAISSerialConfig *serial.Config
+var externalAISSerialPort *serial.Port
+var externalAISExitChan chan bool = make(chan bool, 1)
 
-// daisyAISListen is the main goroutine for reading AIS data from a Daisy receiver
-func daisyAISListen() {
+// externalAISListen is the main goroutine for reading AIS data from an external serial receiver
+func externalAISListen() {
 	for {
-		if !globalSettings.DaisyAIS_Enabled {
-			// Wait until Daisy AIS is enabled
+		if !globalSettings.ExternalAIS_Enabled {
+			// Wait until external AIS is enabled
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		// Try to connect to the Daisy device
-		if !initDaisySerial() {
+		// Try to connect to the external AIS device
+		if !initExternalAISSerial() {
 			time.Sleep(3 * time.Second)
 			continue
 		}
 
-		log.Printf("Daisy AIS: successfully connected to %s at %d baud\n",
-			globalSettings.DaisyAIS_SerialPort, globalSettings.DaisyAIS_BaudRate)
-		globalStatus.DaisyAIS_connected = true
+		log.Printf("External AIS: successfully connected to %s at %d baud\n",
+			globalSettings.ExternalAIS_SerialPort, globalSettings.ExternalAIS_BaudRate)
+		globalStatus.ExternalAIS_connected = true
 
 		// Make sure the exit channel is empty
-		for len(daisyExitChan) > 0 {
-			<-daisyExitChan
+		for len(externalAISExitChan) > 0 {
+			<-externalAISExitChan
 		}
 
 		// Read loop
-		reader := bufio.NewReader(daisySerialPort)
-		for globalSettings.DaisyAIS_Enabled {
+		reader := bufio.NewReader(externalAISSerialPort)
+		for globalSettings.ExternalAIS_Enabled {
 			// Set read timeout
-			daisySerialPort.SetReadDeadline(time.Now().Add(5 * time.Second))
+			externalAISSerialPort.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 			line, err := reader.ReadString('\n')
 			if err != nil {
@@ -61,7 +61,7 @@ func daisyAISListen() {
 					// Timeout is expected, just continue
 					continue
 				}
-				log.Printf("Daisy AIS: read error: %s\n", err.Error())
+				log.Printf("External AIS: read error: %s\n", err.Error())
 				break
 			}
 
@@ -78,57 +78,57 @@ func daisyAISListen() {
 		}
 
 		// Cleanup
-		globalStatus.DaisyAIS_connected = false
-		if daisySerialPort != nil {
-			daisySerialPort.Close()
-			daisySerialPort = nil
+		globalStatus.ExternalAIS_connected = false
+		if externalAISSerialPort != nil {
+			externalAISSerialPort.Close()
+			externalAISSerialPort = nil
 		}
 		time.Sleep(3 * time.Second)
 	}
 }
 
-// initDaisySerial initializes the serial port for the Daisy receiver
-func initDaisySerial() bool {
-	device := globalSettings.DaisyAIS_SerialPort
-	baudrate := globalSettings.DaisyAIS_BaudRate
+// initExternalAISSerial initializes the serial port for the external AIS receiver
+func initExternalAISSerial() bool {
+	device := globalSettings.ExternalAIS_SerialPort
+	baudrate := globalSettings.ExternalAIS_BaudRate
 
 	// Validate baud rate
 	if baudrate <= 0 {
-		baudrate = 38400 // Default for Daisy
+		baudrate = 38400 // Default baud rate for most AIS receivers
 	}
 
 	// Check if device exists
 	if _, err := os.Stat(device); err != nil {
 		if globalSettings.DEBUG {
-			log.Printf("Daisy AIS: device %s not found\n", device)
+			log.Printf("External AIS: device %s not found\n", device)
 		}
 		return false
 	}
 
 	// Open serial port
-	daisySerialConfig = &serial.Config{
+	externalAISSerialConfig = &serial.Config{
 		Name:        device,
 		Baud:        baudrate,
 		ReadTimeout: 5 * time.Second,
 	}
 
-	p, err := serial.OpenPort(daisySerialConfig)
+	p, err := serial.OpenPort(externalAISSerialConfig)
 	if err != nil {
-		log.Printf("Daisy AIS: error opening serial port %s: %s\n", device, err.Error())
+		log.Printf("External AIS: error opening serial port %s: %s\n", device, err.Error())
 		return false
 	}
 
-	daisySerialPort = p
+	externalAISSerialPort = p
 	return true
 }
 
-// closeDaisySerial closes the serial port
-func closeDaisySerial() {
-	if daisySerialPort != nil {
-		daisySerialPort.Close()
-		daisySerialPort = nil
+// closeExternalAISSerial closes the serial port
+func closeExternalAISSerial() {
+	if externalAISSerialPort != nil {
+		externalAISSerialPort.Close()
+		externalAISSerialPort = nil
 	}
-	globalStatus.DaisyAIS_connected = false
+	globalStatus.ExternalAIS_connected = false
 }
 
 // GetAvailableSerialPorts returns a list of available serial ports for the web interface
@@ -168,9 +168,4 @@ func GetAvailableSerialPorts() []string {
 	}
 
 	return ports
-}
-
-// initDaisyAIS initializes the Daisy AIS subsystem
-func initDaisyAIS() {
-	go daisyAISListen()
 }

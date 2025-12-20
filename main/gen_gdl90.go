@@ -1249,10 +1249,10 @@ type settings struct {
 	GpsManualTargetBaud int    // default: 115200
 	RegionSelected      int    // 0 - none, 1 = US, 2 = EU
 
-	// Daisy AIS receiver config (serial-based AIS receiver)
-	DaisyAIS_Enabled    bool   // Enable Daisy AIS receiver (disables SDR AIS when true)
-	DaisyAIS_SerialPort string // Serial port for Daisy (e.g., /dev/ttyUSB0, /dev/ttyAMA0)
-	DaisyAIS_BaudRate   int    // Baud rate (default: 38400)
+	// External AIS receiver config (serial-based AIS receiver like Daisy 2+, Daisy HAT, etc.)
+	ExternalAIS_Enabled    bool   // Enable external serial AIS receiver (disables SDR AIS when true)
+	ExternalAIS_SerialPort string // Serial port (e.g., /dev/ttyUSB0, /dev/ttyAMA0)
+	ExternalAIS_BaudRate   int    // Baud rate (default: 38400)
 }
 
 type status struct {
@@ -1277,7 +1277,7 @@ type status struct {
 	AIS_messages_max               uint
 	AIS_messages_total             uint64
 	AIS_connected                  bool
-	DaisyAIS_connected             bool
+	ExternalAIS_connected             bool
 	UAT_traffic_targets_tracking   uint16
 	ES_traffic_targets_tracking    uint16
 	Ping_connected                 bool
@@ -1388,10 +1388,10 @@ func defaultSettings() {
 	globalSettings.GpsManualTargetBaud = 115200
 	globalSettings.GpsManualChip = "ublox"
 
-	// Daisy AIS receiver defaults
-	globalSettings.DaisyAIS_Enabled = false
-	globalSettings.DaisyAIS_SerialPort = "/dev/ttyUSB0"
-	globalSettings.DaisyAIS_BaudRate = 38400
+	// External AIS receiver defaults
+	globalSettings.ExternalAIS_Enabled = false
+	globalSettings.ExternalAIS_SerialPort = "/dev/ttyUSB0"
+	globalSettings.ExternalAIS_BaudRate = 38400
 }
 
 func readSettings() {

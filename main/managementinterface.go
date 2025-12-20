@@ -476,23 +476,23 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.OGN_Enabled = val.(bool)
 					case "AIS_Enabled":
 						globalSettings.AIS_Enabled = val.(bool)
-					case "DaisyAIS_Enabled":
-						globalSettings.DaisyAIS_Enabled = val.(bool)
-						// When Daisy is enabled, it takes over from SDR AIS
-						if globalSettings.DaisyAIS_Enabled {
-							log.Printf("Daisy AIS enabled - SDR AIS will be bypassed\n")
+					case "ExternalAIS_Enabled":
+						globalSettings.ExternalAIS_Enabled = val.(bool)
+						// When external AIS is enabled, it takes over from SDR AIS
+						if globalSettings.ExternalAIS_Enabled {
+							log.Printf("External AIS enabled - SDR AIS will be bypassed\n")
 						}
-					case "DaisyAIS_SerialPort":
-						globalSettings.DaisyAIS_SerialPort = val.(string)
+					case "ExternalAIS_SerialPort":
+						globalSettings.ExternalAIS_SerialPort = val.(string)
 						// Close and reconnect if port changed while connected
-						if globalStatus.DaisyAIS_connected {
-							closeDaisySerial()
+						if globalStatus.ExternalAIS_connected {
+							closeExternalAISSerial()
 						}
-					case "DaisyAIS_BaudRate":
-						globalSettings.DaisyAIS_BaudRate = int(val.(float64))
+					case "ExternalAIS_BaudRate":
+						globalSettings.ExternalAIS_BaudRate = int(val.(float64))
 						// Close and reconnect if baud rate changed while connected
-						if globalStatus.DaisyAIS_connected {
-							closeDaisySerial()
+						if globalStatus.ExternalAIS_connected {
+							closeExternalAISSerial()
 						}
 					case "APRS_Enabled":
 						globalSettings.APRS_Enabled = val.(bool)

@@ -2,10 +2,10 @@
 	<div class="panel panel-default">
 		<div class="panel-heading">
 			<span class="panel_label">AIS Maritime Traffic</span>
-			<span ng-show="AIS_connected || DaisyAIS_connected" class="label label-success">Connected</span>
-			<span ng-hide="AIS_connected || DaisyAIS_connected" class="label label-danger">Disconnected</span>
-			<span ng-show="DaisyAIS_connected" class="label label-info" style="margin-left: 5px;">Daisy</span>
-			<span ng-show="AIS_connected && !DaisyAIS_connected" class="label label-info" style="margin-left: 5px;">SDR</span>
+			<span ng-show="AIS_connected || ExternalAIS_connected" class="label label-success">Connected</span>
+			<span ng-hide="AIS_connected || ExternalAIS_connected" class="label label-danger">Disconnected</span>
+			<span ng-show="ExternalAIS_connected" class="label label-info" style="margin-left: 5px;">External</span>
+			<span ng-show="AIS_connected && !ExternalAIS_connected" class="label label-info" style="margin-left: 5px;">SDR</span>
 		</div>
 
 		<div class="panel-body traffic-page">
@@ -51,7 +51,7 @@
 				<div class="separator"></div>
 				<div class="col-sm-12 text-center text-muted">
 					<p>No AIS vessels detected</p>
-					<p ng-hide="AIS_connected || DaisyAIS_connected">Enable AIS receiver in Settings to receive maritime traffic</p>
+					<p ng-hide="AIS_connected || ExternalAIS_connected">Enable AIS receiver in Settings to receive maritime traffic</p>
 				</div>
 			</div>
 		</div>

@@ -6,7 +6,7 @@ function AISTrafficCtrl($rootScope, $scope, $state, $http, $interval) {
 	$scope.$parent.helppage = 'plates/ais-traffic-help.html';
 	$scope.ais_data_list = [];
 	$scope.AIS_connected = false;
-	$scope.DaisyAIS_connected = false;
+	$scope.ExternalAIS_connected = false;
 	$scope.GPS_connected = false;
 	$scope.AIS_messages_total = 0;
 
@@ -59,7 +59,7 @@ function AISTrafficCtrl($rootScope, $scope, $state, $http, $interval) {
 		$http.get(URL_STATUS_GET).then(function(response) {
 			var status = angular.fromJson(response.data);
 			$scope.AIS_connected = status.AIS_connected;
-			$scope.DaisyAIS_connected = status.DaisyAIS_connected;
+			$scope.ExternalAIS_connected = status.ExternalAIS_connected;
 			$scope.GPS_connected = status.GPS_connected;
 			$scope.AIS_messages_total = status.AIS_messages_total;
 		});

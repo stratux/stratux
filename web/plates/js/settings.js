@@ -260,7 +260,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
-	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'DaisyAIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'Pong_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
+	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'ExternalAIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'Pong_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
 		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'TraceLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
 
 	var settings = {};
@@ -275,10 +275,10 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		var gpsHardwareCode = (status.GPS_detected_type & 0x0f);
 		$scope.gpsHardwareCode = gpsHardwareCode;
 		$scope.hasTracker = gpsHardwareCode == 3 || status.OGN_tx_enabled || gpsHardwareCode == 13 || gpsHardwareCode == 15;
-		$scope.DaisyAIS_connected = status.DaisyAIS_connected;
+		$scope.ExternalAIS_connected = status.ExternalAIS_connected;
 	});
 
-	// Fetch available serial ports for Daisy AIS
+	// Fetch available serial ports for external AIS
 	$http.get(URL_HOST_BASE + '/getSerialPorts').then(function(response) {
 		$scope.serialPorts = angular.fromJson(response.data);
 		// Add a default option if no ports found
@@ -305,9 +305,9 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.ES_Enabled = settings.ES_Enabled;
 		$scope.OGN_Enabled = settings.OGN_Enabled;
 		$scope.AIS_Enabled = settings.AIS_Enabled;
-		$scope.DaisyAIS_Enabled = settings.DaisyAIS_Enabled;
-		$scope.DaisyAIS_SerialPort = settings.DaisyAIS_SerialPort;
-		$scope.DaisyAIS_BaudRate = settings.DaisyAIS_BaudRate;
+		$scope.ExternalAIS_Enabled = settings.ExternalAIS_Enabled;
+		$scope.ExternalAIS_SerialPort = settings.ExternalAIS_SerialPort;
+		$scope.ExternalAIS_BaudRate = settings.ExternalAIS_BaudRate;
 		$scope.APRS_Enabled = settings.APRS_Enabled;
 		$scope.Ping_Enabled = settings.Ping_Enabled;
 		$scope.Pong_Enabled = settings.Pong_Enabled;

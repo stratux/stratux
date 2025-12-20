@@ -36,8 +36,8 @@ func aisListen() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		// If Daisy AIS is enabled, don't use SDR-based AIS
-		if globalSettings.DaisyAIS_Enabled {
+		// If external AIS is enabled, don't use SDR-based AIS
+		if globalSettings.ExternalAIS_Enabled {
 			time.Sleep(1 * time.Second)
 			continue
 		}
