@@ -52,7 +52,7 @@ func makeFlarmPFLAUString(ti TrafficInfo) (msg string) {
 
 	dist, bearing, _, _ := common.DistRect(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(ti.Lat), float64(ti.Lng))
 	relativeVertical := computeRelativeVertical(ti)
-	alarmLevel := computeAlarmLevel(dist, relativeVertical)
+	alarmLevel := computeAlarmLevel(ti, dist, relativeVertical)
 
 	// make bearing relative to ground track, with +-180deg
 	bearing = bearing - float64(mySituation.GPSTrueCourse)
@@ -68,7 +68,7 @@ func makeFlarmPFLAUString(ti TrafficInfo) (msg string) {
 		alarmType = 2
 	}
 
-	idstr := fmt.Sprintf("%.6X", ti.Icao_addr & 0xFFFFFF)
+	idstr := fmt.Sprintf("%.6X", ti.Icao_addr&0xFFFFFF)
 	if len(ti.Tail) > 0 {
 		idstr += "!" + ti.Tail
 	}
@@ -83,8 +83,58 @@ func makeFlarmPFLAUString(ti TrafficInfo) (msg string) {
 	return
 }
 
-// TODO: only very simplistic implementation
-func computeAlarmLevel(dist float64, relativeVertical int32) (alarmLevel uint8) {
+// computeAlarmLevel calculates FLARM alarm levels based on estimated time to collision.
+// According to FLARM spec:
+//   - Level 0: no alarm (or >18 seconds to impact)
+//   - Level 1: 13-18 seconds to impact
+//   - Level 2: 9-12 seconds to impact
+//   - Level 3: 0-8 seconds to impact
+//
+// This implementation estimates time to closest approach using closing rate
+// when speed data is available, falling back to distance-based thresholds otherwise.
+func computeAlarmLevel(ti TrafficInfo, dist float64, relativeVertical int32) (alarmLevel uint8) {
+	// If we don't have valid speed data or GPS, use simple distance-based calculation
+	if !ti.Speed_valid || !isGPSValid() {
+		return computeAlarmLevelByDistance(dist, relativeVertical)
+	}
+
+	// Calculate time to closest approach
+	timeToClosest := estimateTimeToClosestApproach(ti, dist)
+
+	// Calculate vertical time to conflict
+	verticalTimeToConflict := estimateVerticalTimeToConflict(ti, relativeVertical)
+
+	// Use the minimum of horizontal and vertical time estimates
+	// Only consider vertical if both aircraft are converging vertically
+	effectiveTime := timeToClosest
+	if verticalTimeToConflict >= 0 && verticalTimeToConflict < effectiveTime {
+		effectiveTime = verticalTimeToConflict
+	}
+
+	// Apply distance gate - don't alarm if target is moving away or very far
+	// even if calculation suggests low time (can happen with diverging traffic)
+	if dist > 5556 { // 3 NM - no alarm beyond this regardless of calculation
+		return 0
+	}
+
+	// Assign alarm level based on time to closest approach
+	if effectiveTime >= 0 && effectiveTime <= 8 {
+		alarmLevel = 3
+	} else if effectiveTime > 8 && effectiveTime <= 12 {
+		alarmLevel = 2
+	} else if effectiveTime > 12 && effectiveTime <= 18 {
+		alarmLevel = 1
+	} else {
+		// Fall back to distance-based for large time values or diverging traffic
+		alarmLevel = computeAlarmLevelByDistance(dist, relativeVertical)
+	}
+
+	return
+}
+
+// computeAlarmLevelByDistance provides distance-based alarm levels as fallback
+// when closing rate cannot be calculated (e.g., no speed data available).
+func computeAlarmLevelByDistance(dist float64, relativeVertical int32) (alarmLevel uint8) {
 	if (dist < 926) && (relativeVertical < 152) && (relativeVertical > -152) { // 926 m = 0.5 NM; 152m = 500'
 		alarmLevel = 3
 	} else if (dist < 1852) && (relativeVertical < 304) && (relativeVertical > -304) { // 1852 m = 1.0 NM ; 304 m = 1000'
@@ -93,6 +143,109 @@ func computeAlarmLevel(dist float64, relativeVertical int32) (alarmLevel uint8) 
 		alarmLevel = 0
 	}
 	return
+}
+
+// estimateTimeToClosestApproach calculates the time in seconds until the
+// closest point of approach (CPA) between ownship and traffic.
+// Returns a negative value if aircraft are diverging.
+func estimateTimeToClosestApproach(ti TrafficInfo, currentDist float64) float64 {
+	// Get ownship speed and track
+	ownSpeed := mySituation.GPSGroundSpeed * 0.5144 // knots to m/s
+	ownTrack := float64(mySituation.GPSTrueCourse) * math.Pi / 180.0
+
+	// Get traffic speed and track
+	trafficSpeed := float64(ti.Speed) * 0.5144 // knots to m/s
+	trafficTrack := float64(ti.Track) * math.Pi / 180.0
+
+	// Calculate velocity components (North, East) for both aircraft
+	ownVn := ownSpeed * math.Cos(ownTrack)
+	ownVe := ownSpeed * math.Sin(ownTrack)
+
+	trafficVn := trafficSpeed * math.Cos(trafficTrack)
+	trafficVe := trafficSpeed * math.Sin(trafficTrack)
+
+	// Calculate relative velocity (traffic relative to ownship)
+	relVn := trafficVn - ownVn
+	relVe := trafficVe - ownVe
+	relSpeed := math.Sqrt(relVn*relVn + relVe*relVe)
+
+	// If relative speed is very small, use distance-only estimate
+	if relSpeed < 1.0 { // less than 1 m/s relative motion
+		return 9999 // effectively no closure
+	}
+
+	// Calculate relative position (traffic relative to ownship)
+	relPosN, relPosE := calculateRelativePosition(ti)
+
+	// Time to closest approach using dot product method:
+	// t_cpa = -(relPos · relVel) / |relVel|²
+	dotProduct := relPosN*relVn + relPosE*relVe
+	timeToCPA := -dotProduct / (relSpeed * relSpeed)
+
+	// If timeToCPA is negative, aircraft are diverging
+	if timeToCPA < 0 {
+		return -1 // indicate diverging
+	}
+
+	// Calculate distance at closest approach to validate the alarm is warranted
+	cpaPosN := relPosN + relVn*timeToCPA
+	cpaPosE := relPosE + relVe*timeToCPA
+	cpaDist := math.Sqrt(cpaPosN*cpaPosN + cpaPosE*cpaPosE)
+
+	// If closest approach distance is still far, reduce urgency
+	if cpaDist > 500 { // >500m at closest approach
+		// Scale time by how far the CPA is - reduces false alarms for crossing traffic
+		timeToCPA = timeToCPA * (1 + cpaDist/500)
+	}
+
+	return timeToCPA
+}
+
+// calculateRelativePosition returns the relative position of traffic to ownship
+// in North/East components (meters).
+func calculateRelativePosition(ti TrafficInfo) (relN, relE float64) {
+	_, _, relN, relE = common.DistRect(
+		float64(mySituation.GPSLatitude),
+		float64(mySituation.GPSLongitude),
+		float64(ti.Lat),
+		float64(ti.Lng),
+	)
+	return
+}
+
+// estimateVerticalTimeToConflict calculates time until vertical separation
+// becomes dangerous (< 150m / ~500ft).
+// Returns negative if aircraft are diverging vertically.
+func estimateVerticalTimeToConflict(ti TrafficInfo, relativeVertical int32) float64 {
+	// Get vertical speeds in m/s
+	ownVvel := float64(mySituation.GPSVerticalSpeed) * 0.00508 // fps to m/s
+	trafficVvel := float64(ti.Vvel) * 0.00508                  // fpm to m/s (1 fpm = 0.00508 m/s)
+
+	// Relative vertical velocity (positive = converging if relativeVertical > 0)
+	verticalClosingRate := float64(0)
+	if relativeVertical > 0 {
+		verticalClosingRate = ownVvel - trafficVvel // ownship below traffic
+	} else {
+		verticalClosingRate = trafficVvel - ownVvel // ownship above traffic
+	}
+
+	// Current vertical separation in meters
+	vertSep := math.Abs(float64(relativeVertical))
+
+	// If already in vertical conflict zone, return 0
+	dangerousVertSep := 150.0 // 150m ~ 500ft
+	if vertSep < dangerousVertSep {
+		return 0
+	}
+
+	// If not converging vertically, no vertical conflict
+	if verticalClosingRate <= 0 {
+		return -1
+	}
+
+	// Time to dangerous vertical separation
+	timeToConflict := (vertSep - dangerousVertSep) / verticalClosingRate
+	return timeToConflict
 }
 
 func computeRelativeVertical(ti TrafficInfo) (relativeVertical int32) {
@@ -111,16 +264,26 @@ func computeRelativeVertical(ti TrafficInfo) (relativeVertical int32) {
 func gdl90EmitterCatToNMEA(emitterCat uint8) string {
 	acType := "0"
 	switch emitterCat {
-		case 1, 6: acType = "8" // light/"highly maneuverable > 5g" = piston
-		case 2, 3, 4, 5: acType = "9" // small/large/heavy = jet
-		case 7: acType = "3" // helicopter = helicopter
-		case 9: acType = "1" // glider = glider
-		case 10: acType = "B" // lighter than air = balloon
-		case 11: acType = "4" // skydiver/parachute = sky diver
-		case 12: acType = "7" // paraglider, hanglider
-		case 14: acType = "D" // UAV
-		case 17, 18: acType = "E" // Surface vehicle->Ground support (not in dataport spec, but OGN extension?)
-		case 19: acType = "F" // static object / point obstacle
+	case 1, 6:
+		acType = "8" // light/"highly maneuverable > 5g" = piston
+	case 2, 3, 4, 5:
+		acType = "9" // small/large/heavy = jet
+	case 7:
+		acType = "3" // helicopter = helicopter
+	case 9:
+		acType = "1" // glider = glider
+	case 10:
+		acType = "B" // lighter than air = balloon
+	case 11:
+		acType = "4" // skydiver/parachute = sky diver
+	case 12:
+		acType = "7" // paraglider, hanglider
+	case 14:
+		acType = "D" // UAV
+	case 17, 18:
+		acType = "E" // Surface vehicle->Ground support (not in dataport spec, but OGN extension?)
+	case 19:
+		acType = "F" // static object / point obstacle
 	}
 	return acType
 }
@@ -131,17 +294,27 @@ func nmeaAircraftTypeToGdl90(actype string) uint8 {
 		return 0
 	}
 	cat := uint8(0)
-	switch(acTypeInt) {
-		case 1: cat = 9 // glider = glider
-		case 2, 5, 8: cat = 1 // tow, drop, piston = light
-		case 3: cat = 7 // helicopter = helicopter
-		case 4: cat = 11 // skydiver
-		case 6, 7: cat = 12 // hang glider / paraglider
-		case 9: cat = 3 // jet = large
-		case 0xB, 0xC: cat = 10 // Balloon, airship = lighter than air
-		case 0xD: cat = 14 // UAV=UAV
-		case 0xE: cat = 18 // Ground support = surface vehicle (OGN extension?)
-		case 0xF: cat = 19 // point obstacle=static object
+	switch acTypeInt {
+	case 1:
+		cat = 9 // glider = glider
+	case 2, 5, 8:
+		cat = 1 // tow, drop, piston = light
+	case 3:
+		cat = 7 // helicopter = helicopter
+	case 4:
+		cat = 11 // skydiver
+	case 6, 7:
+		cat = 12 // hang glider / paraglider
+	case 9:
+		cat = 3 // jet = large
+	case 0xB, 0xC:
+		cat = 10 // Balloon, airship = lighter than air
+	case 0xD:
+		cat = 14 // UAV=UAV
+	case 0xE:
+		cat = 18 // Ground support = surface vehicle (OGN extension?)
+	case 0xF:
+		cat = 19 // point obstacle=static object
 	}
 	return cat
 }
@@ -225,7 +398,7 @@ func makeFlarmPFLAAString(ti TrafficInfo) (msg string, valid bool, alarmLevel ui
 	//}
 
 	relativeVertical = computeRelativeVertical(ti)
-	alarmLevel = computeAlarmLevel(dist, relativeVertical)
+	alarmLevel = computeAlarmLevel(ti, dist, relativeVertical)
 
 	if ti.Speed_valid {
 		groundSpeed = int32(float32(ti.Speed) * 0.5144) // convert to m/s
@@ -235,7 +408,7 @@ func makeFlarmPFLAAString(ti TrafficInfo) (msg string, valid bool, alarmLevel ui
 
 	climbRate := float32(ti.Vvel) * 0.3048 / 60 // convert to m/s
 
-	idstr := fmt.Sprintf("%.6X", ti.Icao_addr & 0xFFFFFF)
+	idstr := fmt.Sprintf("%.6X", ti.Icao_addr&0xFFFFFF)
 	if len(ti.Tail) > 0 {
 		idstr += "!" + ti.Tail
 	}
@@ -460,7 +633,7 @@ func makeAHRSLevilReport() {
 
 	msg := fmt.Sprintf("$RPYL,%d,%d,%d,%d,%d,%d,0", roll, pitch, hdg, slip_skid, yaw_rate, g)
 	appendNmeaChecksum(msg)
-	sendNetFLARM(msg + "\r\n", 100 * time.Millisecond, 4)
+	sendNetFLARM(msg+"\r\n", 100*time.Millisecond, 4)
 }
 
 func atof32(val string) float32 {
@@ -485,9 +658,9 @@ func parseFlarmNmeaMessage(message []string) {
 
 func relativeGpsAltToBaro(relVert float32) (alt int32, altIsGnss bool) {
 	if isTempPressValid() {
-		return int32(mySituation.BaroPressureAltitude + relVert * 3.28084), false
+		return int32(mySituation.BaroPressureAltitude + relVert*3.28084), false
 	} else if isGPSValid() {
-		return int32(mySituation.GPSAltitudeMSL + relVert * 3.28084), true
+		return int32(mySituation.GPSAltitudeMSL + relVert*3.28084), true
 	}
 	return 0, false
 }
@@ -530,14 +703,14 @@ func parseFlarmPFLAU(message []string) {
 	thisMsg.MessageClass = MSGCLASS_OGN
 	thisMsg.TimeReceived = stratuxClock.Time
 	msgLogAppend(thisMsg)
-	
+
 	if !isGPSValid() {
 		return // can't convert relative to absolute without GPS
 	}
 
 	ognID, tail, address := getIdTail(message[10])
 
-	trafficBearing := int32(mySituation.GPSTrueCourse + atof32(message[6])) % 360
+	trafficBearing := int32(mySituation.GPSTrueCourse+atof32(message[6])) % 360
 	if trafficBearing < 0 {
 		trafficBearing += 360
 	}
@@ -547,11 +720,11 @@ func parseFlarmPFLAU(message []string) {
 	var ti TrafficInfo
 	trafficMutex.Lock()
 	defer trafficMutex.Unlock()
-	
+
 	// We don't know idType any more in PFLAU message.. just use anything we have.. Not optimal, but better than having multiple targets
 	key := address
 	existingTi, ok := traffic[key]
-	key = 1 << 24 | address
+	key = 1<<24 | address
 	if !ok {
 		existingTi, ok = traffic[key]
 	}
@@ -577,7 +750,7 @@ func parseFlarmPFLAU(message []string) {
 	ti.Last_source = TRAFFIC_SOURCE_OGN
 	ti.Alt, ti.AltIsGNSS = relativeGpsAltToBaro(relVertical)
 
-	lat, lng := calcLocationForBearingDistance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(trafficBearing), float64(relDist / 1852.0))
+	lat, lng := calcLocationForBearingDistance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(trafficBearing), float64(relDist/1852.0))
 	ti.Lat = float32(lat)
 	ti.Lng = float32(lng)
 	ti.Distance = float64(relDist)
@@ -609,7 +782,7 @@ func parseFlarmPFLAA(message []string) {
 	thisMsg.TimeReceived = stratuxClock.Time
 	// thisMsg.Data = ...?
 	msgLogAppend(thisMsg)
-	
+
 	relNorth := atof32(message[2])
 	relEast := atof32(message[3])
 	relVert := atof32(message[4])
@@ -617,9 +790,9 @@ func parseFlarmPFLAA(message []string) {
 	ognID, tail, address := getIdTail(message[6])
 	idType, _ := strconv.ParseInt(message[5], 10, 8)
 	if idType == 1 {
-		idType = 0; // ICAO ID
+		idType = 0 // ICAO ID
 	} else {
-		idType = 1; // non-ICAO ID
+		idType = 1 // non-ICAO ID
 	}
 
 	track := atof32(message[7])
@@ -632,14 +805,14 @@ func parseFlarmPFLAA(message []string) {
 
 	trafficMutex.Lock()
 	defer trafficMutex.Unlock()
-	
+
 	// check if traffic is already known
-	key := uint32(idType) << 24 | address
+	key := uint32(idType)<<24 | address
 	if existingTi, ok := traffic[key]; ok {
 		if existingTi.Last_source == TRAFFIC_SOURCE_1090ES && existingTi.Age < 5 {
 			// traffic has FLARM and 1090ES and was seen via 1090ES recently?
 			// -> ignore the flarm message. 1090ES has much less delay, so we prefer that.
-			return 
+			return
 		}
 
 		ti = existingTi
@@ -664,7 +837,7 @@ func parseFlarmPFLAA(message []string) {
 
 	// lat dist = 60nm = 111,12km
 	ti.Lat = mySituation.GPSLatitude + (relNorth / 111120.0)
-	avgLat := ti.Lat / 2.0 + mySituation.GPSLatitude / 2.0
+	avgLat := ti.Lat/2.0 + mySituation.GPSLatitude/2.0
 	lngFactor := float32(111120.0 * math.Cos(common.Radians(float64(avgLat))))
 	ti.Lng = mySituation.GPSLongitude + (relEast / lngFactor)
 
@@ -672,7 +845,7 @@ func parseFlarmPFLAA(message []string) {
 		ti.Distance, ti.Bearing = common.Distance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(ti.Lat), float64(ti.Lng))
 		ti.BearingDist_valid = true
 	}
-	
+
 	ti.Track = track
 	ti.TurnRate = turn
 	ti.Speed = uint16(speed * 1.94384) // m/s to knots
