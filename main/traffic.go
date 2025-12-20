@@ -84,7 +84,7 @@ type TrafficInfo struct {
 	Reg                 string    // Registration. Calculated from Icao_addr for civil aircraft of US registry.
 	Tail                string    // Callsign. Transmitted by aircraft.
 	Emitter_category    uint8     // Formatted using GDL90 standard, e.g. in a Mode ES report, A7 becomes 0x07, B0 becomes 0x08, etc.
-	SurfaceVehicleType	uint16    // Type of service vehicle (when Emitter_category==18) 0..255 is reserved for AIS vessels
+	SurfaceVehicleType  uint16    // Type of service vehicle (when Emitter_category==18) 0..255 is reserved for AIS vessels
 	OnGround            bool      // Air-ground status. On-ground is "true".
 	Addr_type           uint8     // UAT address qualifier. Used by GDL90 format, so translations for ES TIS-B/ADS-R are needed.
 	TargetType          uint8     // types decribed in const above
@@ -121,17 +121,17 @@ type TrafficInfo struct {
 	ExtrapolatedPosition bool      //TODO: True if Stratux is "coasting" the target from last known position.
 	Last_extrapolation   time.Time
 	AgeExtrapolation     float64
-	Lat_fix              float32   // Last real, non-extrapolated latitude
-	Lng_fix              float32   // Last real, non-extrapolated longitude
-	Alt_fix              int32     // Last real, non-extrapolated altitude
+	Lat_fix              float32 // Last real, non-extrapolated latitude
+	Lng_fix              float32 // Last real, non-extrapolated longitude
+	Alt_fix              int32   // Last real, non-extrapolated altitude
 
-	BearingDist_valid    bool      // set when bearing and distance information is valid
-	Bearing              float64   // Bearing in common.Degrees true to traffic from ownship, if it can be calculated. Units: common.Degrees.
-	Distance             float64   // Distance to traffic from ownship, if it can be calculated. Units: meters.
-	DistanceEstimated    float64   // Estimated distance of the target if real distance can't be calculated, Estimated from signal strength with exponential smoothing.
+	BearingDist_valid       bool      // set when bearing and distance information is valid
+	Bearing                 float64   // Bearing in common.Degrees true to traffic from ownship, if it can be calculated. Units: common.Degrees.
+	Distance                float64   // Distance to traffic from ownship, if it can be calculated. Units: meters.
+	DistanceEstimated       float64   // Estimated distance of the target if real distance can't be calculated, Estimated from signal strength with exponential smoothing.
 	DistanceEstimatedLastTs time.Time // Used to compute moving average
-	ReceivedMsgs         uint64    // Number of messages received by this aircraft
-	IsStratux            bool      // Target is equipped with a Stratux that transmits via OGN tracker
+	ReceivedMsgs            uint64    // Number of messages received by this aircraft
+	IsStratux               bool      // Target is equipped with a Stratux that transmits via OGN tracker
 	//FIXME: Rename variables for consistency, especially "Last_".
 }
 
@@ -182,7 +182,7 @@ func convertMetersToFeet(meters float32) float32 {
 
 func cleanupOldEntries() {
 	for key, ti := range traffic {
-		
+
 		if ti.Last_source != TRAFFIC_SOURCE_AIS && stratuxClock.Since(ti.Last_seen).Seconds() > 60 { // keep it in the database for up to 60 seconds, so we don't lose tail number, etc...
 			delete(traffic, key)
 		}
@@ -192,7 +192,6 @@ func cleanupOldEntries() {
 		}
 	}
 }
-
 
 func removeTarget(id uint32) {
 	trafficMutex.Lock()
@@ -212,7 +211,7 @@ func removeTarget(id uint32) {
 // If it has no position information, we will not take it as ownship, but ignore its data (no mode-s detection for everything that is configured as ownship)
 func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool) {
 	// First, check if this is our own OGN tracker
-	
+
 	if (globalStatus.GPS_detected_type & 0x0f) == GPS_TYPE_OGNTRACKER {
 		ognTrackerCodeInt, _ := strconv.ParseUint(globalSettings.OGNAddr, 16, 32)
 		prevTrackerCodeInt, _ := strconv.ParseUint(globalStatus.OGNPrevRandomAddr, 16, 32)
@@ -222,7 +221,6 @@ func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool
 			return
 		}
 	}
-
 
 	codes := strings.Split(globalSettings.OwnshipModeS, ",")
 	shouldIgnore = false
@@ -238,10 +236,10 @@ func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool
 
 			// User might have specified the address of another airplane that he regularly flys.
 			// If this airplane is currently in the air and we receive it, it gets priority over our ownship information.
-			// This is a sanity check to filter out such cases - only accept the ownship data if 
+			// This is a sanity check to filter out such cases - only accept the ownship data if
 			// it somewhat matches our real data
 			// because of second-resolution in flarm we assume worst case of +1 second
-			timeDiff := math.Abs(ti.Age - stratuxClock.Since(mySituation.GPSLastGPSTimeStratuxTime).Seconds()) + 1
+			timeDiff := math.Abs(ti.Age-stratuxClock.Since(mySituation.GPSLastGPSTimeStratuxTime).Seconds()) + 1
 			//if ti.ExtrapolatedPosition {
 			//	timeDiff = math.Abs(ti.AgeExtrapolation - stratuxClock.Since(mySituation.GPSLastGPSTimeStratuxTime).Seconds()) + 1
 			//}
@@ -265,12 +263,12 @@ func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool
 			}
 
 			// Check if the distance to the ti is plausible
-			maxDistMetersIgnore := (timeDiff * speed * 0.514444 + float64(mySituation.GPSHorizontalAccuracy) + 50) * 3
+			maxDistMetersIgnore := (timeDiff*speed*0.514444 + float64(mySituation.GPSHorizontalAccuracy) + 50) * 3
 			if trafficDist > maxDistMetersIgnore {
 				log.Printf("Skipping ownship %s because it's too far away (%fm, speed=%f, max=%f)", ownCode, trafficDist, speed, maxDistMetersIgnore)
 				continue
 			}
-			
+
 			// If we have a pressure sensor, and the pressure altitude of traffic and ownship is too big, skip...
 			if altDiff > 500 {
 				log.Printf("Skipping ownship %s because the altitude is off (%f ft)", ownCode, altDiff)
@@ -279,7 +277,7 @@ func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool
 
 			// To really use the information from the ownship traffic info, we have much more
 			// strict requirements. At most 5s old and must be much closer
-			maxDistMetersOwnship :=  (timeDiff * speed * 0.514444 + float64(mySituation.GPSHorizontalAccuracy) + 20) * 1.4
+			maxDistMetersOwnship := (timeDiff*speed*0.514444 + float64(mySituation.GPSHorizontalAccuracy) + 20) * 1.4
 			if !isGPSValid() || (ti.Age <= 5 && trafficDist < maxDistMetersOwnship) && !ti.AltIsGNSS {
 				isOwnshipInfo = true
 			}
@@ -314,7 +312,7 @@ func sendTrafficUpdates() {
 
 	var currAlt float32
 	currAlt = mySituation.BaroPressureAltitude
-	if currAlt == 99999 {   // no valid BaroAlt, take GPS instead, better than nothing
+	if currAlt == 99999 { // no valid BaroAlt, take GPS instead, better than nothing
 		currAlt = mySituation.GPSAltitudeMSL
 	}
 
@@ -350,7 +348,7 @@ func sendTrafficUpdates() {
 		// As bearingless targets, we show the closest estimated traffic that is between +-2000ft
 		if !shouldIgnore && !ti.Position_valid && ti.DistanceEstimated > 0 &&
 			(bestEstimate.DistanceEstimated == 0 || ti.DistanceEstimated < bestEstimate.DistanceEstimated) {
-			if ti.Alt != 0 && math.Abs(float64(ti.Alt) - float64(currAlt)) < 2000 {
+			if ti.Alt != 0 && math.Abs(float64(ti.Alt)-float64(currAlt)) < 2000 {
 				bestEstimate = ti
 			}
 		}
@@ -371,9 +369,9 @@ func sendTrafficUpdates() {
 			trafficUpdate.SendJSON(ti)
 		}
 		if !shouldIgnore && isCurrent {
-			if float32(ti.Alt) <= currAlt + float32(globalSettings.RadarLimits) * 1.3 && //take 30% more to see moving outs
-			   float32(ti.Alt) >= currAlt - float32(globalSettings.RadarLimits) * 1.3 && // altitude lower than upper boundary
-			   (!ti.Position_valid || ti.Distance<float64(globalSettings.RadarRange) * 1852.0 * 1.3) {    //allow more so that aircraft moves out
+			if float32(ti.Alt) <= currAlt+float32(globalSettings.RadarLimits)*1.3 && //take 30% more to see moving outs
+				float32(ti.Alt) >= currAlt-float32(globalSettings.RadarLimits)*1.3 && // altitude lower than upper boundary
+				(!ti.Position_valid || ti.Distance < float64(globalSettings.RadarRange)*1852.0*1.3) { //allow more so that aircraft moves out
 				radarUpdate.SendJSON(ti)
 			}
 		}
@@ -416,7 +414,7 @@ func sendTrafficUpdates() {
 		if isGPSValid() {
 			if globalSettings.EstimateBearinglessDist {
 				fakeTargets := calculateModeSFakeTargets(bestEstimate)
-				fakeMsg :=  make([]byte, 0)
+				fakeMsg := make([]byte, 0)
 				for _, ti := range fakeTargets {
 					fakeMsg = append(fakeMsg, makeTrafficReportMsg(ti)...)
 				}
@@ -425,7 +423,7 @@ func sendTrafficUpdates() {
 			}
 			prio := computeTrafficPriority(&bestEstimate)
 			msg, valid, _ := makeFlarmPFLAAString(bestEstimate)
-			if valid { 
+			if valid {
 				sendNetFLARM(msg, time.Second, prio)
 			}
 		}
@@ -448,7 +446,7 @@ func computeTrafficPriority(ti *TrafficInfo) int32 {
 	altDiff := math.Abs(float64(myAlt) - float64(ti.Alt))
 	// assumes 333ft vertical difference has same priority 1000m horizontal
 	// This will usually produce priorities ranging from around 0-10
-	return int32((altDiff / 3.33 + ti.Distance) / 10000.0)
+	return int32((altDiff/3.33 + ti.Distance) / 10000.0)
 }
 
 // Used to tune to our radios. We compare our estimate to real values for ADS-B Traffic.
@@ -458,24 +456,24 @@ func computeTrafficPriority(ti *TrafficInfo) int32 {
 // This is only a wild guess, but seems to help a bit. To do so, we use different estimatedDistFactors for different
 // altitude buckets: <5000ft, 5000-10000ft, >10000ft
 var estimatedDistFactors [3]float64 = [3]float64{2500.0, 2800.0, 3000.0}
+
 func estimateDistance(ti *TrafficInfo) {
 	if ti.Last_source != TRAFFIC_SOURCE_1090ES {
 		return
 	}
-	altClass := int32(math.Max(0.0, math.Min(float64(ti.Alt / 5000), 2.0)))
-	dist := math.Pow(2.0, -ti.SignalLevel / 6.0) * estimatedDistFactors[altClass];  // distance approx. in meters, 6dB for double distance
+	altClass := int32(math.Max(0.0, math.Min(float64(ti.Alt/5000), 2.0)))
+	dist := math.Pow(2.0, -ti.SignalLevel/6.0) * estimatedDistFactors[altClass] // distance approx. in meters, 6dB for double distance
 
-	lambda := 0.2;
+	lambda := 0.2
 	timeDiff := ti.Timestamp.Sub(ti.DistanceEstimatedLastTs).Seconds() * 1000
 	ti.DistanceEstimatedLastTs = ti.Timestamp
 	if timeDiff < 0.0 {
 		return
 	}
-	
 
-	expon := math.Exp(-timeDiff / 100 * lambda);
+	expon := math.Exp(-timeDiff / 100 * lambda)
 	//log.Printf("timediff: %f, expon: %f", timeDiff, expon)
-	ti.DistanceEstimated = ti.DistanceEstimated * expon + dist * (1 - expon);
+	ti.DistanceEstimated = ti.DistanceEstimated*expon + dist*(1-expon)
 
 	// Only learn from 1090ES ADS-B targets
 	// We ignore targets that are too far away (a lot of signal strength fluctuation), too close (non-reception cone or ownship)
@@ -490,14 +488,14 @@ func estimateDistance(ti *TrafficInfo) {
 		}
 		estimatedDistFactors[altClass] += errorFactor
 		//log.Printf("Estimate off: %f, new factor: %f", errorFactor, estimatedDistFactor)
-		if (estimatedDistFactors[altClass] < 1.0) {
+		if estimatedDistFactors[altClass] < 1.0 {
 			estimatedDistFactors[altClass] = 1.0
 		}
 	}
 
 }
 
- // calculates coordinates of a point defined by a location, a bearing, and a distance, thanks to 0x74-0x62
+// calculates coordinates of a point defined by a location, a bearing, and a distance, thanks to 0x74-0x62
 func calcLocationForBearingDistance(lat1, lon1, bearingDeg, distanceNm float64) (lat2, lon2 float64) {
 	lat1Rad := common.Radians(lat1)
 	lon1Rad := common.Radians(lon1)
@@ -518,7 +516,7 @@ func calculateModeSFakeTargets(bearinglessTi TrafficInfo) []TrafficInfo {
 	result := make([]TrafficInfo, 8)
 	for i := 0; i < 8; i++ {
 		ti := bearinglessTi
-		lat, lon := calcLocationForBearingDistance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(i * 45), bearinglessTi.DistanceEstimated / 1852.0)
+		lat, lon := calcLocationForBearingDistance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(i*45), bearinglessTi.DistanceEstimated/1852.0)
 		ti.Lat = float32(lat)
 		ti.Lng = float32(lon)
 		ti.Icao_addr = uint32(i) // So that the EFB shows it as a different aircraft
@@ -1086,7 +1084,7 @@ func parseDump1090Message(buf string) {
 	eslog.Data = buf
 	logESMsg(eslog) // log raw dump1090:30006 output to SQLite log
 	// Only increment if using an SDR for 1090 traffic
-	if !globalSettings.Ping_Enabled  && !globalSettings.Pong_Enabled {
+	if !globalSettings.Ping_Enabled && !globalSettings.Pong_Enabled {
 		globalStatus.ES_messages_total++
 	}
 	var newTi *dump1090Data
@@ -1140,7 +1138,7 @@ func parseDump1090Message(buf string) {
 			ti.SignalLevelHist = ti.SignalLevelHist[len(ti.SignalLevelHist)-8:]
 		}
 		ti.SignalLevel = -999
-		for _, level := range(ti.SignalLevelHist) {
+		for _, level := range ti.SignalLevelHist {
 			if level > ti.SignalLevel {
 				ti.SignalLevel = level
 			}
@@ -1440,7 +1438,7 @@ func extrapolateTraffic(ti *TrafficInfo) {
 
 	ti.ExtrapolatedPosition = true
 	ti.Last_extrapolation = stratuxClock.Time
-	
+
 	// TODO: should we call registerTrafficUpdate() to send this traffic to the web interface?
 	// Pro: web interface also shows interpolated position
 	// Con: it doesn't show the really received position with the age any more (i.e. age gets older but position updates)
@@ -1457,7 +1455,6 @@ groundspeed in knots, and bearing offset from 0 deg initial position.
 Traffic on headings 150-240 (bearings 060-150) is intentionally suppressed from updating to allow
 for testing of EFB and webUI response. Additionally, the "on ground" flag is set for headings 240-270,
 and speed invalid flag is set for headings 135-150 to allow testing of response to those conditions.
-
 */
 func updateDemoTraffic(icao uint32, tail string, relAlt float32, gs float64, offset int32) {
 	var ti TrafficInfo
@@ -1730,5 +1727,6 @@ func initTraffic(isTraceReplayMode bool) {
 		go ognListen()
 		go aprsListen()
 		go aisListen()
+		go daisyAISListen() // Daisy serial AIS receiver
 	}
 }

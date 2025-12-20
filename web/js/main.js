@@ -19,6 +19,8 @@ var URL_SETTINGS_GET        = URL_HOST_PROTOCOL + URL_HOST_BASE + "/getSettings"
 var URL_SETTINGS_SET        = URL_HOST_PROTOCOL + URL_HOST_BASE + "/setSettings";
 var URL_SHUTDOWN            = URL_HOST_PROTOCOL + URL_HOST_BASE + "/shutdown";
 var URL_STATUS_GET          = URL_HOST_PROTOCOL + URL_HOST_BASE + "/getStatus";
+var URL_AIS_TRAFFIC_GET     = URL_HOST_PROTOCOL + URL_HOST_BASE + "/getAISTraffic";
+var URL_SERIAL_PORTS_GET    = URL_HOST_PROTOCOL + URL_HOST_BASE + "/getSerialPorts";
 var URL_REGION_GET          = URL_HOST_PROTOCOL + URL_HOST_BASE + "/getRegion";
 var URL_REGION_SET          = URL_HOST_PROTOCOL + URL_HOST_BASE + "/setRegion";
 var URL_TOWERS_GET          = URL_HOST_PROTOCOL + URL_HOST_BASE + "/getTowers";
@@ -70,6 +72,12 @@ app.config(function ($stateProvider, $urlRouterProvider) {
 			url: '/traffic',
 			templateUrl: 'plates/traffic.html',
 			controller: 'TrafficCtrl',
+			reloadOnSearch: false
+		})
+		.state('ais-traffic', {
+			url: '/ais-traffic',
+			templateUrl: 'plates/ais-traffic.html',
+			controller: 'AISTrafficCtrl',
 			reloadOnSearch: false
 		})
 		.state('gps', {

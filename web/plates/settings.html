@@ -379,11 +379,48 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="control-label col-xs-5">162 MHz (AIS)</label>
+                        <label class="control-label col-xs-5">162 MHz (AIS SDR)</label>
                         <div class="col-xs-7">
-                            <ui-switch ng-model='AIS_Enabled' settings-change></ui-switch>
+                            <ui-switch ng-model='AIS_Enabled' ng-disabled='DaisyAIS_Enabled' settings-change></ui-switch>
                         </div>
                     </div>
+
+                    <!-- Daisy AIS Receiver Section -->
+                    <div class="form-group">
+                        <label class="control-label col-xs-5">Daisy AIS (Serial)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='DaisyAIS_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group" ng-show="DaisyAIS_Enabled">
+                        <label class="control-label col-xs-5">Serial Port</label>
+                        <div class="col-xs-7">
+                            <select class="form-control" ng-model="DaisyAIS_SerialPort"
+                                    ng-options="port for port in serialPorts"
+                                    settings-change>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" ng-show="DaisyAIS_Enabled">
+                        <label class="control-label col-xs-5">Baud Rate</label>
+                        <div class="col-xs-7">
+                            <select class="form-control" ng-model="DaisyAIS_BaudRate" settings-change>
+                                <option value="38400">38400 (default)</option>
+                                <option value="9600">9600</option>
+                                <option value="115200">115200</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" ng-show="DaisyAIS_Enabled">
+                        <label class="control-label col-xs-5">Daisy Status</label>
+                        <div class="col-xs-7">
+                            <span class="label" ng-class="{'label-success': DaisyAIS_connected, 'label-danger': !DaisyAIS_connected}">
+                                {{DaisyAIS_connected ? 'Connected' : 'Disconnected'}}
+                            </span>
+                        </div>
+                    </div>
+                    <!-- End Daisy AIS Section -->
+
                     <div class="form-group">
                         <label class="control-label col-xs-5">Internet (OGN APRS)</label>
                         <div class="col-xs-7">
