@@ -145,12 +145,42 @@ echo -e "${YELLOW}Compilation en cours (peut prendre plusieurs minutes)...${NC}"
 make clean 2>/dev/null || true
 make all
 
-# Créer et installer le paquet
-echo -e "${YELLOW}Création du paquet .deb...${NC}"
-make dpkg
+# Installation manuelle (plus fiable que dpkg sur certaines configurations)
+echo -e "${YELLOW}Installation de Stratux...${NC}"
 
-# Installer
-dpkg -i stratux-*.deb || apt-get install -f -y
+# Créer les répertoires
+mkdir -p /opt/stratux/bin
+mkdir -p /opt/stratux/cfg
+mkdir -p /var/log/stratux
+
+# Copier les binaires
+cp -f gen_gdl90 /opt/stratux/bin/
+cp -f dump1090/dump1090 /opt/stratux/bin/
+cp -f godump978 /opt/stratux/bin/ 2>/dev/null || true
+cp -f rtl-ais/rtl_ais /opt/stratux/bin/ 2>/dev/null || true
+cp -f ogn/ogn-* /opt/stratux/bin/ 2>/dev/null || true
+
+# Copier l'interface web
+cp -rf web /opt/stratux/
+
+# Créer le service systemd
+cat > /etc/systemd/system/stratux.service << 'EOF'
+[Unit]
+Description=Stratux ADS-B/AIS Receiver
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/stratux/bin/gen_gdl90
+WorkingDirectory=/opt/stratux
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo -e "${GREEN}Stratux installé dans /opt/stratux${NC}"
 
 echo ""
 echo -e "${YELLOW}Configuration du système...${NC}"
@@ -177,6 +207,10 @@ if [ -f "$CONFIG_FILE" ]; then
     echo -e "${GREEN}Configuration boot mise à jour${NC}"
 fi
 
+# Débloquer le WiFi (rfkill)
+echo -e "${YELLOW}Déblocage WiFi...${NC}"
+rfkill unblock wifi 2>/dev/null || true
+
 # Configuration hostapd (WiFi Access Point)
 cat > /etc/hostapd/hostapd.conf << 'EOF'
 interface=wlan0
@@ -200,13 +234,48 @@ dhcp-range=192.168.10.10,192.168.10.50,255.255.255.0,12h
 address=/stratux.local/192.168.10.1
 EOF
 
-# Configuration réseau wlan0
+# Désactiver NetworkManager pour wlan0 (crucial pour Pi OS Bookworm+)
+echo -e "${YELLOW}Configuration NetworkManager pour libérer wlan0...${NC}"
+
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/stratux.conf << 'EOF'
+[keyfile]
+unmanaged-devices=interface-name:wlan0
+EOF
+
+# Supprimer les connexions WiFi existantes sur wlan0
+if command -v nmcli &> /dev/null; then
+    nmcli device set wlan0 managed no 2>/dev/null || true
+    # Supprimer toutes les connexions WiFi
+    for conn in $(nmcli -t -f NAME,TYPE connection show | grep wireless | cut -d: -f1); do
+        nmcli connection delete "$conn" 2>/dev/null || true
+    done
+fi
+
+# Configuration réseau wlan0 (IP statique)
 mkdir -p /etc/network/interfaces.d
 cat > /etc/network/interfaces.d/wlan0 << 'EOF'
 auto wlan0
 iface wlan0 inet static
     address 192.168.10.1
     netmask 255.255.255.0
+EOF
+
+# Créer un service pour configurer wlan0 avant hostapd
+cat > /etc/systemd/system/stratux-wifi.service << 'EOF'
+[Unit]
+Description=Stratux WiFi AP Setup
+Before=hostapd.service
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'ip link set wlan0 down; ip addr flush dev wlan0; ip addr add 192.168.10.1/24 dev wlan0; ip link set wlan0 up'
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 # Créer le fichier de configuration par défaut
@@ -232,15 +301,24 @@ echo -e "${YELLOW}Configuration des services...${NC}"
 
 # Activer les services
 systemctl unmask hostapd 2>/dev/null || true
+systemctl daemon-reload
+systemctl enable stratux-wifi
 systemctl enable hostapd
 systemctl enable dnsmasq
 systemctl enable stratux
 
-# Désactiver services inutiles
+# Désactiver services qui interfèrent avec le WiFi AP
+systemctl stop wpa_supplicant 2>/dev/null || true
 systemctl disable wpa_supplicant 2>/dev/null || true
+systemctl mask wpa_supplicant 2>/dev/null || true
+
+# Désactiver services inutiles
 systemctl disable apt-daily.timer 2>/dev/null || true
 systemctl disable apt-daily-upgrade.timer 2>/dev/null || true
 systemctl disable man-db.timer 2>/dev/null || true
+
+# Redémarrer NetworkManager pour appliquer les changements
+systemctl restart NetworkManager 2>/dev/null || true
 
 echo ""
 echo -e "${GREEN}"
