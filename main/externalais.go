@@ -12,6 +12,7 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -51,16 +52,26 @@ func externalAISListen() {
 
 		// Read loop
 		reader := bufio.NewReader(externalAISSerialPort)
-		for globalSettings.ExternalAIS_Enabled {
+		connectionError := false
+		for globalSettings.ExternalAIS_Enabled && !connectionError {
 			// Read timeout is already set in serial config
 
 			line, err := reader.ReadString('\n')
 			if err != nil {
-				if strings.Contains(err.Error(), "timeout") {
-					// Timeout is expected, just continue
+				// EOF and timeout are expected when no data is received - keep listening
+				if err == io.EOF || strings.Contains(err.Error(), "timeout") {
+					// Check if the device still exists (detect unplugged device)
+					if _, statErr := os.Stat(globalSettings.ExternalAIS_SerialPort); statErr != nil {
+						log.Printf("External AIS: device %s disconnected\n", globalSettings.ExternalAIS_SerialPort)
+						connectionError = true
+						break
+					}
+					// Device still exists, just no data - continue listening
 					continue
 				}
+				// Real error - device might be disconnected
 				log.Printf("External AIS: read error: %s\n", err.Error())
+				connectionError = true
 				break
 			}
 
@@ -76,13 +87,17 @@ func externalAISListen() {
 			}
 		}
 
-		// Cleanup
-		globalStatus.ExternalAIS_connected = false
+		// Cleanup - only mark as disconnected if there was an actual error or disabled
 		if externalAISSerialPort != nil {
 			externalAISSerialPort.Close()
 			externalAISSerialPort = nil
 		}
-		time.Sleep(3 * time.Second)
+		if connectionError || !globalSettings.ExternalAIS_Enabled {
+			globalStatus.ExternalAIS_connected = false
+		}
+		if connectionError {
+			time.Sleep(3 * time.Second)
+		}
 	}
 }
 
