@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stratux/stratux/sensors/bmp388"
+	"github.com/stratux/stratux/sensors/lps22hb"
 
 	"github.com/kidoman/embd"
 	_ "github.com/kidoman/embd/host/all"
@@ -34,6 +35,8 @@ const (
 	ICMREG_WHO_AM_I             = 0x00
 	ICMREG_WHO_AM_I_VAL         = 0xEA             // Expected value.
 	PRESSURE_WHO_AM_I           = bmp388.RegChipId // Expected address for bosch pressure sensors bmpXXX.
+	LPS22HB_WHO_AM_I            = lps22hb.RegWhoAmI // WHO_AM_I register for LPS22HB (0x0F)
+	LPS22HB_WHO_AM_I_VAL        = lps22hb.ChipId    // Expected value for LPS22HB (0xB1)
 )
 
 var (
@@ -82,31 +85,46 @@ func pollSensors() {
 
 func initPressureSensor() (ok bool) {
 
+	// First try BMP388/BMP280 at addresses 0x76 and 0x77
 	v, err := i2cbus.ReadByteFromReg(0x76, PRESSURE_WHO_AM_I)
 
 	if err != nil {
 		v, err = i2cbus.ReadByteFromReg(0x77, PRESSURE_WHO_AM_I)
 	}
-	if err != nil {
-		log.Printf("Error identifying BMP: %s\n", err.Error())
-		return false
-	}
-	if v == bmp388.ChipId || v == bmp388.ChipId390 {
-		log.Printf("BMP-388 detected")
-		bmp, err := sensors.NewBMP388(&i2cbus)
-		if err == nil {
-			myPressureReader = bmp
-			return true
-		}
-	} else {
-		log.Printf("using BMP-280")
-		bmp, err := sensors.NewBMP280(&i2cbus, 100*time.Millisecond)
-		if err == nil {
-			myPressureReader = bmp
-			return true
+	if err == nil {
+		if v == bmp388.ChipId || v == bmp388.ChipId390 {
+			log.Printf("BMP-388 detected")
+			bmp, err := sensors.NewBMP388(&i2cbus)
+			if err == nil {
+				myPressureReader = bmp
+				return true
+			}
+		} else {
+			log.Printf("using BMP-280")
+			bmp, err := sensors.NewBMP280(&i2cbus, 100*time.Millisecond)
+			if err == nil {
+				myPressureReader = bmp
+				return true
+			}
 		}
 	}
 
+	// Try LPS22HB at addresses 0x5C and 0x5D (Waveshare Sense HAT B)
+	v, err = i2cbus.ReadByteFromReg(0x5C, LPS22HB_WHO_AM_I)
+	if err != nil {
+		v, err = i2cbus.ReadByteFromReg(0x5D, LPS22HB_WHO_AM_I)
+	}
+	if err == nil && v == LPS22HB_WHO_AM_I_VAL {
+		log.Printf("LPS22HB detected (Sense HAT B compatible)")
+		lps, err := sensors.NewLPS22HB(&i2cbus)
+		if err == nil {
+			myPressureReader = lps
+			return true
+		}
+		log.Printf("Error initializing LPS22HB: %s\n", err.Error())
+	}
+
+	log.Printf("No pressure sensor detected (tried BMP280/388 and LPS22HB)")
 	return false
 }
 
