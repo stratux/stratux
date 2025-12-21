@@ -279,7 +279,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	});
 
 	// Fetch available serial ports for external AIS
-	$http.get(URL_HOST_BASE + '/getSerialPorts').then(function(response) {
+	$http.get(URL_SERIAL_PORTS_GET).then(function(response) {
 		$scope.serialPorts = angular.fromJson(response.data);
 		// Add a default option if no ports found
 		if (!$scope.serialPorts || $scope.serialPorts.length === 0) {
