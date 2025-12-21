@@ -161,8 +161,8 @@ cp -f libdump978.so /opt/stratux/bin/ 2>/dev/null || true
 cp -f rtl-ais/rtl_ais /opt/stratux/bin/ 2>/dev/null || true
 cp -f ogn/ogn-* /opt/stratux/bin/ 2>/dev/null || true
 
-# Copier l'interface web
-cp -rf web /opt/stratux/
+# Copier l'interface web (Stratux utilise /www pas /web)
+cp -rf web /opt/stratux/www
 
 # Créer le service systemd
 cat > /etc/systemd/system/stratux.service << 'EOF'
