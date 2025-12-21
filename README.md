@@ -61,6 +61,37 @@ This repository offers code and binaries that can help you to build your own tra
 * Support for NMEA output (including PFLAA/PFLAU traffic messages) via TCP Port 2000 and [serial](https://github.com/stratux/stratux/wiki/Stratux-Serial-output-for-EFIS's-that-support-GDL90-or-Flarm-NMEA-over-serial)
 * Over-the-air (OTA) software update (between minor releases)
 
+## Quick Install - Raspberry Pi 5
+
+This fork includes additional features:
+* **External AIS receiver support** (Daisy 2+, Daisy HAT, or any serial NMEA AIS receiver)
+* **LPS22HB pressure sensor** (Waveshare Sense HAT B)
+* **Dedicated AIS Traffic page** in the web interface
+
+### One-liner installation
+
+On a fresh Raspberry Pi OS Lite 64-bit:
+
+```bash
+sudo bash -c "$(wget -nv -O - https://raw.githubusercontent.com/fredoos/stratux_ais/claude/implement-feature-mjej6af2ml9zt0oa-Z7irF/setup-pi5.sh)"
+```
+
+### Supported Hardware
+
+| Component | Connection | Notes |
+|-----------|------------|-------|
+| GPS u-blox (F9P, etc.) | USB | Auto-detected |
+| RTL-SDR (ADS-B) | USB | Auto-detected |
+| Waveshare Sense HAT (B) | GPIO I2C | IMU + LPS22HB barometer |
+| Daisy HAT / AIS receiver | GPIO UART | Configure in Settings |
+
+### Post-installation
+
+1. Reboot: `sudo reboot`
+2. Connect to WiFi `stratux`
+3. Open http://192.168.10.1
+4. Configure External AIS if needed (Settings → External AIS)
+
 ## Building
 
 Due to the modular nature of Stratux, there are many possibilities how you can build it to your needs.
