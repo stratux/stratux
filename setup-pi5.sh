@@ -154,9 +154,10 @@ mkdir -p /opt/stratux/cfg
 mkdir -p /var/log/stratux
 
 # Copier les binaires
-cp -f gen_gdl90 /opt/stratux/bin/
+cp -f stratuxrun /opt/stratux/bin/
+cp -f fancontrol /opt/stratux/bin/ 2>/dev/null || true
 cp -f dump1090/dump1090 /opt/stratux/bin/
-cp -f godump978 /opt/stratux/bin/ 2>/dev/null || true
+cp -f libdump978.so /opt/stratux/bin/ 2>/dev/null || true
 cp -f rtl-ais/rtl_ais /opt/stratux/bin/ 2>/dev/null || true
 cp -f ogn/ogn-* /opt/stratux/bin/ 2>/dev/null || true
 
@@ -171,10 +172,11 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/opt/stratux/bin/gen_gdl90
+ExecStart=/opt/stratux/bin/stratuxrun
 WorkingDirectory=/opt/stratux
 Restart=always
 RestartSec=3
+Environment=LD_LIBRARY_PATH=/opt/stratux/bin
 
 [Install]
 WantedBy=multi-user.target
