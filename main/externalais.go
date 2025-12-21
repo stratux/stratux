@@ -52,8 +52,7 @@ func externalAISListen() {
 		// Read loop
 		reader := bufio.NewReader(externalAISSerialPort)
 		for globalSettings.ExternalAIS_Enabled {
-			// Set read timeout
-			externalAISSerialPort.SetReadDeadline(time.Now().Add(5 * time.Second))
+			// Read timeout is already set in serial config
 
 			line, err := reader.ReadString('\n')
 			if err != nil {
