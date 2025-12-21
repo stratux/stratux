@@ -50,29 +50,21 @@ func externalAISListen() {
 			<-externalAISExitChan
 		}
 
-		// Read loop
+		// Read loop - stay connected as long as device exists and feature is enabled
 		reader := bufio.NewReader(externalAISSerialPort)
-		connectionError := false
-		for globalSettings.ExternalAIS_Enabled && !connectionError {
-			// Read timeout is already set in serial config
-
+		deviceGone := false
+		for globalSettings.ExternalAIS_Enabled && !deviceGone {
 			line, err := reader.ReadString('\n')
 			if err != nil {
-				// EOF and timeout are expected when no data is received - keep listening
-				if err == io.EOF || strings.Contains(err.Error(), "timeout") {
-					// Check if the device still exists (detect unplugged device)
-					if _, statErr := os.Stat(globalSettings.ExternalAIS_SerialPort); statErr != nil {
-						log.Printf("External AIS: device %s disconnected\n", globalSettings.ExternalAIS_SerialPort)
-						connectionError = true
-						break
-					}
-					// Device still exists, just no data - continue listening
-					continue
+				// Any error: check if device still exists
+				if _, statErr := os.Stat(globalSettings.ExternalAIS_SerialPort); statErr != nil {
+					// Device is gone (unplugged)
+					log.Printf("External AIS: device %s removed\n", globalSettings.ExternalAIS_SerialPort)
+					deviceGone = true
+					break
 				}
-				// Real error - device might be disconnected
-				log.Printf("External AIS: read error: %s\n", err.Error())
-				connectionError = true
-				break
+				// Device still exists - just no data or transient error, keep listening
+				continue
 			}
 
 			line = strings.TrimSpace(line)
@@ -87,15 +79,15 @@ func externalAISListen() {
 			}
 		}
 
-		// Cleanup - only mark as disconnected if there was an actual error or disabled
+		// Cleanup
 		if externalAISSerialPort != nil {
 			externalAISSerialPort.Close()
 			externalAISSerialPort = nil
 		}
-		if connectionError || !globalSettings.ExternalAIS_Enabled {
-			globalStatus.ExternalAIS_connected = false
-		}
-		if connectionError {
+		globalStatus.ExternalAIS_connected = false
+
+		// Only wait before retry if device was removed
+		if deviceGone {
 			time.Sleep(3 * time.Second)
 		}
 	}
