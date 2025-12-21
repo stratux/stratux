@@ -134,6 +134,12 @@ git fetch origin "$BRANCH"
 git checkout "$BRANCH"
 git submodule update --init --recursive
 
+# Patch dump1090 pour GCC 14+ (corrige l'ordre des arguments calloc)
+echo -e "${YELLOW}Application des patches de compatibilité...${NC}"
+sed -i 's/calloc(sizeof(\*service), 1)/calloc(1, sizeof(*service))/' dump1090/net_io.c
+# Désactiver -Werror si d'autres erreurs similaires apparaissent
+sed -i 's/-Werror/-Wno-error=calloc-transposed-args/' dump1090/Makefile
+
 # Compiler
 echo -e "${YELLOW}Compilation en cours (peut prendre plusieurs minutes)...${NC}"
 make clean 2>/dev/null || true
