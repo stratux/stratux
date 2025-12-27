@@ -71,8 +71,20 @@ func externalAISListen() {
 				continue
 			}
 
-			// Process AIS NMEA sentences (!AIVDM, !AIVDO)
-			if strings.HasPrefix(line, "!AIVDM") || strings.HasPrefix(line, "!AIVDO") {
+			// Log all received data in DEBUG mode
+			if globalSettings.DEBUG {
+				log.Printf("External AIS raw: %s\n", line)
+			}
+
+			// Process AIS NMEA sentences
+			// Standard: !AIVDM (received), !AIVDO (own vessel)
+			// Alternative prefixes: $AIVDM, $AIVDO
+			// Base station variants: !BSVDM, !ABVDM
+			if strings.Contains(line, "VDM") || strings.Contains(line, "VDO") {
+				// Normalize sentence to start with ! if it starts with $
+				if strings.HasPrefix(line, "$AI") {
+					line = "!" + line[1:]
+				}
 				TraceLog.Record(CONTEXT_AIS, []byte(line))
 				parseAisMessage(line)
 			}
