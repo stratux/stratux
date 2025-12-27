@@ -170,7 +170,7 @@ func importAISTrafficMessage(msg *aisnmea.VdmPacket) {
 		}
 	}
 
-	// Handle MessageID 1,2 & 3 Position reports
+	// Handle MessageID 1,2 & 3 Position reports (Class A)
 	if header.MessageID == 1 || header.MessageID == 2 || header.MessageID == 3 {
 		var positionReport ais.PositionReport = msg.Packet.(ais.PositionReport)
 
@@ -209,6 +209,88 @@ func importAISTrafficMessage(msg *aisnmea.VdmPacket) {
 		ti.TurnRate = (rot / 4.733) * (rot / 4.733)
 
 		ti.ExtrapolatedPosition = false
+	}
+
+	// Handle MessageID 18 - Standard Class B Position Report
+	if header.MessageID == 18 {
+		var positionReport ais.StandardClassBPositionReport = msg.Packet.(ais.StandardClassBPositionReport)
+
+		ti.OnGround = true
+		ti.Position_valid = true
+		ti.Lat = float32(positionReport.Latitude)
+		ti.Lng = float32(positionReport.Longitude)
+
+		if positionReport.Sog < 102.3 {
+			ti.Speed = uint16(positionReport.Sog)
+			ti.Speed_valid = true
+			ti.Last_speed = ti.Last_seen
+		}
+
+		if positionReport.Sog > 0.0 && positionReport.Sog < 102.3 {
+			var cog float32 = 0.0
+			if positionReport.Cog != 360 {
+				cog = float32(positionReport.Cog)
+			}
+			ti.Track = cog
+		} else {
+			var heading float32 = 0.0
+			if positionReport.TrueHeading != 511 {
+				heading = float32(positionReport.TrueHeading)
+			}
+			ti.Track = heading
+		}
+
+		ti.ExtrapolatedPosition = false
+	}
+
+	// Handle MessageID 19 - Extended Class B Position Report
+	if header.MessageID == 19 {
+		var positionReport ais.ExtendedClassBPositionReport = msg.Packet.(ais.ExtendedClassBPositionReport)
+
+		ti.OnGround = true
+		ti.Position_valid = true
+		ti.Lat = float32(positionReport.Latitude)
+		ti.Lng = float32(positionReport.Longitude)
+		ti.Tail = strings.TrimSpace(positionReport.Name)
+		ti.SurfaceVehicleType = uint16(positionReport.Type)
+
+		if positionReport.Sog < 102.3 {
+			ti.Speed = uint16(positionReport.Sog)
+			ti.Speed_valid = true
+			ti.Last_speed = ti.Last_seen
+		}
+
+		if positionReport.Sog > 0.0 && positionReport.Sog < 102.3 {
+			var cog float32 = 0.0
+			if positionReport.Cog != 360 {
+				cog = float32(positionReport.Cog)
+			}
+			ti.Track = cog
+		} else {
+			var heading float32 = 0.0
+			if positionReport.TrueHeading != 511 {
+				heading = float32(positionReport.TrueHeading)
+			}
+			ti.Track = heading
+		}
+
+		ti.ExtrapolatedPosition = false
+	}
+
+	// Handle MessageID 24 - Class B Static Data Report (Part A & B)
+	if header.MessageID == 24 {
+		var staticData ais.StaticDataReport = msg.Packet.(ais.StaticDataReport)
+
+		if staticData.PartNumber == 0 {
+			// Part A - contains vessel name
+			ti.Tail = strings.TrimSpace(staticData.ReportA.Name)
+		} else if staticData.PartNumber == 1 {
+			// Part B - contains callsign and vessel type
+			ti.Reg = strings.TrimSpace(staticData.ReportB.CallSign)
+			ti.SurfaceVehicleType = uint16(staticData.ReportB.Type)
+		}
+		// Store in case this was the first message
+		traffic[key] = ti
 	}
 
 	// Prevent wild lat/long coordinates
