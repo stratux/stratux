@@ -357,6 +357,25 @@ func (tracker *SoftRF) onNmea(serialPort *serial.Port, nmea []string) bool {
 			globalSettings.OGNAddrType, _ = strconv.Atoi(value)
 		} else if key == "aircraft_id" {
 			globalSettings.OGNAddr = value
+		} else if key == "protocol" {
+			globalSettings.SoftRFProtocol, _ = strconv.Atoi(value)
+		} else if key == "altprotocol" {
+			v, _ := strconv.Atoi(value)
+			if v == 0 {
+				globalSettings.SoftRFAltProtocol = -1 // 0 means "none" in SoftRF
+			} else {
+				globalSettings.SoftRFAltProtocol = v
+			}
+		} else if key == "band" {
+			globalSettings.SoftRFBand, _ = strconv.Atoi(value)
+		} else if key == "alarm" {
+			globalSettings.SoftRFAlarm, _ = strconv.Atoi(value)
+		} else if key == "relay" {
+			globalSettings.SoftRFRelay, _ = strconv.Atoi(value)
+		} else if key == "stealth" {
+			globalSettings.SoftRFStealth = value == "1"
+		} else if key == "no_track" {
+			globalSettings.SoftRFNoTrack = value == "1"
 		}
 		return true
 	}
@@ -401,6 +420,25 @@ func (tracker *SoftRF) writeInitialConfig(serialPort *serial.Port) bool {
 		serialPort.Write([]byte(msg))
 		changed = true
 	}
+	// Auto-set band from Stratux region if not already user-configured
+	if globalSettings.SoftRFBand == 0 {
+		switch globalSettings.RegionSelected {
+		case 1: // US
+			globalSettings.SoftRFBand = 2 // 915 MHz
+		case 2: // EU
+			globalSettings.SoftRFBand = 1 // 868 MHz
+		default:
+			globalSettings.SoftRFBand = 1 // default EU
+		}
+		log.Printf("SoftRF: auto-set band to %d from RegionSelected=%d", globalSettings.SoftRFBand, globalSettings.RegionSelected)
+	}
+	if s, ok := tracker.settings["band"]; !ok || strconv.Itoa(globalSettings.SoftRFBand) != s {
+		msg := appendNmeaChecksum("$PSRFS,0,band," + strconv.Itoa(globalSettings.SoftRFBand)) + "\r\n"
+		log.Printf("Configure SoftRF band: %s", msg)
+		serialPort.Write([]byte(msg))
+		changed = true
+	}
+
 	if changed {
 		serialPort.Write([]byte(appendNmeaChecksum("$PSRFC,SAV") + "\r\n"))
 	}
@@ -413,6 +451,13 @@ func (tracker *SoftRF) requestTrackerConfig(serialPort *serial.Port) {
 	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,acft_type,?") + "\r\n"))
 	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,aircraft_id,?") + "\r\n"))
 	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,id_method,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,protocol,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,altprotocol,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,band,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,alarm,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,relay,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,stealth,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,no_track,?") + "\r\n"))
 }
 
 func (tracker *SoftRF) writeConfigFromSettings(serialPort *serial.Port) bool {
@@ -434,6 +479,49 @@ func (tracker *SoftRF) writeConfigFromSettings(serialPort *serial.Port) bool {
 	}
 	if s, ok := tracker.settings["aircraft_id"]; !ok || addr != s {
 		messages = append(messages, appendNmeaChecksum("$PSRFS,0,aircraft_id," + addr) + "\r\n")
+	}
+
+	// RF protocol
+	proto := strconv.Itoa(globalSettings.SoftRFProtocol)
+	if s, ok := tracker.settings["protocol"]; !ok || proto != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,protocol," + proto) + "\r\n")
+	}
+	altProto := "0"
+	if globalSettings.SoftRFAltProtocol >= 0 {
+		altProto = strconv.Itoa(globalSettings.SoftRFAltProtocol)
+	}
+	if s, ok := tracker.settings["altprotocol"]; !ok || altProto != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,altprotocol," + altProto) + "\r\n")
+	}
+
+	// Band
+	band := strconv.Itoa(globalSettings.SoftRFBand)
+	if s, ok := tracker.settings["band"]; !ok || band != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,band," + band) + "\r\n")
+	}
+
+	// Alarm, relay, stealth, no_track
+	alarm := strconv.Itoa(globalSettings.SoftRFAlarm)
+	if s, ok := tracker.settings["alarm"]; !ok || alarm != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,alarm," + alarm) + "\r\n")
+	}
+	relay := strconv.Itoa(globalSettings.SoftRFRelay)
+	if s, ok := tracker.settings["relay"]; !ok || relay != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,relay," + relay) + "\r\n")
+	}
+	stealth := "0"
+	if globalSettings.SoftRFStealth {
+		stealth = "1"
+	}
+	if s, ok := tracker.settings["stealth"]; !ok || stealth != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,stealth," + stealth) + "\r\n")
+	}
+	noTrack := "0"
+	if globalSettings.SoftRFNoTrack {
+		noTrack = "1"
+	}
+	if s, ok := tracker.settings["no_track"]; !ok || noTrack != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,no_track," + noTrack) + "\r\n")
 	}
 
 	for _, msg := range messages {

@@ -580,6 +580,20 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						reconfigureTracker = true
 					case "OGNTxPower":
 						globalSettings.OGNTxPower = int(val.(float64))
+					case "SoftRFProtocol":
+						globalSettings.SoftRFProtocol = int(val.(float64))
+					case "SoftRFAltProtocol":
+						globalSettings.SoftRFAltProtocol = int(val.(float64))
+					case "SoftRFBand":
+						globalSettings.SoftRFBand = int(val.(float64))
+					case "SoftRFAlarm":
+						globalSettings.SoftRFAlarm = int(val.(float64))
+					case "SoftRFRelay":
+						globalSettings.SoftRFRelay = int(val.(float64))
+					case "SoftRFStealth":
+						globalSettings.SoftRFStealth = val.(bool)
+					case "SoftRFNoTrack":
+						globalSettings.SoftRFNoTrack = val.(bool)
 						reconfigureTracker = true
 					case "PWMDutyMin":
 						globalSettings.PWMDutyMin = int(val.(float64))

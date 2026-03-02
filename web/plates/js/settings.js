@@ -343,6 +343,17 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.OGNReg = settings.OGNReg;
 		$scope.OGNTxPower = settings.OGNTxPower;
 
+		// SoftRF-specific settings
+		$scope.SoftRFProtocol = (settings.SoftRFProtocol || 0).toString();
+		$scope.SoftRFAltProtocol = (settings.SoftRFAltProtocol !== undefined ? settings.SoftRFAltProtocol : -1).toString();
+		$scope.SoftRFBand = (settings.SoftRFBand || 1).toString();
+		$scope.SoftRFAlarm = (settings.SoftRFAlarm || 0).toString();
+		$scope.SoftRFRelay = (settings.SoftRFRelay || 0).toString();
+		$scope.SoftRFStealth = settings.SoftRFStealth || false;
+		$scope.SoftRFNoTrack = settings.SoftRFNoTrack || false;
+		$scope.softRFCompatSecondary = [];
+		$scope.updateSoftRFCompatProtocols();
+
 		$scope.PWMDutyMin = settings.PWMDutyMin;
 
 		// Update theme
@@ -710,6 +721,24 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		return "???";
 	}
 
+	// SoftRF protocol compatibility map: primary -> valid secondaries
+	var softRFCompatMap = {
+		"0": [{value:"6",label:"Latest (FLARM v7)"},{value:"8",label:"ADS-L"}],
+		"1": [{value:"6",label:"Latest (FLARM v7)"}],
+		"6": [{value:"0",label:"Legacy (FLARM)"},{value:"1",label:"OGNTP"},{value:"8",label:"ADS-L"}],
+		"8": [{value:"6",label:"Latest (FLARM v7)"}],
+		"5": []
+	};
+	$scope.updateSoftRFCompatProtocols = function() {
+		var primary = $scope.SoftRFProtocol;
+		$scope.softRFCompatSecondary = softRFCompatMap[primary] || [];
+		// Reset alt protocol if no longer compatible
+		var stillValid = $scope.softRFCompatSecondary.some(function(p) {
+			return p.value === $scope.SoftRFAltProtocol;
+		});
+		if (!stillValid) { $scope.SoftRFAltProtocol = "-1"; }
+	};
+
 	$scope.updateOgnTrackerConfig = function(action) {
 		var newsettings = {
 			"OGNAddrType": parseInt($scope.OGNAddrType),
@@ -717,7 +746,14 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			"OGNAcftType": parseInt($scope.OGNAcftType),
 			"OGNPilot": $scope.OGNPilot,
 			"OGNReg": $scope.OGNReg,
-			"OGNTxPower": $scope.OGNTxPower
+			"OGNTxPower": $scope.OGNTxPower,
+			"SoftRFProtocol": parseInt($scope.SoftRFProtocol),
+			"SoftRFAltProtocol": parseInt($scope.SoftRFAltProtocol),
+			"SoftRFBand": parseInt($scope.SoftRFBand),
+			"SoftRFAlarm": parseInt($scope.SoftRFAlarm),
+			"SoftRFRelay": parseInt($scope.SoftRFRelay),
+			"SoftRFStealth": $scope.SoftRFStealth,
+			"SoftRFNoTrack": $scope.SoftRFNoTrack
 		};
 		setSettings(angular.toJson(newsettings));
 
