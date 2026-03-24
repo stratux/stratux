@@ -1244,6 +1244,16 @@ type settings struct {
 	OGNReg               string
 	OGNTxPower           int
 
+	// SoftRF-specific settings (only used when GPS_TYPE_SOFTRF is active)
+	// Values are Moshe Braner SoftRF wire values, stored and sent as-is
+	SoftRFProtocol    int  // 1=OGNTP, 5=FANET, 6=Legacy(FLARM), 7=Latest(FLARMv7), 8=ADS-L
+	SoftRFAltProtocol int  // 0=none, 1=OGNTP, 6=Legacy, 7=Latest, 8=ADS-L
+	SoftRFBand        int  // 1=EU 868MHz, 2=US 915MHz, 3=AU 921MHz, 4=NZ 869MHz, 5=RU 868MHz, 7=UK 869MHz
+	SoftRFAlarm       int  // 0=none, 1=distance, 2=vector, 3=FLARM-compatible
+	SoftRFRelay       int  // 0=off, 1=when landed, 2=all, 3=relay-only
+	SoftRFStealth     bool
+	SoftRFNoTrack     bool
+
 	PWMDutyMin           int
 
 	// manual GPS config  (versus autodetect)
@@ -1376,6 +1386,13 @@ func defaultSettings() {
 	globalSettings.AltitudeOffset = 0
 
 	globalSettings.PWMDutyMin = 0
+	globalSettings.SoftRFProtocol = 7    // default Latest (FLARM v7)
+	globalSettings.SoftRFAltProtocol = 0 // none
+	globalSettings.SoftRFBand = 0        // auto (will be set from RegionSelected on first connect)
+	globalSettings.SoftRFAlarm = 2       // vector (recommended default)
+	globalSettings.SoftRFRelay = 0       // off
+	globalSettings.SoftRFStealth = false
+	globalSettings.SoftRFNoTrack = false
 
 	globalSettings.OGNI2CTXEnabled = true
 

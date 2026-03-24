@@ -357,6 +357,20 @@ func (tracker *SoftRF) onNmea(serialPort *serial.Port, nmea []string) bool {
 			globalSettings.OGNAddrType, _ = strconv.Atoi(value)
 		} else if key == "aircraft_id" {
 			globalSettings.OGNAddr = value
+		} else if key == "protocol" {
+			globalSettings.SoftRFProtocol, _ = strconv.Atoi(value)
+		} else if key == "altprotocol" {
+			globalSettings.SoftRFAltProtocol, _ = strconv.Atoi(value)
+		} else if key == "band" {
+			globalSettings.SoftRFBand, _ = strconv.Atoi(value)
+		} else if key == "alarm" {
+			globalSettings.SoftRFAlarm, _ = strconv.Atoi(value)
+		} else if key == "relay" {
+			globalSettings.SoftRFRelay, _ = strconv.Atoi(value)
+		} else if key == "stealth" {
+			globalSettings.SoftRFStealth = value == "1"
+		} else if key == "no_track" {
+			globalSettings.SoftRFNoTrack = value == "1"
 		}
 		return true
 	}
@@ -377,7 +391,7 @@ func (tracker *SoftRF) isDetected() bool {
 }
 
 func (tracker *SoftRF) isConfigRead() bool {
-	return len(tracker.settings) >= 5 // need at least or 5 main settings: acft type, id method and id, as well as nmea1/2 mode
+	return len(tracker.settings) >= 8 // need at least 8 settings: acft type, id method, id, nmea1/2 mode, plus some of the new SoftRF-specific fields
 }
 
 func (tracker *SoftRF) writeReadDelay() time.Duration {
@@ -413,6 +427,13 @@ func (tracker *SoftRF) requestTrackerConfig(serialPort *serial.Port) {
 	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,acft_type,?") + "\r\n"))
 	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,aircraft_id,?") + "\r\n"))
 	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,id_method,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,protocol,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,altprotocol,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,band,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,alarm,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,relay,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,stealth,?") + "\r\n"))
+	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,no_track,?") + "\r\n"))
 }
 
 func (tracker *SoftRF) writeConfigFromSettings(serialPort *serial.Port) bool {
@@ -434,6 +455,46 @@ func (tracker *SoftRF) writeConfigFromSettings(serialPort *serial.Port) bool {
 	}
 	if s, ok := tracker.settings["aircraft_id"]; !ok || addr != s {
 		messages = append(messages, appendNmeaChecksum("$PSRFS,0,aircraft_id," + addr) + "\r\n")
+	}
+
+	// RF protocol (wire values from Moshe Braner SoftRF, stored and sent as-is)
+	if globalSettings.SoftRFProtocol > 0 {
+		proto := strconv.Itoa(globalSettings.SoftRFProtocol)
+		if s, ok := tracker.settings["protocol"]; !ok || proto != s {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,protocol," + proto) + "\r\n")
+		}
+	}
+	altProto := strconv.Itoa(globalSettings.SoftRFAltProtocol)
+	if s, ok := tracker.settings["altprotocol"]; !ok || altProto != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,altprotocol," + altProto) + "\r\n")
+	}
+	if globalSettings.SoftRFBand > 0 {
+		band := strconv.Itoa(globalSettings.SoftRFBand)
+		if s, ok := tracker.settings["band"]; !ok || band != s {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,band," + band) + "\r\n")
+		}
+	}
+	alarm := strconv.Itoa(globalSettings.SoftRFAlarm)
+	if s, ok := tracker.settings["alarm"]; !ok || alarm != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,alarm," + alarm) + "\r\n")
+	}
+	relay := strconv.Itoa(globalSettings.SoftRFRelay)
+	if s, ok := tracker.settings["relay"]; !ok || relay != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,relay," + relay) + "\r\n")
+	}
+	stealth := "0"
+	if globalSettings.SoftRFStealth {
+		stealth = "1"
+	}
+	if s, ok := tracker.settings["stealth"]; !ok || stealth != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,stealth," + stealth) + "\r\n")
+	}
+	noTrack := "0"
+	if globalSettings.SoftRFNoTrack {
+		noTrack = "1"
+	}
+	if s, ok := tracker.settings["no_track"]; !ok || noTrack != s {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,no_track," + noTrack) + "\r\n")
 	}
 
 	for _, msg := range messages {

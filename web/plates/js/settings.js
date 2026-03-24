@@ -343,6 +343,15 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.OGNReg = settings.OGNReg;
 		$scope.OGNTxPower = settings.OGNTxPower;
 
+		// SoftRF-specific settings (wire values from Moshe Braner SoftRF)
+		$scope.SoftRFProtocol = (settings.SoftRFProtocol || 7).toString();
+		$scope.SoftRFAltProtocol = (settings.SoftRFAltProtocol !== undefined ? settings.SoftRFAltProtocol : 0).toString();
+		$scope.SoftRFBand = (settings.SoftRFBand || 0).toString();
+		$scope.SoftRFAlarm = (settings.SoftRFAlarm !== undefined ? settings.SoftRFAlarm : 2).toString();
+		$scope.SoftRFRelay = (settings.SoftRFRelay || 0).toString();
+		$scope.SoftRFStealth = settings.SoftRFStealth || false;
+		$scope.SoftRFNoTrack = settings.SoftRFNoTrack || false;
+
 		$scope.PWMDutyMin = settings.PWMDutyMin;
 
 		// Update theme
@@ -717,7 +726,14 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			"OGNAcftType": parseInt($scope.OGNAcftType),
 			"OGNPilot": $scope.OGNPilot,
 			"OGNReg": $scope.OGNReg,
-			"OGNTxPower": $scope.OGNTxPower
+			"OGNTxPower": $scope.OGNTxPower,
+			"SoftRFProtocol": parseInt($scope.SoftRFProtocol),
+			"SoftRFAltProtocol": parseInt($scope.SoftRFAltProtocol),
+			"SoftRFBand": parseInt($scope.SoftRFBand),
+			"SoftRFAlarm": parseInt($scope.SoftRFAlarm),
+			"SoftRFRelay": parseInt($scope.SoftRFRelay),
+			"SoftRFStealth": $scope.SoftRFStealth,
+			"SoftRFNoTrack": $scope.SoftRFNoTrack
 		};
 		setSettings(angular.toJson(newsettings));
 
