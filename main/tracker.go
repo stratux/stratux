@@ -391,14 +391,7 @@ func (tracker *SoftRF) isDetected() bool {
 }
 
 func (tracker *SoftRF) isConfigRead() bool {
-	// Require the 5 core fields. New MB-specific fields (protocol, band, etc.)
-	// are requested but not required - Linar SoftRF uses a different config format
-	// and won't respond to PSRFS queries.
-	_, hasNmeaG := tracker.settings["nmea_g"]
-	_, hasAcftType := tracker.settings["acft_type"]
-	_, hasIdMethod := tracker.settings["id_method"]
-	_, hasAircraftId := tracker.settings["aircraft_id"]
-	return hasNmeaG && hasAcftType && hasIdMethod && hasAircraftId
+	return len(tracker.settings) >= 8 // need at least 8 settings: acft type, id method, id, nmea1/2 mode, plus some of the new MB SoftRF-specific fields
 }
 
 func (tracker *SoftRF) writeReadDelay() time.Duration {
