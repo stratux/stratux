@@ -343,14 +343,17 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.OGNReg = settings.OGNReg;
 		$scope.OGNTxPower = settings.OGNTxPower;
 
-		// SoftRF-specific settings (wire values from Moshe Braner SoftRF)
-		$scope.SoftRFProtocol = (settings.SoftRFProtocol || 7).toString();
-		$scope.SoftRFAltProtocol = (settings.SoftRFAltProtocol !== undefined ? settings.SoftRFAltProtocol : 0).toString();
-		$scope.SoftRFBand = (settings.SoftRFBand || 0).toString();
-		$scope.SoftRFAlarm = (settings.SoftRFAlarm !== undefined ? settings.SoftRFAlarm : 2).toString();
-		$scope.SoftRFRelay = (settings.SoftRFRelay || 0).toString();
+		// SoftRF-specific settings (wire values from Moshe Braner SoftRF; -1 = not yet read from device)
+		$scope.SoftRFProtocol = (settings.SoftRFProtocol > 0) ? settings.SoftRFProtocol.toString() : "7";
+		$scope.SoftRFAltProtocol = (settings.SoftRFAltProtocol >= 0) ? settings.SoftRFAltProtocol.toString() : "0";
+		$scope.SoftRFBand = (settings.SoftRFBand > 0) ? settings.SoftRFBand.toString() : defaultSoftRFBand(settings.RegionSelected).toString();
+		$scope.SoftRFAlarm = (settings.SoftRFAlarm >= 0) ? settings.SoftRFAlarm.toString() : "3";
+		$scope.SoftRFRelay = (settings.SoftRFRelay >= 0) ? settings.SoftRFRelay.toString() : "0";
+		$scope.SoftRFTxPower = (settings.SoftRFTxPower >= 0) ? settings.SoftRFTxPower.toString() : "2";
 		$scope.SoftRFStealth = settings.SoftRFStealth || false;
 		$scope.SoftRFNoTrack = settings.SoftRFNoTrack || false;
+		$scope.softRFConfigReady = settings.SoftRFProtocol > 0 && settings.SoftRFBand > 0;
+		$scope.updateSoftRFCompatProtocols();
 
 		$scope.PWMDutyMin = settings.PWMDutyMin;
 
@@ -719,6 +722,34 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		return "???";
 	}
 
+	function defaultSoftRFBand(region) {
+		switch (parseInt(region)) {
+			case 1: return 2;  // US -> 915 MHz
+			case 2: return 1;  // EU -> 868 MHz
+			default: return 1; // default EU
+		}
+	}
+
+	// Protocol compatibility: primary -> allowed alt protocol values (as object keys for fast lookup)
+	var softRFCompatMap = {
+		"7": {"1":true,"2":true,"5":true,"6":true,"8":true},  // Latest: all others
+		"6": {"1":true,"7":true,"8":true},                    // Legacy: OGNTP, Latest, ADS-L
+		"1": {"2":true,"5":true,"6":true,"7":true,"8":true},  // OGNTP: P3I, FANET, Legacy, Latest, ADS-L
+		"2": {"1":true,"7":true,"8":true},                    // P3I: OGNTP, Latest, ADS-L
+		"5": {"1":true,"7":true,"8":true},                    // FANET: OGNTP, Latest, ADS-L
+		"8": {"1":true,"2":true,"5":true,"6":true,"7":true}   // ADS-L: all others
+	};
+
+	$scope.updateSoftRFCompatProtocols = function() {
+		var proto = $scope.SoftRFProtocol;
+		var allowed = softRFCompatMap[proto] || {};
+		$scope.softRFAltProtoAllowed = allowed;
+		// If current alt selection is no longer valid, reset to None
+		if ($scope.SoftRFAltProtocol !== "0" && !allowed[$scope.SoftRFAltProtocol]) {
+			$scope.SoftRFAltProtocol = "0";
+		}
+	};
+
 	$scope.updateOgnTrackerConfig = function(action) {
 		var newsettings = {
 			"OGNAddrType": parseInt($scope.OGNAddrType),
@@ -726,15 +757,19 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			"OGNAcftType": parseInt($scope.OGNAcftType),
 			"OGNPilot": $scope.OGNPilot,
 			"OGNReg": $scope.OGNReg,
-			"OGNTxPower": $scope.OGNTxPower,
-			"SoftRFProtocol": parseInt($scope.SoftRFProtocol),
-			"SoftRFAltProtocol": parseInt($scope.SoftRFAltProtocol),
-			"SoftRFBand": parseInt($scope.SoftRFBand),
-			"SoftRFAlarm": parseInt($scope.SoftRFAlarm),
-			"SoftRFRelay": parseInt($scope.SoftRFRelay),
-			"SoftRFStealth": $scope.SoftRFStealth,
-			"SoftRFNoTrack": $scope.SoftRFNoTrack
+			"OGNTxPower": $scope.OGNTxPower
 		};
+		// Only include SoftRF settings when a SoftRF device is connected
+		if (parseInt($scope.gpsHardwareCode) === 13) {
+			newsettings["SoftRFProtocol"] = parseInt($scope.SoftRFProtocol);
+			newsettings["SoftRFAltProtocol"] = parseInt($scope.SoftRFAltProtocol);
+			newsettings["SoftRFBand"] = parseInt($scope.SoftRFBand);
+			newsettings["SoftRFAlarm"] = parseInt($scope.SoftRFAlarm);
+			newsettings["SoftRFRelay"] = parseInt($scope.SoftRFRelay);
+			newsettings["SoftRFTxPower"] = parseInt($scope.SoftRFTxPower);
+			newsettings["SoftRFStealth"] = $scope.SoftRFStealth;
+			newsettings["SoftRFNoTrack"] = $scope.SoftRFNoTrack;
+		}
 		setSettings(angular.toJson(newsettings));
 
 		// reload settings after a short time, to check if OGN tracker actually accepted the settings

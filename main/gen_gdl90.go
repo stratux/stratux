@@ -1246,11 +1246,12 @@ type settings struct {
 
 	// SoftRF-specific settings (only used when GPS_TYPE_SOFTRF is active)
 	// Values are Moshe Braner SoftRF wire values, stored and sent as-is
-	SoftRFProtocol    int  // 1=OGNTP, 5=FANET, 6=Legacy(FLARM), 7=Latest(FLARMv7), 8=ADS-L
-	SoftRFAltProtocol int  // 0=none, 1=OGNTP, 6=Legacy, 7=Latest, 8=ADS-L
-	SoftRFBand        int  // 1=EU 868MHz, 2=US 915MHz, 3=AU 921MHz, 4=NZ 869MHz, 5=RU 868MHz, 7=UK 869MHz
-	SoftRFAlarm       int  // 0=none, 1=distance, 2=vector, 3=FLARM-compatible
-	SoftRFRelay       int  // 0=off, 1=when landed, 2=all, 3=relay-only
+	SoftRFProtocol    int  // 1=OGNTP,2=P3I,5=FANET,6=Legacy(FLARMv6),7=Latest(FLARMv7),8=ADS-L; -1=unread
+	SoftRFAltProtocol int  // 0=none, or secondary protocol value; -1=unread
+	SoftRFBand        int  // 1=EU,2=US,3=AU,4=NZ,5=RU,6=CN,7=UK,8=IN,9=IL,10=KR; -1=unread
+	SoftRFAlarm       int  // 0=none,1=distance,2=vector,3=FLARM; -1=unread
+	SoftRFRelay       int  // 0=off,1=landed,2=all,3=relay-only; -1=unread
+	SoftRFTxPower     int  // 0=off,1=low,2=full; -1=unread
 	SoftRFStealth     bool
 	SoftRFNoTrack     bool
 
@@ -1386,11 +1387,12 @@ func defaultSettings() {
 	globalSettings.AltitudeOffset = 0
 
 	globalSettings.PWMDutyMin = 0
-	globalSettings.SoftRFProtocol = 7    // default Latest (FLARM v7)
-	globalSettings.SoftRFAltProtocol = 0 // none
-	globalSettings.SoftRFBand = 0        // auto (will be set from RegionSelected on first connect)
-	globalSettings.SoftRFAlarm = 2       // vector (recommended default)
-	globalSettings.SoftRFRelay = 0       // off
+	globalSettings.SoftRFProtocol = -1    // -1 = not yet read from device
+	globalSettings.SoftRFAltProtocol = -1
+	globalSettings.SoftRFBand = -1
+	globalSettings.SoftRFAlarm = -1
+	globalSettings.SoftRFRelay = -1
+	globalSettings.SoftRFTxPower = -1
 	globalSettings.SoftRFStealth = false
 	globalSettings.SoftRFNoTrack = false
 
@@ -1425,6 +1427,21 @@ func readSettings() {
 		return
 	}
 	log.Printf("read in settings.\n")
+
+	// SoftRF old-config migration: Protocol==0 and Band==0 means an old config
+	// with no SoftRF data (both are invalid as zero). Reset all to -1 (unread).
+	if globalSettings.SoftRFProtocol == 0 && globalSettings.SoftRFBand == 0 {
+		globalSettings.SoftRFProtocol = -1
+		globalSettings.SoftRFAltProtocol = -1
+		globalSettings.SoftRFBand = -1
+		globalSettings.SoftRFAlarm = -1
+		globalSettings.SoftRFRelay = -1
+		globalSettings.SoftRFTxPower = -1
+	}
+	// TxPower was added later; reset if zero (invalid) and no SoftRF config saved yet
+	if globalSettings.SoftRFTxPower == 0 && globalSettings.SoftRFProtocol == -1 {
+		globalSettings.SoftRFTxPower = -1
+	}
 }
 
 func addSystemError(err error) {
