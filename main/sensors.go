@@ -87,24 +87,31 @@ func initPressureSensor() (ok bool) {
 	if err != nil {
 		v, err = i2cbus.ReadByteFromReg(0x77, PRESSURE_WHO_AM_I)
 	}
-	if err != nil {
-		log.Printf("Error identifying BMP: %s\n", err.Error())
-		return false
-	}
-	if v == bmp388.ChipId || v == bmp388.ChipId390 {
+	if err == nil && (v == bmp388.ChipId || v == bmp388.ChipId390) {
 		log.Printf("BMP-388 detected")
 		bmp, err := sensors.NewBMP388(&i2cbus)
 		if err == nil {
 			myPressureReader = bmp
 			return true
 		}
-	} else {
+	} else if err == nil {
 		log.Printf("using BMP-280")
 		bmp, err := sensors.NewBMP280(&i2cbus, 100*time.Millisecond)
 		if err == nil {
 			myPressureReader = bmp
 			return true
 		}
+	} else {
+		log.Printf("Error identifying BMP: %s\n", err.Error())
+	}
+
+	// Try BMP58x sensors after the existing BMP388/BMP280 paths so current
+	// Stratux hardware keeps its previous detection precedence.
+	bmp58x, err := sensors.NewBMP5XX(&i2cbus)
+	if err == nil {
+		log.Printf("BMP-58x detected")
+		myPressureReader = bmp58x
+		return true
 	}
 
 	return false
