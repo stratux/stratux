@@ -68,8 +68,8 @@ func signExtend24(data []byte) int32 {
 	return raw
 }
 
-func (d *BMP5XX) readRegister(register byte, len int) ([]byte, error) {
-	data := make([]byte, len)
+func (d *BMP5XX) readRegister(register byte, count int) ([]byte, error) {
+	data := make([]byte, count)
 	err := (*d.Bus).ReadFromReg(d.Address, register, data)
 	return data, err
 }
@@ -85,4 +85,3 @@ func (d *BMP5XX) readByte(register byte) (byte, error) {
 func (d *BMP5XX) writeRegister(register byte, data byte) error {
 	return (*d.Bus).WriteToReg(d.Address, register, []byte{data})
 }
-

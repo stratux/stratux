@@ -54,6 +54,10 @@ func (bmp *BMP5XX) run() {
 		press, pressErr := bmp.sensor.ReadPressure()
 		temp, tempErr := bmp.sensor.ReadTemperature()
 		if pressErr != nil || tempErr != nil {
+			bmp.mu.Lock()
+			bmp.pressure = 0
+			bmp.temperature = 0
+			bmp.mu.Unlock()
 			continue
 		}
 
@@ -90,4 +94,3 @@ func (bmp *BMP5XX) Pressure() (float64, error) {
 
 	return bmp.pressure, nil
 }
-
