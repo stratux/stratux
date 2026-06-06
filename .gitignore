@@ -47,3 +47,7 @@ test/uatsummary
 
 .DS_Store
 
+
+# Local Go workspace (dev-only)
+go.work
+go.work.sum

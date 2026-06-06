@@ -178,39 +178,20 @@ func tempAndPressureSender() {
 }
 
 func initIMU() (ok bool) {
-	// Check if the chip is the ICM-20948 or MPU-9250.
-	v, err := i2cbus.ReadByteFromReg(0x68, ICMREG_WHO_AM_I)
-	if err != nil {
-		log.Printf("Error identifying IMU: %s\n", err.Error())
-		return false
-	}
-	v2, err := i2cbus.ReadByteFromReg(0x68, MPUREG_WHO_AM_I)
-	if err != nil {
-		log.Printf("Error identifying IMU: %s\n", err.Error())
-		return false
-	}
-
-	if v == ICMREG_WHO_AM_I_VAL {
+	// Drivers auto-detect the chip at I2C 0x68 or 0x69 internally and
+	// return an error if the expected chip isn't present at either address.
+	// Try ICM-20948 first, then fall back to MPU-9250.
+	if imu, err := sensors.NewICM20948(&i2cbus); err == nil {
 		log.Println("ICM-20948 detected.")
-		imu, err := sensors.NewICM20948(&i2cbus)
-		if err == nil {
-			myIMUReader = imu
-			return true
-		}
-	} else if v2 == MPUREG_WHO_AM_I_VAL || v2 == MPUREG_WHO_AM_I_VAL_9255 || v2 == MPUREG_WHO_AM_I_VAL_6500 ||
-		v2 == MPUREG_WHO_AM_I_VAL_60X0 || v2 == MPUREG_WHO_AM_I_VAL_UNKNOWN {
-
-		log.Printf("MPU detected (%02x).\n", v2)
-		imu, err := sensors.NewMPU9250(&i2cbus)
-		if err == nil {
-			myIMUReader = imu
-			return true
-		}
-	} else {
-		log.Printf("Could not identify MPU. v=%02x, v2=%02x.\n", v, v2)
-		return false
+		myIMUReader = imu
+		return true
 	}
-
+	if imu, err := sensors.NewMPU9250(&i2cbus); err == nil {
+		log.Println("MPU-9250 detected.")
+		myIMUReader = imu
+		return true
+	}
+	log.Println("No IMU detected at I2C 0x68 or 0x69.")
 	return false
 }
 
