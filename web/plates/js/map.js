@@ -132,7 +132,27 @@ function MapCtrl($rootScope, $scope, $state, $http, $interval, craftService) {
 		})
 	});
 	$scope.map.addControl(new ol.control.LayerSwitcher());
-	$scope.map.addControl(new ol.control.FullScreen());
+
+	// Custom fullscreen toggle. ol.control.FullScreen relies on the browser
+	// Fullscreen API, which iOS Safari doesn't implement, so its button never
+	// renders there. Instead we toggle a CSS class that expands the map
+	// container to fill the viewport, which works on mobile browsers too.
+	const fullScreenButton = document.createElement('button');
+	fullScreenButton.type = 'button';
+	fullScreenButton.title = 'Toggle fullscreen';
+	fullScreenButton.innerHTML = '⤢';   // ⤢
+	const fullScreenElement = document.createElement('div');
+	fullScreenElement.className = 'map-fullscreen-toggle ol-unselectable ol-control';
+	fullScreenElement.appendChild(fullScreenButton);
+	fullScreenButton.addEventListener('click', function() {
+		const container = $scope.map.getTargetElement().parentElement;
+		const isFullScreen = container.classList.toggle('map-fullscreen');
+		fullScreenButton.innerHTML = isFullScreen ? '×' : '⤢';   // × : ⤢
+		fullScreenButton.title = isFullScreen ? 'Exit fullscreen' : 'Toggle fullscreen';
+		$scope.map.updateSize();
+	});
+	$scope.map.addControl(new ol.control.Control({ element: fullScreenElement }));
+
 	$scope.aircraft = [];
 
 	function connect($scope) {
