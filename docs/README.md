@@ -47,6 +47,9 @@ re-verify before acting.
   tooling, with a prioritized backlog and suggested sequencing.
 - **[tech-debt/dead-code.md](tech-debt/dead-code.md)** — functions, types, and fields that are
   defined but never referenced.
+- **[tech-debt/deprecations.md](tech-debt/deprecations.md)** — whole features and hardware
+  integrations that are candidates for outright removal (e.g. the out-of-production uAvionix
+  Ping receiver), each with a complete removal inventory.
 
 ## Doc conventions
 
