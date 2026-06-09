@@ -1,5 +1,5 @@
 /*
-	pong.go: uAvionix Pong ADS-B monitoring and management.
+	pong.go: Jamez's Pong ADS-B monitoring and management.
 	Added 1/2026
 */
 
@@ -28,8 +28,20 @@ var pongSerialConfig *serial.Config
 var pongSerialPort *serial.Port
 var pongWG *sync.WaitGroup
 var closeChpong chan int
+var pongPortCloseOnce sync.Once
 var pongUpdateMode bool
 var pongDeviceSuccessfullyWorking bool
+
+// closePongPort releases the serial port exactly once, regardless of whether
+// the serial reader exits on its own or pongShutdown() interrupts it. The
+// guarding Once is reset on each successful connect (see pongWatcher).
+func closePongPort() {
+	pongPortCloseOnce.Do(func() {
+		if pongSerialPort != nil {
+			pongSerialPort.Close()
+		}
+	})
+}
 
 
 type PongTermMessage struct {
@@ -75,6 +87,9 @@ func initPongSerial() bool {
 
 func pongNetworkRepeater() {
 	defer pongWG.Done()
+	// Capture this session's shutdown channel locally. pongShutdown() clears the
+	// global after closing it, so reading the global here would otherwise race.
+	myClose := closeChpong
 	log.Println("Entered Pong network repeater ...")
 	cmd := exec.Command(STRATUX_HOME + "/bin/dump1090", "--net-only", "--net-stratux-port", "30006")
 	stdout, _ := cmd.StdoutPipe()
@@ -85,59 +100,61 @@ func pongNetworkRepeater() {
 		log.Printf("Error executing "+STRATUX_HOME+"/bin/dump1090: %s\n", err)
 		// don't return immediately, use the proper shutdown procedure
 		shutdownPong = true
-		for {
-			select {
-			case <-closeChpong:
-				return
-			default:
-				time.Sleep(1 * time.Second)
-			}
-		}
+		<-myClose
+		return
 	}
 
 	log.Println("Executed " + cmd.String() + " successfully...")
 
-	scanStdout := bufio.NewScanner(stdout)
-	scanStderr := bufio.NewScanner(stderr)
+	done := make(chan bool)
 
-	for {
-		select {
-		case <-closeChpong:
-			log.Println("Pong network repeater: shutdown msg received, calling cmd.Process.Kill() ...")
-			err := cmd.Process.Kill()
-			if err != nil {
-				log.Printf("\t couldn't kill dump1090: %s\n", err)
-			} else {
-				cmd.Wait()
-				log.Println("\t kill successful...")
-			}
-			return
-		default:
-			for scanStdout.Scan() {
-				m := Dump1090TermMessage{Text: scanStdout.Text(), Source: "stdout"}
-				logDump1090TermMessage(m)
-			}
-			if err := scanStdout.Err(); err != nil {
-				log.Printf("scanStdout error: %s\n", err)
-			}
-
-			for scanStderr.Scan() {
-				m := Dump1090TermMessage{Text: scanStderr.Text(), Source: "stderr"}
-				logDump1090TermMessage(m)
-			}
-			if err := scanStderr.Err(); err != nil {
-				log.Printf("scanStderr error: %s\n", err)
-			}
-			for scanStderr.Scan() {
-				m := Dump1090TermMessage{Text: scanStderr.Text(), Source: "stderr"}
-				logDump1090TermMessage(m)
-				if shutdownES != true {
-					shutdownES = true
+	// Watch for a shutdown signal and kill dump1090 when it arrives. This runs
+	// in its own goroutine so the blocking scanners below can never starve the
+	// closeChpong check. (The original code only re-checked closeChpong after a
+	// blocking Scan() returned, so the shutdown path was unreachable.)
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case <-myClose:
+				log.Println("Pong network repeater: shutdown msg received, calling cmd.Process.Kill() ...")
+				if err := cmd.Process.Kill(); err != nil {
+					log.Printf("\t couldn't kill dump1090: %s\n", err)
+				} else {
+					log.Println("\t kill successful...")
 				}
+				return
 			}
-			time.Sleep(1 * time.Second)
 		}
-	}
+	}()
+
+	go func() {
+		scanStdout := bufio.NewScanner(stdout)
+		for scanStdout.Scan() {
+			m := Dump1090TermMessage{Text: scanStdout.Text(), Source: "stdout"}
+			logDump1090TermMessage(m)
+		}
+		if err := scanStdout.Err(); err != nil {
+			log.Printf("scanStdout error: %s\n", err)
+		}
+	}()
+
+	go func() {
+		scanStderr := bufio.NewScanner(stderr)
+		for scanStderr.Scan() {
+			m := Dump1090TermMessage{Text: scanStderr.Text(), Source: "stderr"}
+			logDump1090TermMessage(m)
+		}
+		if err := scanStderr.Err(); err != nil {
+			log.Printf("scanStderr error: %s\n", err)
+		}
+	}()
+
+	// Block until dump1090 exits — either on its own or because the watcher
+	// goroutine above killed it — then release the watcher goroutine.
+	cmd.Wait()
+	close(done)
 }
 
 var dump1090ConnectionPong net.Conn = nil
@@ -152,7 +169,7 @@ func pongNetworkConnection() {
 
 func pongSerialReader() {
 	//defer pongWG.Done()
-	defer pongSerialPort.Close()
+	defer closePongPort()
 	// RCB TODO channel control for terminate
 
 	log.Printf("Starting Pong serial reader")
@@ -163,6 +180,10 @@ func pongSerialReader() {
 		s := scanner.Text()
 		// Trimspace removes newlines as well as whitespace
 		s = strings.TrimSpace(s)
+		// Skip blank lines; indexing s[0] below would panic on an empty string.
+		if len(s) == 0 {
+			continue
+		}
 		if s[0] == '\'' {
 			report := strings.Split(s, "'")
 			logString :=  fmt.Sprintf("Pong ASCII: %s",report[1])
@@ -229,7 +250,17 @@ func pongSerialReader() {
 func pongShutdown() {
 	log.Println("Entered Pong shutdown() ...")
 	if globalStatus.Pong_connected == true {
-		pongSerialPort.Close()
+		// Signal the network repeater (if running) to kill dump1090 and exit.
+		// The repeater captured this channel locally, so clearing the global
+		// here is safe and makes a second shutdown call a no-op. pongShutdown
+		// only runs on the pongWatcher goroutine, so these accesses are serial.
+		if closeChpong != nil {
+			close(closeChpong)
+			closeChpong = nil
+		}
+		// Interrupt the serial reader and release the port (exactly once).
+		closePongPort()
+		globalStatus.Pong_connected = false
 	}
 }
 
@@ -362,6 +393,11 @@ func pongWatcher() {
 				continue
 			}
 			if globalStatus.Pong_connected  {
+				// Fresh shutdown channel and close-guard for this session;
+				// the previous ones were consumed by the last pongShutdown().
+				closeChpong = make(chan int)
+				pongPortCloseOnce = sync.Once{}
+				pongWG.Add(1)
 				go pongNetworkRepeater()
 				go pongSerialReader()
 			}
@@ -374,6 +410,7 @@ func pongWatcher() {
 }
 
 func pongInit() {
+	pongWG = &sync.WaitGroup{}
 	go pongWatcher()
 }
 
