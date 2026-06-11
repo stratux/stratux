@@ -32,7 +32,7 @@ hardware integration). User-facing how-tos live in the
   table.
   - [hardware/sdr-and-bands.md](hardware/sdr-and-bands.md) — RTL-SDR dongles and band
     assignment.
-  - [hardware/gps.md](hardware/gps.md) — GPS/GNSS receivers.
+  - [hardware/gnss.md](hardware/gnss.md) — GPS/GNSS receivers.
   - [hardware/sensors.md](hardware/sensors.md) — barometric and IMU/AHRS sensors.
   - [hardware/ogn-ais-receivers.md](hardware/ogn-ais-receivers.md) — OGN trackers (RX/TX),
     AIS, and external ADS-B receivers (Ping/Pong/UATRadio).

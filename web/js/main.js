@@ -78,9 +78,9 @@ app.config(function ($stateProvider, $urlRouterProvider) {
 			controller: 'AHRSCtrl',
 			reloadOnSearch: false
 		})
-		.state('gps', {
-			url: '/gps',
-			templateUrl: 'plates/gps.html',
+		.state('gnss', {
+			url: '/gnss',
+			templateUrl: 'plates/gnss.html',
 			controller: 'GPSCtrl',
 			reloadOnSearch: false
 		})
