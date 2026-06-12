@@ -32,7 +32,8 @@ CACHE MANIFEST
 /plates/status.html
 /plates/traffic.html
 /plates/towers-help.html
-/plates/gps-help.html
+/plates/ahrs-help.html
+/plates/gnss-help.html
 /plates/weather.html
 /img/screen-320x460.png
 /img/screen-1536x2008.png

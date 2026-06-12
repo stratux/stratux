@@ -170,7 +170,7 @@ const MSG_GROUND_TEST = ["GROUND TEST MODE - GPS REQUIRED", "DO NOT USE IN FLIGH
     MSG_NO_AHRS     = ["NO AHRS AVAILABLE", "MUST HAVE IMU AND/OR GPS FOR AHRS"];
 
 function AHRSCtrl($rootScope, $scope, $state, $http, $interval) {
-    $scope.$parent.helppage = 'plates/gps-help.html';
+    $scope.$parent.helppage = 'plates/ahrs-help.html';
     $scope.isHidden = false;
     $scope.noSleep = new NoSleep();
 

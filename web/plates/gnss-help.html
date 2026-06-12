@@ -1,0 +1,16 @@
+<div class="section text-left help-page">
+	<p>The <strong>GNSS</strong> page provides detailed status of the GPS/GNSS receiver and satellite constellation.</p>
+	<p><strong>GNSS Status</strong> shows a map of the current position alongside grouped information panels: position (latitude, longitude, altitude), fix quality and satellite counts, accuracy metrics, and motion and time data.</p>
+	<p>Accuracy metrics include:</p>
+	<ul class="list-simple">
+		<li><strong>H/V Accuracy</strong> — estimated horizontal and vertical position error.</li>
+		<li><strong>HDOP / PDOP</strong> — horizontal and position dilution of precision. Lower values indicate a better satellite geometry.</li>
+		<li><strong>NACp</strong> — Navigation Accuracy Category for position, per AC 20-165A. Values range from 0 (EPU ≥ 18.52 km) to 11 (EPU &lt; 3 m).</li>
+	</ul>
+	<p><strong>Constellation Plot</strong> shows satellite positions in the sky as a polar view. Elevation rings are drawn at 0°, 30°, and 60°. Filled dots indicate satellites currently used in the position solution; hollow dots are tracked but not in solution.</p>
+	<p><strong>Signal Strength</strong> shows a bar chart of signal levels (dB-Hz) per satellite. The Y-axis scales automatically to the strongest signal received. Dimmed bars are satellites not in the current solution.</p>
+	<p>Satellites are color-coded by constellation: <strong>GPS</strong> (blue), <strong>GLONASS</strong> (red), <strong>Galileo</strong> (green), <strong>BeiDou</strong> (orange), <strong>SBAS</strong> (purple), <strong>QZSS</strong> (cyan).</p>
+	<p>Use the <strong>Show satellites not in solution</strong> checkbox to include tracked and seen satellites in all views.</p>
+	<p>The map supports offline use when local map tiles (MBTiles) are installed on the Stratux device. Use the layer switcher icon on the map to toggle between available tile sources.</p>
+
+</div>

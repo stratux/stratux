@@ -224,7 +224,7 @@ function drawSignalBars(canvas, width, height, satellites, showAll) {
 
 // ── Controller ──────────────────────────────────────────────────────────────────
 function GPSCtrl($rootScope, $scope, $state, $http, $interval, $timeout) {
-    $scope.$parent.helppage = 'plates/gps-help.html';
+    $scope.$parent.helppage = 'plates/gnss-help.html';
     $scope.data_list = [];
     $scope.showAll   = false;
 
