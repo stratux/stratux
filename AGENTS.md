@@ -90,7 +90,7 @@ Understanding these three patterns is the key to the codebase:
    binary in `ogn/`) for 868MHz; and `rtl_ais` (submodule) for AIS. Each is spawned with
    `exec.Command`, monitored, and **auto-restarted on crash**. OGN APRS parsing is in
    `main/ogn.go` / `main/ogn-aprs.go`; AIS in `main/ais.go`.
-3. **GPS / baro / IMU → direct hardware.** `main/gps.go` (serial GPS, large file with chip
+3. **GPS / baro / IMU → direct hardware.** `main/gnss.go` (serial GPS, large file with chip
    autodetect for various u-blox/SiRF modules), `main/sensors.go`, and the `sensors/` package
    (BMP280/388 baro, ICM20948/MPU9250 IMU drivers).
 

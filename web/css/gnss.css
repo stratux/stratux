@@ -1,0 +1,71 @@
+/* ── GNSS plate ────────────────────────────────────────────────────────────── */
+
+/* GNSS Status two-column flex layout — overrides Bootstrap floats */
+.gnss-flex-row {
+    display: flex;
+    align-items: stretch;
+    margin: 0 -15px;
+}
+.gnss-flex-row > .gnss-col {
+    flex: 1;
+    padding: 0 15px;
+    min-width: 0;
+}
+@media (max-width: 767px) {
+    .gnss-flex-row { flex-direction: column; }
+}
+
+#gnss_map_display {
+    height: 280px;
+    border-radius: 3px;
+}
+@media (min-width: 768px) {
+    #gnss_map_display { height: 100%; min-height: 260px; }
+}
+
+/* Info groups */
+.gnss-info-group { margin-bottom: 10px; }
+.gnss-info-group:last-child { margin-bottom: 0; }
+.gnss-info-label {
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #888;
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+}
+.gnss-info-group table { width: 100%; }
+.gnss-info-group td { padding: 1px 0; font-size: 0.9em; vertical-align: top; }
+.gnss-info-group td:first-child { color: #666; white-space: nowrap; padding-right: 8px; width: 50%; }
+.gnss-info-group td:last-child  { font-weight: bold; }
+
+/* Filter + legend bar */
+.gnss-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+    padding: 7px 12px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+}
+.gnss-filter-bar label { margin: 0; font-weight: normal; cursor: pointer; }
+.gnss-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; }
+.gnss-legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.82em; }
+.gnss-legend-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* Satellite table */
+.gnss-sat-table { margin-bottom: 0; font-size: 0.85em; }
+.gnss-sat-table td, .gnss-sat-table th { padding: 4px 8px; }
+.gnss-not-in-solution td { color: #aaa; }
+.gnss-not-in-solution td:first-child { color: #bbb; }
