@@ -29,3 +29,6 @@ core_freq=450
 arm_freq=900
 
 arm_64bit=1
+
+# enablement for a shutdown button on gpio 5
+dtoverlay=gpio-shutdown,gpio_pin=5
