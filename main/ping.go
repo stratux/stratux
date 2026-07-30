@@ -41,6 +41,84 @@ var closeCh chan int
 var pingDeviceModel int
 var pingDeviceSuccessfullyWorking bool
 
+func gdl90SerialReader() {
+	defer pingSerialPort.Close()
+
+	log.Printf("Starting SoftRF GDL90 serial reader")
+
+	buf := make([]byte, 256)
+	frame := make([]byte, 0, 512)
+
+	inFrame := false
+	escaped := false
+
+	for globalStatus.Ping_connected && globalSettings.Ping_Enabled {
+
+		n, err := pingSerialPort.Read(buf)
+		if err != nil {
+			log.Printf("SoftRF read error: %v", err)
+			break
+		}
+
+		for i := 0; i < n; i++ {
+
+			b := buf[i]
+
+			if b == 0x7e {
+
+				if inFrame {
+
+					// kompletten Frame erhalten
+					if len(frame) >= 3 {
+
+						// CRC entfernen
+						payload := frame[:len(frame)-2]
+
+						msgType := payload[0]
+
+						switch msgType {
+
+						case 0x14:
+							processSoftRFGDL90Traffic(payload)
+						default:
+							// optional zum Debuggen
+							// log.Printf("Ignoring GDL90 type=0x%02X", msgType)
+						}
+
+
+					}
+
+					frame = frame[:0]
+				}
+
+				inFrame = true
+				continue
+			}
+
+			if inFrame {
+
+				// Escaping nach GDL90
+
+				if escaped {
+					frame = append(frame, b^0x20)
+					escaped = false
+					continue
+				}
+
+				if b == 0x7d {
+					escaped = true
+					continue
+				}
+
+				frame = append(frame, b)
+			}
+		}
+	}
+
+	globalStatus.Ping_connected = false
+	log.Printf("Exiting SoftRF GDL90 serial reader")
+}
+
 func initPingSerial() bool {
 	var device string
 	baudrate := int(2000000)
@@ -50,20 +128,26 @@ func initPingSerial() bool {
 
 	if _, err := os.Stat("/dev/ping"); err == nil {
 		device = "/dev/ping"
+
 	} else if _, err := os.Stat("/dev/softrf"); err == nil {
 		device = "/dev/softrf"
-		baudrate = int(38400)
+		baudrate = 38400
+
+	} else if _, err := os.Stat("/dev/serial0"); err == nil {
+		device = "/dev/serial0"
+		baudrate = 38400
+
 	} else if _, err := os.Stat("/dev/pingusb"); err == nil {
-		// 99-uavionix.rules 0403:6015
 		device = "/dev/pingusb"
-		baudrate = int(57600)
+		baudrate = 57600
 		pingDeviceModel = 1
+
 	} else {
 		log.Printf("No suitable Ping device found.\n")
 		return false
 	}
-	log.Printf("Using %s for Ping\n", device)
 
+	log.Printf("Using %s for Ping\n", device)
 	// Open port
 	// No timeout specified as Ping does not heartbeat
 	pingSerialConfig = &serial.Config{Name: device, Baud: baudrate}
@@ -284,12 +368,18 @@ func pingWatcher() {
 			//count := 0
 			// pingEFB - 1090
 			if globalStatus.Ping_connected && pingDeviceModel == 0 {
-				//pingWG.Add(1)
+
 				go pingNetworkRepeater()
-				//pingNetworkConnection()
-				go pingSerialReader()
-				// Emulate SDR count
-				//count = 2
+
+			  	switch pingSerialConfig.Name {
+			  		case "/dev/softrf", "/dev/serial0":
+						log.Printf("Starting SoftRF GDL90 serial reader")
+						go gdl90SerialReader()
+			  		default:
+						log.Printf("Starting Ping ASCII serial reader")
+						go pingSerialReader()
+			  	}
+
 			}
 			// pingUSB - MavLink
 			if globalStatus.Ping_connected && pingDeviceModel == 1 {
