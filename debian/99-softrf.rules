@@ -1,0 +1,2 @@
+# Ebyte E80-900MBL-02 with CH340 USB-UART Adapter
+SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="softrf"
