@@ -1244,6 +1244,17 @@ type settings struct {
 	OGNReg               string
 	OGNTxPower           int
 
+	// SoftRF-specific settings (Moshe-Braner fork)
+	SoftRFProtocol       int            // 1=OGNTP, 2=P3I, 5=FANET, 6=Legacy, 7=Latest, 8=ADS-L (-1 while unread)
+	SoftRFAltProtocol    int            // 0=none, or a valid secondary protocol value (-1 while unread)
+	SoftRFBand           int            // 1=EU, 2=US, 3=AU, 4=NZ, 5=RU, 6=CN, 7=UK, 8=IN, 9=IL, 10=KR (-1 while unread)
+	SoftRFAlarm          int            // 0=none, 1=distance, 2=vector, 3=FLARM (-1 while unread)
+	SoftRFRelay          int            // 0=off, 1=landed, 2=all, 3=relay-only (-1 while unread)
+	SoftRFTxPower        int            // 0=off, 1=low, 2=full (-1 while unread)
+	SoftRFStealth        bool
+	SoftRFNoTrack        bool
+	SoftRFEnabled        bool           // enable SoftRF-MB HAT subprocess
+
 	PWMDutyMin           int
 
 	// manual GPS config  (versus autodetect)
@@ -1313,6 +1324,12 @@ type status struct {
 	NightMode                                  bool // For turning off LEDs.
 	OGN_noise_db                               float32
 	OGN_gain_db                                float32
+	SoftRF_rx_packets                          uint32
+	SoftRF_tx_packets                          uint32
+	SoftRF_rx_FLARM_latest                     uint32
+	SoftRF_rx_FLARM_legacy                     uint32
+	SoftRF_rx_ADSL                             uint32
+	SoftRF_rx_other                            uint32
 	OGN_tx_enabled                             bool // If ogn-rx-eu uses a local tx module for transmission
 
 	OGNPrevRandomAddr                          string    // when OGN is in random stealth mode, it's ID changes randomly - keep the previous one so we can filter properly
@@ -1362,6 +1379,14 @@ func defaultSettings() {
 	globalSettings.DeveloperMode = false
 	globalSettings.StaticIps = make([]string, 0)
 	globalSettings.NoSleep = false
+
+	// SoftRF defaults: -1 means "not yet read from device"
+	globalSettings.SoftRFProtocol = -1
+	globalSettings.SoftRFAltProtocol = -1
+	globalSettings.SoftRFBand = -1
+	globalSettings.SoftRFAlarm = -1
+	globalSettings.SoftRFRelay = -1
+	globalSettings.SoftRFTxPower = -1
 	globalSettings.EstimateBearinglessDist = false
 
 	globalSettings.WiFiChannel = 1
@@ -1408,6 +1433,26 @@ func readSettings() {
 		return
 	}
 	log.Printf("read in settings.\n")
+
+	// SoftRF settings: 0 is not a valid value for Protocol, Band, or TxPower,
+	// so if they are 0 after loading an old config file, reset to -1 (unread).
+	if globalSettings.SoftRFProtocol == 0 {
+		globalSettings.SoftRFProtocol = -1
+	}
+	if globalSettings.SoftRFBand == 0 {
+		globalSettings.SoftRFBand = -1
+	}
+	if globalSettings.SoftRFTxPower == 0 {
+		globalSettings.SoftRFTxPower = -1
+	}
+	// AltProtocol, Alarm, and Relay: 0 is valid (none/off), but we need a way
+	// to distinguish "not yet read" from "intentionally set to 0". Use -1 only
+	// if Protocol is also unread, meaning no SoftRF config has ever been saved.
+	if globalSettings.SoftRFProtocol == -1 {
+		globalSettings.SoftRFAltProtocol = -1
+		globalSettings.SoftRFAlarm = -1
+		globalSettings.SoftRFRelay = -1
+	}
 }
 
 func addSystemError(err error) {
@@ -1631,6 +1676,9 @@ func gracefulShutdown() {
 	sdrKill()
 	pingKill()
 	pongKill()
+
+	// Shut down SoftRF subprocess.
+	softRFShutdown()
 
 	// Shut down data logging.
 	if dataLogStarted {

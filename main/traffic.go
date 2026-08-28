@@ -1728,6 +1728,7 @@ func initTraffic(isTraceReplayMode bool) {
 	if !isTraceReplayMode {
 		go esListen()
 		go ognListen()
+		go softRFListen()
 		go aprsListen()
 		go aisListen()
 	}

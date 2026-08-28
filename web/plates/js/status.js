@@ -58,6 +58,12 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 			$scope.OGN_messages_max = status.OGN_messages_max;
 			$scope.OGN_messages_total = status.OGN_messages_total;
 			$scope.OGN_connected = status.OGN_connected;
+			$scope.SoftRF_rx_packets = status.SoftRF_rx_packets;
+			$scope.SoftRF_tx_packets = status.SoftRF_tx_packets;
+			$scope.SoftRF_rx_FLARM_latest = status.SoftRF_rx_FLARM_latest;
+			$scope.SoftRF_rx_FLARM_legacy = status.SoftRF_rx_FLARM_legacy;
+			$scope.SoftRF_rx_ADSL = status.SoftRF_rx_ADSL;
+			$scope.SoftRF_rx_other = status.SoftRF_rx_other;
 			$scope.AIS_messages_last_minute = status.AIS_messages_last_minute;
 			$scope.AIS_messages_max = status.AIS_messages_max;
 			$scope.AIS_messages_total = status.AIS_messages_total;
@@ -90,6 +96,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 					$scope.GPS_position_accuracy = ", " + status.GPS_position_accuracy.toFixed(1) + " m";
 			}
 			var gpsHardwareCode = (status.GPS_detected_type & 0x0f);
+			$scope.gpsHardwareCode = gpsHardwareCode;
 			var tempGpsHardwareString = "Not installed";
 			switch(gpsHardwareCode) {
 				// Keep in mind that this must be in sync with the enumeration in gen_gdl90.go
@@ -239,7 +246,8 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval, craftService) 
 			$scope.DeveloperMode = settings.DeveloperMode;
 			$scope.visible_uat = settings.UAT_Enabled;
 			$scope.visible_es = settings.ES_Enabled;
-			$scope.visible_ogn = settings.OGN_Enabled;
+			$scope.visible_ogn = settings.OGN_Enabled || settings.SoftRFEnabled || ($scope.gpsHardwareCode == 11 || $scope.gpsHardwareCode == 13);
+			$scope.visible_softrf = settings.SoftRFEnabled || ($scope.gpsHardwareCode == 11 || $scope.gpsHardwareCode == 13);
 			$scope.visible_ais = settings.AIS_Enabled;
 			$scope.visible_ping = settings.Ping_Enabled;
 			$scope.visible_pong = settings.Pong_Enabled;

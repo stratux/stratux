@@ -136,10 +136,105 @@
                             <label class="control-label col-xs-5">Registration</label>
                             <input class="col-xs-7" type="text" maxlength="15" ognreg-input ng-model="OGNReg" />
                         </div>
-                        <!-- TX Power -->
+                        <!-- TX Power (OGN/GX only) -->
                         <div class="form-group reset-flow" ng-hide="gpsHardwareCode==13 || gpsHardwareCode==15">
                             <label class="control-label col-xs-5">Transmit Power (dBm)<br/><small>-32 = no transmission, actual power depends on hardware</small></label>
                             <input class="col-xs-7" type="number" min="-32" max="31" ng-model="OGNTxPower" />
+                        </div>
+
+                        <!-- SoftRF-specific settings (hardware code 13, or HAT enabled) -->
+                        <div ng-show="gpsHardwareCode==13 || SoftRFEnabled" class="reset-flow" style="width:100%">
+                            <!-- RF Protocol -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">RF Protocol</label>
+                                <select class="col-xs-7 custom-select" ng-model="SoftRFProtocol" ng-change="updateSoftRFCompatProtocols()">
+                                    <option value="7">Latest (FLARM v7)</option>
+                                    <option value="6">Legacy (FLARM v6)</option>
+                                    <option value="1">OGNTP</option>
+                                    <option value="2">P3I (PilotAware)</option>
+                                    <option value="5">FANET</option>
+                                    <option value="8">ADS-L</option>
+                                </select>
+                            </div>
+
+                            <!-- Alternate Protocol -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">Alternate Protocol</label>
+                                <select class="col-xs-7 custom-select" ng-model="SoftRFAltProtocol">
+                                    <option value="0">None</option>
+                                    <option value="1" ng-show="softRFAltProtoAllowed['1']">OGNTP</option>
+                                    <option value="2" ng-show="softRFAltProtoAllowed['2']">P3I (PilotAware)</option>
+                                    <option value="5" ng-show="softRFAltProtoAllowed['5']">FANET</option>
+                                    <option value="6" ng-show="softRFAltProtoAllowed['6']">Legacy (FLARM v6)</option>
+                                    <option value="7" ng-show="softRFAltProtoAllowed['7']">Latest (FLARM v7)</option>
+                                    <option value="8" ng-show="softRFAltProtoAllowed['8']">ADS-L</option>
+                                </select>
+                            </div>
+
+                            <!-- RF Band -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">RF Band</label>
+                                <select class="col-xs-7 custom-select" ng-model="SoftRFBand">
+                                    <option value="1">EU (868 MHz)</option>
+                                    <option value="2">US (915 MHz)</option>
+                                    <option value="3">AU (921 MHz)</option>
+                                    <option value="4">NZ (869 MHz)</option>
+                                    <option value="5">RU (868 MHz)</option>
+                                    <option value="6">CN (470 MHz)</option>
+                                    <option value="7">UK (869 MHz)</option>
+                                    <option value="8">IN (866 MHz)</option>
+                                    <option value="9">IL (916 MHz)</option>
+                                    <option value="10">KR (920 MHz)</option>
+                                </select>
+                            </div>
+
+                            <!-- TX Power -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">TX Power</label>
+                                <select class="col-xs-7 custom-select" ng-model="SoftRFTxPower">
+                                    <option value="2">Full</option>
+                                    <option value="1">Low</option>
+                                    <option value="0">Off (receive only)</option>
+                                </select>
+                            </div>
+
+                            <!-- Alarm Method -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">Alarm Method</label>
+                                <select class="col-xs-7 custom-select" ng-model="SoftRFAlarm">
+                                    <option value="3">FLARM</option>
+                                    <option value="2">Vector</option>
+                                    <option value="1">Distance</option>
+                                    <option value="0">None</option>
+                                </select>
+                            </div>
+
+                            <!-- Relay Mode -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">Relay Mode</label>
+                                <select class="col-xs-7 custom-select" ng-model="SoftRFRelay">
+                                    <option value="0">Off</option>
+                                    <option value="1">Landed</option>
+                                    <option value="2">All</option>
+                                    <option value="3">Relay only</option>
+                                </select>
+                            </div>
+
+                            <!-- Stealth -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">Stealth</label>
+                                <div class="col-xs-5">
+                                    <ui-switch ng-model='SoftRFStealth'></ui-switch>
+                                </div>
+                            </div>
+
+                            <!-- No Track -->
+                            <div class="form-group reset-flow">
+                                <label class="control-label col-xs-5">No Track</label>
+                                <div class="col-xs-5">
+                                    <ui-switch ng-model='SoftRFNoTrack'></ui-switch>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group reset-flow">
@@ -432,6 +527,13 @@
                         <label class="control-label col-xs-5">OGN Transmission via I&#178;C/GPIO HAT</label>
                         <div class="col-xs-7">
                             <ui-switch ng-model='OGNI2CTXEnabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">SoftRF-MB LoRa HAT (FLARM/ADS-L)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='SoftRFEnabled' settings-change></ui-switch>
                         </div>
                     </div>
 

@@ -347,6 +347,9 @@ func (tracker *SoftRF) onNmea(serialPort *serial.Port, nmea []string) bool {
 	// See output of $PSRFS,0,?*4B
 	if nmea[0] == "PSRFS" {
 		key, value := nmea[2], nmea[3]
+		if value == "?" {
+			return true // ignore query echoes
+		}
 		log.Printf("Received SoftRF config %s=%s", key, value)
 		tracker.settings[key] = value
 		if key == "acft_type" {
@@ -357,6 +360,22 @@ func (tracker *SoftRF) onNmea(serialPort *serial.Port, nmea []string) bool {
 			globalSettings.OGNAddrType, _ = strconv.Atoi(value)
 		} else if key == "aircraft_id" {
 			globalSettings.OGNAddr = value
+		} else if key == "protocol" {
+			globalSettings.SoftRFProtocol, _ = strconv.Atoi(value)
+		} else if key == "altprotocol" {
+			globalSettings.SoftRFAltProtocol, _ = strconv.Atoi(value)
+		} else if key == "band" {
+			globalSettings.SoftRFBand, _ = strconv.Atoi(value)
+		} else if key == "alarm" {
+			globalSettings.SoftRFAlarm, _ = strconv.Atoi(value)
+		} else if key == "relay" {
+			globalSettings.SoftRFRelay, _ = strconv.Atoi(value)
+		} else if key == "tx_power" {
+			globalSettings.SoftRFTxPower, _ = strconv.Atoi(value)
+		} else if key == "stealth" {
+			globalSettings.SoftRFStealth = value == "1"
+		} else if key == "no_track" {
+			globalSettings.SoftRFNoTrack = value == "1"
 		}
 		return true
 	}
@@ -377,7 +396,7 @@ func (tracker *SoftRF) isDetected() bool {
 }
 
 func (tracker *SoftRF) isConfigRead() bool {
-	return len(tracker.settings) >= 5 // need at least or 5 main settings: acft type, id method and id, as well as nmea1/2 mode
+	return len(tracker.settings) >= 12 // need identity (3) + nmea gates (2) + rf settings (protocol, altprotocol, band, tx_power, alarm, relay, stealth)
 }
 
 func (tracker *SoftRF) writeReadDelay() time.Duration {
@@ -408,11 +427,22 @@ func (tracker *SoftRF) writeInitialConfig(serialPort *serial.Port) bool {
 }
 
 func (tracker *SoftRF) requestTrackerConfig(serialPort *serial.Port) {
-	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,nmea_g,?") + "\r\n"))
-	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,nmea2_g,?") + "\r\n"))
-	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,acft_type,?") + "\r\n"))
-	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,aircraft_id,?") + "\r\n"))
-	serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0,id_method,?") + "\r\n"))
+	keys := []string{
+		"nmea_g", "nmea2_g",
+		"acft_type", "aircraft_id", "id_method",
+		"protocol", "altprotocol", "band", "alarm", "relay",
+		"tx_power", "stealth", "no_track",
+	}
+	for _, key := range keys {
+		serialPort.Write([]byte(appendNmeaChecksum("$PSRFS,0," + key + ",?") + "\r\n"))
+	}
+}
+
+func (tracker *SoftRF) softRFSettingChanged(key string, desired string) bool {
+	if s, ok := tracker.settings[key]; !ok || s != desired {
+		return true
+	}
+	return false
 }
 
 func (tracker *SoftRF) writeConfigFromSettings(serialPort *serial.Port) bool {
@@ -426,14 +456,69 @@ func (tracker *SoftRF) writeConfigFromSettings(serialPort *serial.Port) bool {
 
 	var messages []string
 
-	if s, ok := tracker.settings["acft_type"]; !ok || acType != s {
+	if tracker.softRFSettingChanged("acft_type", acType) {
 		messages = append(messages, appendNmeaChecksum("$PSRFS,0,acft_type," + acType) + "\r\n")
 	}
-	if s, ok := tracker.settings["id_method"]; !ok || addrType != s {
+	if tracker.softRFSettingChanged("id_method", addrType) {
 		messages = append(messages, appendNmeaChecksum("$PSRFS,0,id_method," + addrType) + "\r\n")
 	}
-	if s, ok := tracker.settings["aircraft_id"]; !ok || addr != s {
+	if tracker.softRFSettingChanged("aircraft_id", addr) {
 		messages = append(messages, appendNmeaChecksum("$PSRFS,0,aircraft_id," + addr) + "\r\n")
+	}
+
+	// SoftRF-specific settings: only send if they have been read from the device (>= 0 or -1 means unread)
+	if globalSettings.SoftRFProtocol > 0 {
+		desired := strconv.Itoa(globalSettings.SoftRFProtocol)
+		if tracker.softRFSettingChanged("protocol", desired) {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,protocol," + desired) + "\r\n")
+		}
+	}
+	if globalSettings.SoftRFAltProtocol >= 0 {
+		desired := strconv.Itoa(globalSettings.SoftRFAltProtocol)
+		if tracker.softRFSettingChanged("altprotocol", desired) {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,altprotocol," + desired) + "\r\n")
+		}
+	}
+	if globalSettings.SoftRFBand > 0 {
+		desired := strconv.Itoa(globalSettings.SoftRFBand)
+		if tracker.softRFSettingChanged("band", desired) {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,band," + desired) + "\r\n")
+		}
+	}
+	if globalSettings.SoftRFAlarm >= 0 {
+		desired := strconv.Itoa(globalSettings.SoftRFAlarm)
+		if tracker.softRFSettingChanged("alarm", desired) {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,alarm," + desired) + "\r\n")
+		}
+	}
+	if globalSettings.SoftRFRelay >= 0 {
+		desired := strconv.Itoa(globalSettings.SoftRFRelay)
+		if tracker.softRFSettingChanged("relay", desired) {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,relay," + desired) + "\r\n")
+		}
+	}
+	if globalSettings.SoftRFTxPower >= 0 {
+		desired := strconv.Itoa(globalSettings.SoftRFTxPower)
+		if tracker.softRFSettingChanged("tx_power", desired) {
+			messages = append(messages, appendNmeaChecksum("$PSRFS,0,tx_power," + desired) + "\r\n")
+		}
+	}
+
+	// Boolean settings: always send if different from device
+	stealthDesired := "0"
+	if globalSettings.SoftRFStealth {
+		stealthDesired = "1"
+	}
+	if tracker.softRFSettingChanged("stealth", stealthDesired) {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,stealth," + stealthDesired) + "\r\n")
+	}
+
+	noTrackDesired := "0"
+	if globalSettings.SoftRFNoTrack {
+		noTrackDesired = "1"
+	}
+	if tracker.softRFSettingChanged("no_track", noTrackDesired) {
+		messages = append(messages, appendNmeaChecksum("$PSRFS,0,no_track," + noTrackDesired) + "\r\n")
 	}
 
 	for _, msg := range messages {
@@ -442,9 +527,9 @@ func (tracker *SoftRF) writeConfigFromSettings(serialPort *serial.Port) bool {
 	}
 
 	if len(messages) > 0 {
-		serialPort.Write([]byte(appendNmeaChecksum("$PSRFC,SAV") + "\r\n")) // Finally reboot
+		serialPort.Write([]byte(appendNmeaChecksum("$PSRFC,SAV") + "\r\n")) // Save and reboot
 	}
-	
+
 	return len(messages) > 0
 }
 
