@@ -172,6 +172,115 @@ var seenTraffic map[uint32]bool // Historical list of all ICAO addresses seen.
 
 var OwnshipTrafficInfo TrafficInfo
 
+func processSoftRFGDL90Traffic(frame []byte) {
+
+	if len(frame) != 28 {
+		log.Printf("Unexpected TYPE14 length=%d", len(frame))
+		return
+	}
+
+	var ti TrafficInfo
+
+	// ICAO-Adresse
+	ti.Icao_addr =
+		uint32(frame[2])<<16 |
+		uint32(frame[3])<<8 |
+		uint32(frame[4])
+
+	// vorhandenen Datensatz übernehmen
+	trafficMutex.Lock()
+	if old, ok := traffic[ti.Icao_addr]; ok {
+		ti = old
+	}
+	trafficMutex.Unlock()
+
+	ti.Addr_type = frame[1] & 0x0f
+
+	// Position
+	ti.Lat = decodeLatLng(frame[5], frame[6], frame[7])
+	ti.Lng = decodeLatLng(frame[8], frame[9], frame[10])
+	ti.Position_valid = true
+
+	if isGPSValid() {
+		ti.Distance, ti.Bearing = common.Distance(
+			float64(mySituation.GPSLatitude),
+			float64(mySituation.GPSLongitude),
+			float64(ti.Lat),
+			float64(ti.Lng),
+		)
+		ti.BearingDist_valid = true
+	}
+
+	// Höhe
+	altCode := (uint16(frame[11]) << 4) | (uint16(frame[12]) >> 4)
+	if altCode != 0x0FFF {
+		ti.Alt = int32(altCode)*25 - 1000
+	}
+
+	// Airborne / Ground
+	ti.OnGround = (frame[12] & 0x08) == 0
+
+	// NIC / NACp
+	ti.NIC = int((frame[13] >> 4) & 0x0F)
+	ti.NACp = int(frame[13] & 0x0F)
+
+	// Geschwindigkeit
+	speed := (uint16(frame[14]) << 4) | (uint16(frame[15]) >> 4)
+	if speed != 0x0FFF {
+		ti.Speed = speed
+		ti.Speed_valid = true
+	}
+
+	// Vertikalgeschwindigkeit
+	vv := (int16(frame[15]&0x0F) << 8) | int16(frame[16])
+	if vv != 0x0800 {
+		if vv&0x0800 != 0 {
+			vv |= ^0x0FFF
+		}
+		ti.Vvel = vv * 64
+	}
+
+	// Kurs
+	if frame[17] != 0xFF {
+		ti.Track = float32(frame[17]) * TRACK_RESOLUTION
+	}
+
+	// Kategorie
+	ti.Emitter_category = frame[18]
+
+	// Rufzeichen
+	if tail := strings.TrimSpace(string(frame[19:27])); tail != "" {
+		ti.Tail = tail
+	}
+
+	ti.Timestamp = time.Now()
+	ti.Last_seen = stratuxClock.Time
+	ti.Last_alt = stratuxClock.Time
+	ti.Last_speed = stratuxClock.Time
+	ti.Last_source = TRAFFIC_SOURCE_UAT
+	ti.ExtrapolatedPosition = false
+
+	trafficMutex.Lock()
+
+	postProcessTraffic(&ti)
+	traffic[ti.Icao_addr] = ti
+
+	registerTrafficUpdate(ti)
+	seenTraffic[ti.Icao_addr] = true
+
+	trafficMutex.Unlock()
+}
+
+func decodeLatLng(b0, b1, b2 byte) float32 {
+	v := int32(b0)<<16 | int32(b1)<<8 | int32(b2)
+
+	if v&0x800000 != 0 {
+		v |= ^0xFFFFFF
+	}
+
+	return float32(v) * LON_LAT_RESOLUTION
+}
+
 func convertFeetToMeters(feet float32) float32 {
 	return feet * 0.3048
 }
@@ -327,6 +436,7 @@ func sendTrafficUpdates() {
 		log.Printf("==================================================================\n")
 	}
 	for key, ti := range traffic { // ForeFlight 7.5 chokes at ~1000-2000 messages depending on iDevice RAM. Practical limit likely around ~500 aircraft without filtering.
+
 		if isGPSValid() && ti.Position_valid {
 			// func distRect(lat1, lon1, lat2, lon2 float64) (dist, bearing, distN, distE float64) {
 			dist, bearing := common.Distance(float64(mySituation.GPSLatitude), float64(mySituation.GPSLongitude), float64(ti.Lat), float64(ti.Lng))
@@ -1031,9 +1141,10 @@ func parseDownlinkReport(s string, signalLevel int) {
 
 	ti.Timestamp = time.Now()
 
-	ti.Last_source = TRAFFIC_SOURCE_UAT
+	ti.Last_source = TRAFFIC_SOURCE_OGN
 	postProcessTraffic(&ti)
 	traffic[ti.Icao_addr] = ti
+
 	registerTrafficUpdate(ti)
 	seenTraffic[ti.Icao_addr] = true // Mark as seen.
 }

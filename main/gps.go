@@ -310,7 +310,7 @@ func initGPSSerial() bool {
 		device = "/dev/softrf_dongle"
 		globalStatus.GPS_detected_type = GPS_TYPE_SOFTRF_DONGLE
 		baudrates[0] = 115200
- 	} else if _, err := os.Stat("/dev/serial0"); err == nil { 
+ 	} else if !globalSettings.Ping_Enabled { 
 		// ttyS0 is PL011 UART (GPIO pins 8 and 10) on all RPi.
 		// assume that any GPS connected to serial GPIO is ublox
 		device = "/dev/serial0"
