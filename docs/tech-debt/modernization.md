@@ -73,7 +73,7 @@ Deps with no newer upstream (custom/forked/abandoned — leave as-is): `jpoirier
 
 `main/` imports **three** serial packages directly:
 
-- `tarm/serial` — `gps.go`, `clientconnection.go`, `tracker.go`, `network.go`, `pong.go`, `ping.go` (de-facto primary)
+- `tarm/serial` — `gnss.go`, `clientconnection.go`, `tracker.go`, `network.go`, `pong.go`, `ping.go` (de-facto primary)
 - `stratux/serial` — `lowpower_uat.go`, `pong.go` (stratux's own maintained fork)
 - `uavionix/serial` — `ping.go` only (an untagged `v0.0.0-19700101…` epoch snapshot)
 
@@ -111,7 +111,7 @@ dependency bumps above.
 
 | Change | Where | Notes |
 | --- | --- | --- |
-| Loop-variable capture (pre-1.22) | `main/gps.go:1777` | A `go func(){…}()` inside a `range` loop closes over the range variable. A `break` follows so only one goroutine spawns in practice, but it's a latent footgun under 1.20 semantics. Only such case in the tree. |
+| Loop-variable capture (pre-1.22) | `main/gnss.go:1777` | A `go func(){…}()` inside a `range` loop closes over the range variable. A `break` follows so only one goroutine spawns in practice, but it's a latent footgun under 1.20 semantics. Only such case in the tree. |
 | Error wrapping | `main/sensors.go:493`, `main/datalog.go:409` | The 2 `fmt.Errorf` calls don't use `%w`; `errors.Is`/`errors.As` are used nowhere. Low value since these errors aren't inspected downstream. Optional. |
 
 ### Checked and clean (no action)
@@ -167,7 +167,7 @@ service worker, no `manifest.json`), archived add-to-homescreen, and many pre-iP
 
 1. Bump OpenLayers + olms + ol-layerswitcher to current majors (only `map.js`/`radar.js` consume them).
 2. Bump svg.js 2.7.1 → 3.2.5 (only `ahrs.js`; reconcile minor v3 API changes).
-3. Replace NoSleep.js with the native Screen Wake Lock API (single call site in `gps.js`).
+3. Replace NoSleep.js with the native Screen Wake Lock API (single call site in `gnss.js`).
 4. Remove dead PWA cruft; if PWA install is wanted, add a real `manifest.json` + minimal service worker.
 
 ---

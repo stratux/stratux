@@ -9,7 +9,7 @@ a new device."
 | Topic | Doc |
 |---|---|
 | SDR dongles & band assignment (1090ES / 978 UAT / 868 OGN / AIS) | [sdr-and-bands.md](sdr-and-bands.md) |
-| GPS / GNSS receivers | [gps.md](gps.md) |
+| GPS / GNSS receivers | [gnss.md](gnss.md) |
 | Barometric & IMU/AHRS sensors | [sensors.md](sensors.md) |
 | OGN trackers (RX/TX), AIS, and external ADS-B receivers (Ping/Pong/UATRadio) | [ogn-ais-receivers.md](ogn-ais-receivers.md) |
 | Cooling fan | see `fancontrol_main/` (PID PWM fan, default BCM pin 18, own systemd service) |
@@ -23,7 +23,7 @@ Two complementary mechanisms:
    recognized" devices — Stratux opens the symlinks, not raw `/dev/ttyUSB*`.
 2. **Runtime probing** in the Go daemon: SDR dongles are tagged and assigned by their EEPROM
    serial prefix (`main/sdr.go`); GPS chips are autodetected by baud/NMEA probing
-   (`main/gps.go`); baro/IMU chips are probed by I²C WHO_AM_I (`main/sensors.go`).
+   (`main/gnss.go`); baro/IMU chips are probed by I²C WHO_AM_I (`main/sensors.go`).
 
 ## udev-recognized USB devices
 
@@ -51,7 +51,7 @@ From `debian/10-stratux.rules`, `debian/99-uavionix.rules`, and `debian/99-pong.
 | pongradio Pong dual ADS-B | `0403:6998` (FTDI) | `/dev/pong` |
 
 > **Adding new hardware:** add a udev rule for the stable symlink (if USB-serial) and the
-> detection/handling branch in the relevant Go file (`sdr.go`, `gps.go`, `sensors.go`,
+> detection/handling branch in the relevant Go file (`sdr.go`, `gnss.go`, `sensors.go`,
 > `ping.go`/`pong.go`, or `tracker.go`). Per [building.md](../building.md), adding hardware
 > support is a PR-sized change rather than a direct push.
 

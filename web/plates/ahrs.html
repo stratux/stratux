@@ -1,0 +1,75 @@
+<div class="col-sm-12">
+	<div class="col-sm-6">
+		<div class="panel panel-default">
+			<div class="panel-heading">
+				<span ng-click="hideClick()" class="panel_label">AHRS</span>
+				<span ng-show="ConnectState == 'Connected'" class="label label-success">{{ConnectState}}</span>
+				<span ng-hide="ConnectState == 'Connected'" class="label label-danger">{{ConnectState}}</span>
+			</div>
+			<div class="panel-body">
+				<div class="row">
+					<span class="col-xs-12">
+						<div id="ahrs_display"></div>
+					</span>
+				</div>
+				<div class="col-xs-12">
+					<div class="row" style="margin-bottom: 4px;">
+						<div class="col-xs-3 text-center indicator off" id="status-calibrating">Ready</div>
+						<div class="col-xs-3 text-center indicator off" id="status-gps">GPS</div>
+						<div class="col-xs-3 text-center indicator off" id="status-imu">ATT</div>
+						<div class="col-xs-3 text-center indicator off" id="status-bmp">ALT</div>
+					</div>
+				</div>
+				<div class="col-xs-12">
+					<div class="separator"></div>
+					<div class="col-xs-3">
+						<button class="btn btn-primary btn-block" ng-click="AHRSCage()"
+								ng-disabled="IsCaging || !IMU_Sensor_Enabled">Set Level</button>
+						<button class="btn btn-primary btn-block" ng-click="AHRSCalibrate()"
+								ng-disabled="IsCaging || !IMU_Sensor_Enabled">Zero Drift</button>
+					</div>
+					<div class="col-xs-9">
+						<div class="row">
+							<strong class="col-xs-3 text-center">Heading</strong>
+							<strong class="col-xs-3 text-center">Pitch</strong>
+							<strong class="col-xs-3 text-center">Roll</strong>
+							<strong class="col-xs-3 text-center">P-Alt</strong>
+						</div>
+						<div class="row">
+							<span class="col-xs-3 text-center">{{ahrs_heading}}&deg;</span>
+							<span class="col-xs-3 text-center">{{ahrs_pitch}}&deg;</span>
+							<span class="col-xs-3 text-center">{{ahrs_roll}}&deg;</span>
+							<span class="col-xs-3 text-center">{{ahrs_alt}}'</span>
+						</div>
+						<div class="row">
+							<strong class="col-xs-3 text-center">Mag Hdg</strong>
+							<strong class="col-xs-3 text-center" >Slip/<wbr>Skid</strong>
+							<strong class="col-xs-3 text-center">Turn Rate</strong>
+							<strong class="col-xs-3 text-center">G Load</strong>
+						</div>
+						<div class="row">
+							<span class="col-xs-3 text-center">{{ahrs_heading_mag}}&deg;</span>
+							<span class="col-xs-3 text-center">{{ahrs_slip_skid}}&deg;</span>
+							<span class="col-xs-3 text-center">{{ahrs_turn_rate}} min</span>
+							<span class="col-xs-3 text-center">{{ahrs_gload}}G</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-sm-6 hider">
+		<div class="panel panel-default">
+			<div class="panel-heading">
+				<span class="panel_label">G-Meter</span>
+			</div>
+			<div class="panel-body">
+				<div class="row">
+					<span class="col-xs-12">
+						<div id="gMeter_display"></div>
+					</span>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>

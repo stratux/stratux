@@ -389,7 +389,7 @@ func makeOwnshipReport() bool {
 		msg[12] = msg[12] | 0x09 // "Airborne" + "True Track"
 	}
 
-	msg[13] = byte(0x80 | (mySituation.GPSNACp & 0x0F)) //Set NIC = 8 and use NACp from gps.go.
+	msg[13] = byte(0x80 | (mySituation.GPSNACp & 0x0F)) //Set NIC = 8 and use NACp from gnss.go.
 
 	gdSpeed := uint16(0) // 1kt resolution.
 	if useReceivedOwnshipInfo && curOwnship.Speed_valid {

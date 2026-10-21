@@ -5,7 +5,7 @@
 	as part of this header.
 
 	---
-	gps.go: GPS functions, GPS init, AHRS status messages, other external sensor monitoring.
+	gnss.go: GPS/GNSS functions, GPS init, AHRS status messages, other external sensor monitoring.
 	compile and install: clear && make www && make stratuxrun && mv stratuxrun /opt/stratux/bin/ && stxrestart
 */
 
@@ -78,6 +78,8 @@ type SituationData struct {
 	GPSSatellitesSeen           uint16  // satellites seen (signal received)
 	GPSHorizontalAccuracy       float32 // 95% confidence for horizontal position, meters.
 	GPSNACp                     uint8   // NACp categories are defined in AC 20-165A
+	GPSHDOP                     float32 // horizontal dilution of precision from G?GSA
+	GPSPDOP                     float32 // position dilution of precision from G?GSA
 	GPSAltitudeMSL              float32 // Feet MSL
 	GPSVerticalAccuracy         float32 // 95% confidence for vertical position, meters
 	GPSVerticalSpeed            float32 // GPS vertical velocity, feet per second
@@ -1506,6 +1508,14 @@ func processNMEALineLow(l string, fakeGpsTimeToCurr bool) (sentenceUsed bool) {
 		tmpSituation.GPSSatellitesSeen = mySituation.GPSSatellitesSeen
 		mySituation.muSatellite.Unlock()
 		// END OF PROTECTED BLOCK
+
+		// Always store raw DOP values for display regardless of GST availability
+		if pdop, err := strconv.ParseFloat(x[15], 32); err == nil {
+			tmpSituation.GPSPDOP = float32(pdop)
+		}
+		if hdop, err := strconv.ParseFloat(x[16], 32); err == nil {
+			tmpSituation.GPSHDOP = float32(hdop)
+		}
 
 		// Prefer accuracy from G?GST. Only if not received, estimate from hdop/vdop
 		if stratuxClock.Since(tmpSituation.GPSLastAccuracyTime) > 10 * time.Second {

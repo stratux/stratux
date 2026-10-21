@@ -34,7 +34,7 @@ ID for filtering.
 
 These connect over USB and present as `/dev/serialin` (autodetected at 115200/38400 baud).
 They provide GPS NMEA (and often baro), and Stratux pushes the ownship config (aircraft type,
-address, pilot, TX power) back to them. Driver dispatch is in `main/gps.go`; per-tracker
+address, pilot, TX power) back to them. Driver dispatch is in `main/gnss.go`; per-tracker
 parsers are in `main/tracker.go`:
 
 | Tracker | Detected by | GPS type |

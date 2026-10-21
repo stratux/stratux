@@ -1,0 +1,144 @@
+<div class="col-sm-12">
+
+    <!-- ── GNSS Status ─────────────────────────────────────────────────────── -->
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <span class="panel_label">GNSS Status</span>
+            <span ng-show="ConnectState == 'Connected'" class="label label-success">{{ConnectState}}</span>
+            <span ng-hide="ConnectState == 'Connected'" class="label label-danger">{{ConnectState}}</span>
+        </div>
+        <div class="panel-body">
+            <div class="gnss-flex-row">
+
+                <!-- Map -->
+                <div class="gnss-col">
+                    <div id="gnss_map_display"></div>
+                </div>
+
+                <!-- Info groups -->
+                <div class="gnss-col">
+                    <div class="gnss-info-group">
+                        <div class="gnss-info-label">Position</div>
+                        <table><tbody>
+                            <tr><td>Latitude</td>      <td>{{gps_lat}}</td></tr>
+                            <tr><td>Longitude</td>     <td>{{gps_lon}}</td></tr>
+                            <tr><td>Altitude MSL</td>  <td>{{gps_alt}} ft &plusmn; {{gps_vertical_accuracy}} ft</td></tr>
+                            <tr><td>WGS-84 Height</td> <td>{{gps_height_above_ellipsoid}} ft</td></tr>
+                        </tbody></table>
+                    </div>
+                    <div class="gnss-info-group">
+                        <div class="gnss-info-label">Fix &amp; Solution</div>
+                        <table><tbody>
+                            <tr><td>Fix Quality</td>    <td>{{SolutionText}}</td></tr>
+                            <tr><td>Sample Rate</td>    <td>{{GPS_PositionSampleRate}} Hz</td></tr>
+                            <tr><td>In Solution</td>    <td>{{Satellites}} sats</td></tr>
+                            <tr><td>Seen / Tracked</td> <td>{{GPS_satellites_seen}} / {{GPS_satellites_tracked}}</td></tr>
+                        </tbody></table>
+                    </div>
+                    <div class="gnss-info-group">
+                        <div class="gnss-info-label">Accuracy</div>
+                        <table><tbody>
+                            <tr><td>H Accuracy</td> <td>{{gps_horizontal_accuracy}} m</td></tr>
+                            <tr><td>V Accuracy</td> <td>{{gps_vertical_accuracy}} ft</td></tr>
+                            <tr><td>HDOP</td>       <td>{{gps_hdop}}</td></tr>
+                            <tr><td>PDOP</td>       <td>{{gps_pdop}}</td></tr>
+                            <tr><td>NACp</td>       <td>{{gps_nacp}} ({{gps_nacp_desc}})</td></tr>
+                        </tbody></table>
+                    </div>
+                    <div class="gnss-info-group">
+                        <div class="gnss-info-label">Motion &amp; Time</div>
+                        <table><tbody>
+                            <tr><td>Ground Speed</td> <td>{{gps_speed}} kts</td></tr>
+                            <tr><td>Track</td>        <td>{{gps_track}}&deg;</td></tr>
+                            <tr><td>Vert Speed</td>   <td>{{gps_vert_speed}} ft/min</td></tr>
+                            <tr><td>GPS Time</td>     <td>{{gps_time_display}}</td></tr>
+                        </tbody></table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Filter + legend ────────────────────────────────────────────────── -->
+    <div class="gnss-filter-bar">
+        <label>
+            <input type="checkbox" ng-model="showAll" ng-change="redrawCharts()">&nbsp;
+            Show satellites not in solution
+        </label>
+        <div class="gnss-legend">
+            <div class="gnss-legend-item"><span class="gnss-legend-dot" style="background:#3a9ff5"></span>GPS</div>
+            <div class="gnss-legend-item"><span class="gnss-legend-dot" style="background:#e84040"></span>GLONASS</div>
+            <div class="gnss-legend-item"><span class="gnss-legend-dot" style="background:#40c870"></span>Galileo</div>
+            <div class="gnss-legend-item"><span class="gnss-legend-dot" style="background:#f09020"></span>BeiDou</div>
+            <div class="gnss-legend-item"><span class="gnss-legend-dot" style="background:#b060e0"></span>SBAS</div>
+            <div class="gnss-legend-item"><span class="gnss-legend-dot" style="background:#20c8c8"></span>QZSS</div>
+            <div class="gnss-legend-item">
+                <span class="gnss-legend-dot" style="background:transparent;border:2px solid #999;"></span>
+                Not in solution
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Constellation plot + Signal bars ───────────────────────────────── -->
+    <div class="row">
+        <div class="col-sm-6">
+            <div class="panel panel-default">
+                <div class="panel-heading"><span class="panel_label">Constellation Plot</span></div>
+                <div class="panel-body" style="padding:6px;" id="gnss_sky_wrap">
+                    <canvas id="gnss_sky_plot"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6">
+            <div class="panel panel-default">
+                <div class="panel-heading"><span class="panel_label">Signal Strength</span></div>
+                <div class="panel-body" style="padding:6px;" id="gnss_bar_wrap">
+                    <canvas id="gnss_signal_bars"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Satellite table ────────────────────────────────────────────────── -->
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="panel_label">Satellites</span></div>
+        <div class="panel-body" style="padding:0; overflow-x:auto;">
+            <table class="table table-condensed table-striped gnss-sat-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>System</th>
+                        <th class="text-right">Elev</th>
+                        <th class="text-right">Azimuth</th>
+                        <th class="text-right">Signal</th>
+                        <th class="text-center">In Fix</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr ng-repeat="satellite in displaySatellites() | orderBy:'SatelliteNMEA'"
+                        ng-class="{'gnss-not-in-solution': !satellite.InSolution}">
+                        <td style="font-weight:bold" ng-style="{color: satColor(satellite.SatelliteID)}">{{satellite.SatelliteID}}</td>
+                        <td>{{satSystem(satellite.SatelliteID)}}</td>
+                        <td class="text-right">{{satellite.Elevation < -5 ? '---' : satellite.Elevation}}&deg;</td>
+                        <td class="text-right">{{satellite.Azimuth < 0 ? '---' : satellite.Azimuth}}&deg;</td>
+                        <td class="text-right">{{satellite.Signal < 1 ? '---' : satellite.Signal}}<span style="font-size:50%">&nbsp;dB-Hz</span></td>
+                        <td class="text-center">{{satellite.InSolution ? '✅' : '—'}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="separator"></div>
+        <div class="panel-footer">
+            <div class="row">
+                <label class="col-xs-6">GPS solution:</label>
+                <span class="col-xs-6">{{SolutionText}} @ {{GPS_PositionSampleRate}} Hz</span>
+            </div>
+            <div class="row">
+                <label class="col-xs-6">Summary:</label>
+                <span class="col-xs-6">{{Satellites}} in solution; {{GPS_satellites_seen}} seen; {{GPS_satellites_tracked}} tracked</span>
+            </div>
+        </div>
+    </div>
+
+</div>

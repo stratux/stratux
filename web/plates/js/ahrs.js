@@ -159,6 +159,299 @@ AHRSRenderer.prototype = {
     }
 };
 
+// ── AHRSCtrl ──────────────────────────────────────────────────────────────────
+
+angular.module('appControllers').controller('AHRSCtrl', AHRSCtrl);
+AHRSCtrl.$inject = ['$rootScope', '$scope', '$state', '$http', '$interval'];
+
+const MSG_GROUND_TEST = ["GROUND TEST MODE - GPS REQUIRED", "DO NOT USE IN FLIGHT WITHOUT GPS"],
+    MSG_LEVELING    = ["\n", "CALIBRATING", "FLY STRAIGHT AND DO NOT MOVE SENSOR"],
+    MSG_PSEUDO_AHRS = ["WARNING - USING GPS PSEUDO AHRS", "CONNECT AN AHRS BOARD TO USE TRUE AHRS"],
+    MSG_NO_AHRS     = ["NO AHRS AVAILABLE", "MUST HAVE IMU AND/OR GPS FOR AHRS"];
+
+function AHRSCtrl($rootScope, $scope, $state, $http, $interval) {
+    $scope.$parent.helppage = 'plates/ahrs-help.html';
+    $scope.isHidden = false;
+    $scope.noSleep = new NoSleep();
+
+    function connect($scope) {
+        if (($scope === undefined) || ($scope === null))
+            return;
+
+        if (($scope.socket === undefined) || ($scope.socket === null)) {
+            socket = new WebSocket(URL_GPS_WS);
+            $scope.socket = socket;
+        }
+
+        $scope.ConnectState = "Disconnected";
+
+        socket.onopen = function (msg) {
+            $scope.ConnectState = "Connected";
+        };
+
+        socket.onclose = function (msg) {
+            $scope.ConnectState = "Disconnected";
+            $scope.$apply();
+            delete $scope.socket;
+            setTimeout(function() { connect($scope); }, 1000);
+        };
+
+        socket.onerror = function (msg) {
+            $scope.ConnectState = "Error";
+            resetSituation();
+            $scope.$apply();
+        };
+
+        socket.onmessage = function (msg) {
+            if ($scope === undefined || $scope === null) {
+                socket.close();
+                return;
+            }
+            loadSituation(msg.data);
+            $scope.$apply();
+        };
+    }
+
+    var statusGPS = document.getElementById("status-gps"),
+        statusIMU = document.getElementById("status-imu"),
+        statusBMP = document.getElementById("status-bmp"),
+        statusCal = document.getElementById("status-calibrating");
+
+    function loadSituation(data) {
+        var situation = angular.fromJson(data);
+
+        $scope.gps_horizontal_accuracy = situation.GPSHorizontalAccuracy.toFixed(1);
+
+        var msg_ix = ahrs.messages.indexOf(MSG_GROUND_TEST[0]);
+        if (msg_ix < 0 && $scope.IMU_Sensor_Enabled && $scope.gps_horizontal_accuracy >= 30) {
+            ahrs.messages = ahrs.messages.concat(MSG_GROUND_TEST);
+        } else if (msg_ix >= 0 && $scope.gps_horizontal_accuracy < 30) {
+            ahrs.messages.splice(msg_ix, MSG_GROUND_TEST.length);
+        }
+
+        msg_ix = ahrs.messages.indexOf(MSG_NO_AHRS[0]);
+        if (msg_ix < 0 && !$scope.IMU_Sensor_Enabled && $scope.gps_horizontal_accuracy >= 30) {
+            ahrs.messages = ahrs.messages.concat(MSG_NO_AHRS);
+            ahrs.turn_off();
+        } else if (msg_ix >= 0 && ($scope.IMU_Sensor_Enabled || $scope.gps_horizontal_accuracy < 30)) {
+            ahrs.messages.splice(msg_ix, MSG_NO_AHRS.length);
+            ahrs.turn_on();
+        }
+
+        $scope.press_time = Date.parse(situation.BaroLastMeasurementTime);
+        $scope.gps_time   = Date.parse(situation.GPSLastGPSTimeStratuxTime);
+        if ($scope.gps_time - $scope.press_time < 1000) {
+            $scope.ahrs_alt = Math.round(situation.BaroPressureAltitude.toFixed(0));
+        } else {
+            $scope.ahrs_alt = "---";
+        }
+
+        $scope.ahrs_time = Date.parse(situation.AHRSLastAttitudeTime);
+        if ($scope.gps_time - $scope.ahrs_time < 1000) {
+            $scope.ahrs_heading = Math.round(situation.AHRSGyroHeading.toFixed(0));
+            if ($scope.ahrs_heading > 360) {
+                $scope.ahrs_heading = "---";
+            } else if ($scope.ahrs_heading < 0.5) {
+                $scope.ahrs_heading = 360;
+            }
+            $scope.ahrs_pitch = situation.AHRSPitch.toFixed(1);
+            if ($scope.ahrs_pitch > 360) {
+                $scope.ahrs_pitch = "--";
+            }
+            $scope.ahrs_roll = situation.AHRSRoll.toFixed(1);
+            if ($scope.ahrs_roll > 360) {
+                $scope.ahrs_roll = "--";
+            }
+            $scope.ahrs_slip_skid = situation.AHRSSlipSkid.toFixed(1);
+            if ($scope.ahrs_slip_skid > 360) {
+                $scope.ahrs_slip_skid = "--";
+            }
+            ahrs.update(situation.AHRSPitch, situation.AHRSRoll, situation.AHRSGyroHeading, situation.AHRSSlipSkid);
+
+            $scope.ahrs_heading_mag = situation.AHRSMagHeading.toFixed(0);
+            if ($scope.ahrs_heading_mag > 360) {
+                $scope.ahrs_heading_mag = "---";
+            }
+            $scope.ahrs_gload = situation.AHRSGLoad.toFixed(2);
+            if ($scope.ahrs_gload > 360) {
+                $scope.ahrs_gload = "--";
+            } else if (gMeter !== undefined) {
+                gMeter.update(situation.AHRSGLoad, situation.AHRSGLoadMin, situation.AHRSGLoadMax);
+            }
+
+            if (situation.AHRSTurnRate > 360) {
+                $scope.ahrs_turn_rate = "--";
+            } else if (situation.AHRSTurnRate > 0.6031) {
+                $scope.ahrs_turn_rate = (6 / situation.AHRSTurnRate).toFixed(1);
+            } else {
+                $scope.ahrs_turn_rate = '∞';
+            }
+        } else {
+            $scope.ahrs_heading     = "---";
+            $scope.ahrs_pitch       = "---";
+            $scope.ahrs_roll        = "--";
+            $scope.ahrs_slip_skid   = "--";
+            $scope.ahrs_heading_mag = "---";
+            $scope.ahrs_gload       = "--";
+            $scope.ahrs_turn_rate   = "--";
+        }
+
+        if (situation.AHRSStatus & 0x01) {
+            statusGPS.classList.remove("off");
+            statusGPS.classList.add("on");
+        } else {
+            statusGPS.classList.add("off");
+            statusGPS.classList.remove("on");
+        }
+        if (situation.AHRSStatus & 0x02) {
+            statusIMU.classList.remove("off");
+            statusIMU.classList.add("on");
+        } else {
+            statusIMU.classList.add("off");
+            statusIMU.classList.remove("on");
+        }
+        if (situation.AHRSStatus & 0x04) {
+            statusBMP.classList.remove("off");
+            statusBMP.classList.remove("on");
+            statusBMP.classList.remove("warn");
+            if (situation.BaroSourceType == 4)
+                statusBMP.classList.add("warn");
+            else
+                statusBMP.classList.add("on");
+        } else {
+            statusBMP.classList.remove("warn");
+            statusBMP.classList.remove("on");
+            statusBMP.classList.add("off");
+        }
+        if (situation.AHRSStatus & 0x08) {
+            statusCal.classList.add("blink");
+            statusCal.classList.remove("on");
+            statusCal.innerText = "Caging";
+            $scope.IsCaging = true;
+        } else {
+            statusCal.classList.remove("blink");
+            statusCal.classList.add("on");
+            statusCal.innerText = "Ready";
+            $scope.IsCaging = false;
+        }
+
+        msg_ix = ahrs.messages.indexOf(MSG_LEVELING[0]);
+        if (msg_ix < 0 && $scope.IsCaging) {
+            ahrs.messages = ahrs.messages.concat(MSG_LEVELING);
+            ahrs.turn_off();
+        } else if (msg_ix >= 0 && !$scope.IsCaging) {
+            ahrs.messages.splice(msg_ix, MSG_LEVELING.length);
+            ahrs.turn_on();
+        }
+
+        $scope.IsPseudoAHRS = (!$scope.IMU_Sensor_Enabled && $scope.gps_horizontal_accuracy < 30);
+        msg_ix = ahrs.messages.indexOf(MSG_PSEUDO_AHRS[0]);
+        if (msg_ix < 0 && $scope.IsPseudoAHRS) {
+            ahrs.messages = ahrs.messages.concat(MSG_PSEUDO_AHRS);
+        } else if (msg_ix >= 0 && !$scope.IsPseudoAHRS) {
+            ahrs.messages.splice(msg_ix, MSG_PSEUDO_AHRS.length);
+        }
+    }
+
+    function resetSituation() {
+        $scope.ahrs_heading     = "---";
+        $scope.ahrs_pitch       = "--";
+        $scope.ahrs_roll        = "--";
+        $scope.ahrs_slip_skid   = "--";
+        $scope.ahrs_heading_mag = "---";
+        $scope.ahrs_turn_rate   = "--";
+        $scope.ahrs_gload       = "--";
+        statusGPS.classList.add("off");
+        statusGPS.classList.remove("on");
+        statusIMU.classList.add("off");
+        statusIMU.classList.remove("on");
+        statusBMP.classList.add("off");
+        statusBMP.classList.remove("on");
+        statusBMP.classList.remove("warn");
+        statusCal.classList.add("off");
+        statusCal.classList.remove("on");
+        statusCal.innerText = "Error";
+    }
+
+    $state.get('ahrs').onEnter = function () {};
+
+    $state.get('ahrs').onExit = function () {
+        $scope.noSleep.disable();
+        delete $scope.noSleep;
+
+        if (($scope.socket !== undefined) && ($scope.socket !== null)) {
+            $scope.socket.close();
+            $scope.socket = null;
+        }
+    };
+
+    var ahrs = new AHRSRenderer("ahrs_display");
+    ahrs.turn_on();
+
+    $scope.hideClick = function () {
+        $scope.isHidden = !$scope.isHidden;
+        var disp = "block";
+        if ($scope.isHidden) {
+            disp = "none";
+            $scope.noSleep.enable();
+        } else {
+            $scope.noSleep.disable();
+        }
+        var hiders = document.querySelectorAll(".hider");
+        for (var i = 0; i < hiders.length; i++) {
+            hiders[i].style.display = disp;
+        }
+    };
+
+    $scope.AHRSCage = function () {
+        if (!$scope.IsCaging) {
+            $http.post(URL_AHRS_CAGE).then(function (response) {
+            }, function (response) {
+                ahrs.messages = ahrs.messages.concat(response.data);
+                window.setTimeout(function () {
+                    ahrs.messages.splice(ahrs.messages.indexOf(response.data), 1);
+                }, 1000);
+            });
+        }
+    };
+
+    $scope.AHRSCalibrate = function () {
+        if (!$scope.IsCaging) {
+            $http.post(URL_AHRS_CAL).then(function (response) {
+            }, function (response) {
+                ahrs.messages = ahrs.messages.concat(response.data);
+                window.setTimeout(function () {
+                    ahrs.messages.splice(ahrs.messages.indexOf(response.data), 1);
+                }, 1000);
+            });
+        }
+    };
+
+    $scope.GMeterReset = function () {
+        $http.post(URL_GMETER_RESET).then(function () {}, function () {});
+    };
+
+    function getAHRSSettings() {
+        $http.get(URL_SETTINGS_GET).then(function (response) {
+            var settings = angular.fromJson(response.data);
+            $scope.IMU_Sensor_Enabled = settings.IMU_Sensor_Enabled;
+            if (settings.GLimits === "" || settings.GLimits === undefined) {
+                settings.GLimits = "-1.76 4.4";
+            }
+            var glims = settings.GLimits.split(" ");
+            $scope.gLimNegative = parseFloat(glims[0]);
+            $scope.gLimPositive = parseFloat(glims[1]);
+            gMeter = new GMeterRenderer("gMeter_display", $scope.gLimNegative, $scope.gLimPositive, $scope.GMeterReset);
+        }, function (response) {});
+    }
+
+    var gMeter;
+    getAHRSSettings();
+    connect($scope);
+}
+
+// ── GMeterRenderer ────────────────────────────────────────────────────────────
+
 function GMeterRenderer(locationId, nlim, plim, resetCallback) {
     if (nlim > plim) {
         this.nlim = plim;

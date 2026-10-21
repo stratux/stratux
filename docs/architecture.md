@@ -34,7 +34,7 @@ different ways:
 2. **1090ES, OGN, AIS → external subprocesses.** `main/sdr.go` spawns `dump1090` (1090ES),
    `ogn-rx-eu` (868 MHz), and `rtl_ais` (AIS) with `exec.Command`, monitors them, and
    **auto-restarts on crash**.
-3. **GPS / baro / IMU → direct hardware.** `main/gps.go` (serial GPS with chip autodetect),
+3. **GPS / baro / IMU → direct hardware.** `main/gnss.go` (serial GPS with chip autodetect),
    `main/sensors.go`, and the `sensors/` package (baro/IMU drivers).
 
 SDR dongles are assigned to bands by EEPROM serial prefix (`stratux:1090`, `stratux:978`, …);

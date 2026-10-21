@@ -33,7 +33,7 @@ several of these fields configure.
 | `IMU_Sensor_Enabled` | bool | IMU / AHRS sensor (ICM-20948, MPU-9250 family). |
 
 See [hardware/sdr-and-bands.md](hardware/sdr-and-bands.md),
-[hardware/gps.md](hardware/gps.md), [hardware/sensors.md](hardware/sensors.md), and
+[hardware/gnss.md](hardware/gnss.md), [hardware/sensors.md](hardware/sensors.md), and
 [hardware/ogn-ais-receivers.md](hardware/ogn-ais-receivers.md) for the hardware each enables.
 
 ## Outputs / network
@@ -70,7 +70,7 @@ See [hardware/sdr-and-bands.md](hardware/sdr-and-bands.md),
 | `GpsManualChip` | string | *Advanced.* Chip: `ublox6`, `ublox7`, `ublox8`, `ublox9`, `ublox10`, or `ublox` (generic). Other/empty → unconfigured. |
 | `GpsManualTargetBaud` | int | *Advanced.* Target baud after reconfig. Default `115200`. |
 
-See [hardware/gps.md](hardware/gps.md) for autodetection and chip support.
+See [hardware/gnss.md](hardware/gnss.md) for autodetection and chip support.
 
 ## Sensors / AHRS
 

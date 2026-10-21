@@ -1,6 +1,6 @@
 # GPS / GNSS Receivers
 
-GPS handling is in `main/gps.go`. Stratux can autodetect a receiver via udev symlinks or use
+GPS handling is in `main/gnss.go`. Stratux can autodetect a receiver via udev symlinks or use
 a manually configured serial device. Most receivers are **u-blox**-based, but a SiRF receiver,
 a Raspberry Pi UART GPS, network GPS, and serial trackers are also supported.
 
