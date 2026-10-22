@@ -2,6 +2,28 @@
 	padding: 8px 4px 4px 4px;
     width: 100%;
     height: calc(100vh - 160px);
-    
+
+}
+
+/* Pseudo-fullscreen: expand the map container to fill the viewport. Works on
+   mobile browsers including iOS Safari, where the native Fullscreen API is
+   unavailable. #map_display keeps its inline width/height:100% and fills this
+   container, so no overrides are needed on the map element itself. */
+.panel-body-fullsize.map-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1100;                  /* cover the absolute-positioned navbar (z-index 1000) */
+    padding: 0;
+    width: 100%;
+    height: 100vh;                  /* fallback for older browsers */
+    height: -webkit-fill-available; /* older iOS Safari toolbars */
+    height: 100dvh;                 /* iOS 15.4+ and other modern browsers */
+}
+
+/* Place the custom fullscreen toggle where the native control used to sit. */
+.map-fullscreen-toggle {
+    top: .5em;
+    right: .5em;
 }
 
