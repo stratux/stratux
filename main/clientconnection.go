@@ -39,6 +39,7 @@ type networkConnection struct {
 	Ip              string
 	Port            uint32
 	Capability      uint8
+	Broadcast       bool          `json:"-"` // true when this socket targets the subnet broadcast address
 	Queue           *MessageQueue `json:"-"` // don't store in settings
 
 	LastPingResponse time.Time // last time the client responded
@@ -75,6 +76,10 @@ func (conn *networkConnection) IsThrottled() bool {
 	 Check if a client identifier 'ip:port' is in either a sleep or active state.
 */
 func (conn *networkConnection) IsSleeping() bool {
+	// Broadcast sockets have no per-client ICMP signal; always treat as awake.
+	if conn.Broadcast {
+		return false
+	}
 	// Unable to listen to ICMP without root - send to everything. Just for debugging.
 	if isX86DebugMode() || globalSettings.NoSleep == true {
 		return false
@@ -114,6 +119,9 @@ func (conn *networkConnection) Close() {
 }
 
 func (conn *networkConnection) GetConnectionKey() string {
+	if conn.Broadcast {
+		return "broadcast:" + conn.Ip + ":" + strconv.Itoa(int(conn.Port))
+	}
 	return conn.Ip + ":" + strconv.Itoa(int(conn.Port))
 }
 

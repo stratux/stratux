@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/tarm/serial"
@@ -48,6 +49,83 @@ const (
 )
 
 var dhcpLeaseDirectoryLastTest time.Time // Last time fsWriteTest() was run on the DHCP lease directory.
+
+// computeBroadcastAddr returns the directed broadcast address (a.b.c.255) for
+// the AP subnet, derived from globalSettings.WiFiIPAddress. Falls back to
+// 192.168.10.255 if the configured IP cannot be parsed. The /24 mask is
+// always enforced by the AP config (debian/interfaces.template).
+func computeBroadcastAddr() string {
+	ip := net.ParseIP(globalSettings.WiFiIPAddress).To4()
+	if ip == nil {
+		return "192.168.10.255"
+	}
+	return fmt.Sprintf("%d.%d.%d.255", ip[0], ip[1], ip[2])
+}
+
+// dialBroadcastUDP opens a UDP socket pointed at addr with SO_BROADCAST set,
+// which is required by the Linux kernel before writes to a broadcast address
+// will succeed.
+func dialBroadcastUDP(addr string) (*net.UDPConn, error) {
+	d := net.Dialer{
+		Control: func(network, address string, c syscall.RawConn) error {
+			var sockErr error
+			err := c.Control(func(fd uintptr) {
+				sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
+			})
+			if err != nil {
+				return err
+			}
+			return sockErr
+		},
+	}
+	conn, err := d.Dial("udp4", addr)
+	if err != nil {
+		return nil, err
+	}
+	return conn.(*net.UDPConn), nil
+}
+
+// rebuildNetworkOutputs tears down every existing networkConnection and
+// rebuilds outputs in the currently-configured mode. In broadcast mode it
+// creates one socket per NetworkOutputs entry pointed at the subnet broadcast
+// address. In unicast mode it triggers an immediate DHCP-driven refresh.
+// Safe to call at startup and on settings change.
+func rebuildNetworkOutputs() {
+	netMutex.Lock()
+	for key, conn := range clientConnections {
+		if nc, ok := conn.(*networkConnection); ok {
+			nc.Queue.Close()
+			nc.Conn.Close()
+			delete(clientConnections, key)
+		}
+	}
+	if !globalSettings.NetworkOutputBroadcast {
+		netMutex.Unlock()
+		refreshConnectedClients()
+		return
+	}
+	bcast := computeBroadcastAddr()
+	for _, no := range globalSettings.NetworkOutputs {
+		addr := bcast + ":" + strconv.Itoa(int(no.Port))
+		outConn, err := dialBroadcastUDP(addr)
+		if err != nil {
+			log.Printf("dialBroadcastUDP(%s): %s\n", addr, err.Error())
+			continue
+		}
+		key := "broadcast:" + addr
+		clientConnections[key] = &networkConnection{
+			Conn:       outConn,
+			Ip:         bcast,
+			Port:       no.Port,
+			Capability: no.Capability,
+			Broadcast:  true,
+			Queue:      NewMessageQueue(1024),
+		}
+		go connectionWriter(clientConnections[key])
+		log.Printf("broadcast output created: %s\n", addr)
+	}
+	netMutex.Unlock()
+}
 
 // Read the "dnsmasq.leases" file and parse out IP/hostname.
 func getDHCPLeases() (map[string]string, error) {
@@ -327,6 +405,12 @@ func refreshConnectedClients() {
 	defer netMutex.Unlock()
 
 	dhcpLeases = t
+	// In broadcast mode the network outputs are owned by rebuildNetworkOutputs();
+	// don't create or remove per-client unicast connections here. Lease parsing
+	// above is still kept so the web UI's connected-devices panel works.
+	if globalSettings.NetworkOutputBroadcast {
+		return
+	}
 	// Client connected that wasn't before.
 	for ip, hostname := range dhcpLeases {
 		for _, networkOutput := range globalSettings.NetworkOutputs {
@@ -358,6 +442,9 @@ func refreshConnectedClients() {
 	// Client that was connected before that isn't.
 	for ipAndPort, netconn := range clientConnections {
 		if conn, ok := netconn.(*networkConnection); ok {
+			if conn.Broadcast {
+				continue // broadcast sockets are managed by rebuildNetworkOutputs()
+			}
 			if _, valid := validConnections[ipAndPort]; !valid {
 				log.Printf("removed connection %s.\n", ipAndPort)
 				conn.Queue.Close()
@@ -562,7 +649,10 @@ func icmpEchoSender(c *icmp.PacketConn) {
 		// Collect IPs.
 		ips := make(map[string]bool)
 		for k, conn := range clientConnections {
-			if _, ok := conn.(*networkConnection); ok {
+			if nc, ok := conn.(*networkConnection); ok {
+				if nc.Broadcast {
+					continue // ICMP echoes to a broadcast address are useless
+				}
 				ipAndPort := strings.Split(k, ":")
 				ips[ipAndPort[0]] = true
 			}
@@ -717,6 +807,9 @@ func initNetwork() {
 
 	netMutex = &sync.Mutex{}
 	refreshConnectedClients()
+	if globalSettings.NetworkOutputBroadcast {
+		rebuildNetworkOutputs() // honor persisted broadcast setting at boot
+	}
 	go monitorDHCPLeases() // Checks for new UDP connections
 	go sleepMonitor()
 	go networkStatsCounter()

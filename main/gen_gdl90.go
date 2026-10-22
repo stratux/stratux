@@ -1197,6 +1197,7 @@ type settings struct {
 	BMP_Sensor_Enabled   bool
 	IMU_Sensor_Enabled   bool
 	NetworkOutputs       []networkConnection
+	NetworkOutputBroadcast bool
 	SerialOutputs        map[string]serialConnection
 	BleOutputs           []bleConnection
 	DisplayTrafficSource bool
@@ -1362,6 +1363,7 @@ func defaultSettings() {
 	globalSettings.DeveloperMode = false
 	globalSettings.StaticIps = make([]string, 0)
 	globalSettings.NoSleep = false
+	globalSettings.NetworkOutputBroadcast = false
 	globalSettings.EstimateBearinglessDist = false
 
 	globalSettings.WiFiChannel = 1
