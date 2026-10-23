@@ -23,11 +23,8 @@ import (
 	"os/exec"
 	"time"
 
-	// Using forked version of tarm/serial to force Linux
-	// instead of posix code, allowing for higher baud rates
-
+	"github.com/stratux/serial"
 	"github.com/stratux/stratux/common"
-	"github.com/uavionix/serial"
 )
 
 // Ping device data

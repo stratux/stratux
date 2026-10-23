@@ -324,8 +324,8 @@ github.com/stianeikeland/go-rpio/v4 v4.5.1-0.20210920090620-2ab4c0432c52 h1:HFIc
 github.com/stianeikeland/go-rpio/v4 v4.5.1-0.20210920090620-2ab4c0432c52/go.mod h1:A3GvHxC1Om5zaId+HqB3HKqx4K/AqeckxB7qRjxMK7o=
 github.com/stratux/goflying v0.0.0-20250123172850-dd059ec48194 h1:krb36V5gM+X8smhT31strjBt3UF03dxV9vKxtak0IQ8=
 github.com/stratux/goflying v0.0.0-20250123172850-dd059ec48194/go.mod h1:mUBHzShWc6gsOpF8+312Sd+UJgYBKeKNWgfbJULD1z8=
-github.com/stratux/serial v0.0.0-20250124170838-6b3ab1cff00c h1:HLUIHE1QTC1NgGi+2TmWcba9PmQvEY0i6QZQrhWjt0s=
-github.com/stratux/serial v0.0.0-20250124170838-6b3ab1cff00c/go.mod h1:i4vrHzYiaNeMMsal0bm/fq/MzXwQIB4zxBi9kJtntKg=
+github.com/stratux/serial v0.0.0-20261022003628-e8643089a191 h1:N4QDXtdIYWxI4Zx7wLqg57eFdOls1DAjBiXk2ffjwlE=
+github.com/stratux/serial v0.0.0-20261022003628-e8643089a191/go.mod h1:i4vrHzYiaNeMMsal0bm/fq/MzXwQIB4zxBi9kJtntKg=
 github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94/go.mod h1:AZpEONHx3DKn8O/DFsRAY58/XVQiIPMTMB1SddzLXVw=
 github.com/streadway/amqp v0.0.0-20190827072141-edfb9018d271/go.mod h1:AZpEONHx3DKn8O/DFsRAY58/XVQiIPMTMB1SddzLXVw=
 github.com/streadway/handy v0.0.0-20190108123426-d5acb3125c2a/go.mod h1:qNTQ5P5JnDBl6z3cMAg/SywNDC5ABu5ApDIw6lUbRmI=
@@ -339,15 +339,11 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.5 h1:s5PTfem8p8EbKQOctVV53k6jCJt3UX4IEJzwh+C324Q=
 github.com/takama/daemon v1.0.0 h1:XS3VLnFKmqw2Z7fQ/dHRarrVjdir9G3z7BEP8osjizQ=
 github.com/takama/daemon v1.0.0/go.mod h1:gKlhcjbqtBODg5v9H1nj5dU1a2j2GemtuWSNLD5rxOE=
-github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07 h1:UyzmZLoiDWMRywV4DUYb9Fbt8uiOSooupjTq10vpvnU=
-github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07/go.mod h1:kDXzergiv9cbyO7IOYJZWg1U88JhDg3PB6klq9Hg2pA=
 github.com/tinygo-org/cbgo v0.0.4 h1:3D76CRYbH03Rudi8sEgs/YO0x3JIMdyq8jlQtk/44fU=
 github.com/tinygo-org/cbgo v0.0.4/go.mod h1:7+HgWIHd4nbAz0ESjGlJ1/v9LDU1Ox8MGzP9mah/fLk=
 github.com/tinygo-org/pio v0.0.0-20231216154340-cd888eb58899 h1:/DyaXDEWMqoVUVEJVJIlNk1bXTbFs8s3Q4GdPInSKTQ=
 github.com/tinygo-org/pio v0.0.0-20231216154340-cd888eb58899/go.mod h1:LU7Dw00NJ+N86QkeTGjMLNkYcEYMor6wTDpTCu0EaH8=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
-github.com/uavionix/serial v0.0.0-19700101022104-87f23b1d3198 h1:N/YLVank3IYMUlsGPZidTSd9O13TpHQUHt/FpgtW5w8=
-github.com/uavionix/serial v0.0.0-19700101022104-87f23b1d3198/go.mod h1:YMcwbTnFUL1jd/DFEvJrCEgHDTqYm0jfVuKKl6O/j5o=
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/westphae/quaternion v0.0.0-20190804192539-eb19a71cb818 h1:mqjZgo7sYcdowZ+AKh/pTunpj6dGNA3PzVKo9+WJm3E=

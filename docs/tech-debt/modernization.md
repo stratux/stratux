@@ -66,19 +66,20 @@ give call-graph-aware confirmation of which advisories are actually reachable.
 | `matttproud/golang_protobuf_extensions` | v1.0.1 | archived | 🟡 | Only present via old `prometheus/common`. **Dropped automatically by Prometheus ≥ ~v1.16.** |
 
 Deps with no newer upstream (custom/forked/abandoned — leave as-is): `jpoirier/gortlsdr`,
-`kellydunn/golang-geo`, `takama/daemon`, `tarm/serial`, `stratux/goflying`, `stratux/serial`,
-`uavionix/serial`, `felixge/pidctrl`, `gansidui/geohash`, `kidoman/embd`.
+`kellydunn/golang-geo`, `takama/daemon`, `stratux/goflying`, `stratux/serial`,
+`felixge/pidctrl`, `gansidui/geohash`, `kidoman/embd`.
 
 ### Three serial libraries (consolidation)
 
-`main/` imports **three** serial packages directly:
+✅ Consolidated onto `stratux/serial`; `tarm/serial` and `uavionix/serial` are no longer used.
 
-- `tarm/serial` — `gps.go`, `clientconnection.go`, `tracker.go`, `network.go`, `pong.go`, `ping.go` (de-facto primary)
-- `stratux/serial` — `lowpower_uat.go`, `pong.go` (stratux's own maintained fork)
-- `uavionix/serial` — `ping.go` only (an untagged `v0.0.0-19700101…` epoch snapshot)
-
-`pong.go` mixes tarm+stratux; `ping.go` mixes tarm+uavionix. Consolidating onto one
-(ideally `stratux/serial`) would remove two modules. Requires source edits + testing. 🟡
+- `uavionix/serial` was identical to `stratux/serial` minus `ClearRTS()` (used by Pong).
+- Both forks branched from a pre-2018 `tarm/serial` to keep cgo POSIX code off Linux, where it capped
+  baud rates (Pong runs at 3 Mbaud). Upstream `tarm/serial` fixed this later, so that reason is gone.
+- Behavioral gap vs. `tarm/serial`: the fork returned `(nil, nil)` for an unrecognized baud rate
+  (tarm returns an error), and `Flush()`/`ClearRTS()` returned a non-nil `errno 0` on success.
+  User-configurable bauds (serial output, `GpsManualTargetBaud`) can hit the first case. Fixed in
+  `stratux/serial` e864308 (unknown baud now returns an error; both calls return `nil` on success).
 
 ### Toolchain
 

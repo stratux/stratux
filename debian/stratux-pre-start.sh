@@ -95,7 +95,9 @@ if [ -e ${SCRIPT_UPDATE_LOCATION} ]; then
 		# triggers a service restart that kills this ExecStartPre process.
 		UPDATE_TEMP_SCRIPT="/tmp/$(basename "${UPDATE_SCRIPT_FILE}")"
 		mv "${UPDATE_SCRIPT_FILE}" "${UPDATE_TEMP_SCRIPT}"
-		/sbin/overlayctl enable
+		# Not 'overlayctl enable': with the overlay off it mistakes / for its lower layer
+		# and remounts it read-only before the install runs.
+		rm -f /overlay/disable
 		if bash "${UPDATE_TEMP_SCRIPT}"; then
 			wLog "Update script completed successfully."
 		else
@@ -143,7 +145,9 @@ if [ -e ${PACKAGE_UPDATE_LOCATION} ]; then
 		# first the system is in a consistent state even if dpkg kills this script.
 		UPDATE_TEMP_FILE="/tmp/$(basename "${UPDATE_PACKAGE_FILE}")"
 		mv "${UPDATE_PACKAGE_FILE}" "${UPDATE_TEMP_FILE}"
-		/sbin/overlayctl enable
+		# Not 'overlayctl enable': with the overlay off it mistakes / for its lower layer
+		# and remounts it read-only before the install runs.
+		rm -f /overlay/disable
 		if dpkg -i --force-depends "${UPDATE_TEMP_FILE}"; then
 			wLog "Package installed successfully."
 		else

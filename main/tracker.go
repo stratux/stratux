@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tarm/serial"
+	"github.com/stratux/serial"
 )
 
 /*
