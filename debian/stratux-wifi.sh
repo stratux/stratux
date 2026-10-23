@@ -79,6 +79,7 @@ function wifi-tune {
 	done
 	local txpower=$(conf-get .WiFiTxPower)
 	if [ -n "$txpower" ] && [ "$txpower" -gt 0 ] 2>/dev/null; then
+		[ "$txpower" -gt 31 ] && txpower=31 # same bound as the Go side (networksettings.go)
 		local mbm=$((txpower * 100))
 		if iw dev $dev set txpower fixed $mbm || iw phy phy0 set txpower fixed $mbm; then
 			wLog "TX power on $dev set to ${txpower} dBm"

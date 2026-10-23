@@ -36,6 +36,8 @@ if mountpoint -q "${BOOT_DIR}"; then
 	mount -o remount,rw "${BOOT_DIR}" || wLog "WARNING: could not remount boot partition rw"
 	trap boot-lock EXIT
 fi
+# Leftovers of an atomic write (writeFileAtomicFrom in stratuxrun) that was interrupted by a power cut.
+rm -f "${BOOT_DIR}/stratux.conf.tmp" "${TEMP_DIRECTORY}"/*.tmp
 
 ######################
 # script based update

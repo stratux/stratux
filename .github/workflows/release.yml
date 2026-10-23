@@ -9,12 +9,11 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build_image:
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write # softprops/action-gh-release creates the draft release
 
     steps:
       - uses: actions/checkout@v4

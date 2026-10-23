@@ -48,7 +48,6 @@ function CockpitCtrl($scope, $http, $interval) {
 		s.uatMsgs = status.UAT_messages_last_minute;
 		s.ognMsgs = status.OGN_messages_last_minute;
 		s.aisMsgs = status.AIS_messages_last_minute;
-		s.towers = status.UAT_messages_last_minute > 0; // UAT uplinks only come from ground stations
 
 		s.cpuTemp = status.CPUTemp > 0 ? status.CPUTemp.toFixed(0) + '°C' : '--';
 		s.cpuLevel = stxCpuTempLevel(status.CPUTemp);

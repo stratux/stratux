@@ -1,40 +1,7 @@
-[![CI](https://github.com/coder747-8i/stratux-readonly/actions/workflows/ci.yml/badge.svg)](https://github.com/coder747-8i/stratux-readonly/actions/workflows/ci.yml)
+[![CI](https://github.com/stratux/stratux/actions/workflows/ci.yml/badge.svg)](https://github.com/stratux/stratux/actions/workflows/ci.yml)
 [![](https://dcbadge.limes.pink/api/server/D9NQ6xe4nF)](https://discord.gg/D9NQ6xe4nF)
 
-# Stratux &#9992; - Read-Only Edition
-
-This is a fork of [stratux/stratux](https://github.com/stratux/stratux) built to be safe to power off by just pulling
-the plug, plus some Wi-Fi and cockpit-usability tweaks. Download the SD card image from
-[Releases](https://github.com/coder747-8i/stratux-readonly/releases).
-
-### What's different in this edition
-
-**SD card protection (read-only)**
-- The root filesystem runs from a RAM overlay. This is inherited from upstream and is on unless "Persistent logging" is enabled.
-- **New:** the FAT boot partition (`/boot/firmware`, which holds `stratux.conf`) is remounted **read-only** every time
-  Stratux starts. It is made writable for under a second only while settings are saved or an update is uploaded.
-  The file is written atomically (temp file, fsync, rename), so a power cut leaves either the old settings or the new ones.
-- The Status and Cockpit pages show the protection state ("SD Card: Protected (read-only)").
-- Pulling power is safe except while an update is being installed, or if Persistent logging is on.
-- Shell aliases `bootrw` / `bootro`. Create `/boot/firmware/.stratux-boot-rw` to opt out.
-
-**Wi-Fi tuning (fewer EFB dropouts)**
-- Wi-Fi power save is always turned off. It is a common cause of iPads losing the Stratux.
-- The regulatory domain is applied from the WiFi Country setting before the AP starts.
-- New **WiFi TX Power** setting (driver default, or 20/17/14/10/7 dBm). A cockpit needs very little range.
-- Settings page hints: use channel 1, 6 or 11; set your country; use AccessPoint (not AP+Client) mode in flight.
-
-**Turn off what you don't use (less CPU load and heat)**
-- The receiver, sensor and output toggles (GPS, UAT, 1090, OGN, AIS, APRS, AHRS, Baro, Ping, Pong) are moved out of
-  Developer Mode into a normal **Hardware & Services** panel.
-- **New Bluetooth LE toggle.** Off blocks the BT radio, which shares the 2.4 GHz antenna with Wi-Fi.
-
-**Web UI**
-- **New Cockpit page:** large, high-contrast green/amber/red tiles for GPS fix, NACp and accuracy, satellites, EFB
-  clients, traffic, CPU temperature, SD protection and sensors. A red "NO DATA" banner appears if updates stop.
-- The Status page shows a colored NACp badge (8 or higher is good) and the SD card protection state.
-
----
+# Stratux &#9992;
 
 ```mermaid
 mindmap

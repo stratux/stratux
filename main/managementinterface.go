@@ -859,9 +859,6 @@ func handleUpdatePostRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var temp_filename string
-	var upload_filename string
-
 	var base_dir string
 
 	if common.IsRunningAsRoot() {
@@ -871,60 +868,12 @@ func handleUpdatePostRequest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("not running as root, using base_dir of %s", base_dir)
 	}
 
-	// /boot/firmware is read-only during normal operation (SD card protection), so the whole upload
-	// happens inside a rw window that is synced and closed again afterwards.
-	uploaded := false
-	err = withBootPartitionWritable(func() error {
-		// Ensure the upload directory exists. The SD card flow relies on the user
-		// creating this path manually; the web flow has no such step, so create it
-		// here to avoid a silent failure when os.OpenFile cannot create the file.
-		if err := os.MkdirAll(base_dir, 0755); err != nil {
-			return err
-		}
-
-		for {
-			part, err := reader.NextPart()
-			if err != nil {
-				return err
-			}
-			if part == nil {
-				return nil
-			}
-
-			if part.FormName() != "update_file" {
-				continue
-			}
-
-			temp_filename = fmt.Sprintf("%s/TMP_%s", base_dir, part.FileName())
-			upload_filename = fmt.Sprintf("%s/%s", base_dir, part.FileName())
-
-			fi, err := os.OpenFile(temp_filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(fi, part)
-			if err == nil {
-				err = fi.Sync()
-			}
-			fi.Close()
-			if err != nil {
-				os.Remove(temp_filename)
-				return err
-			}
-			break
-		}
-
-		if err := os.Rename(temp_filename, upload_filename); err != nil {
-			return err
-		}
-		uploaded = true
-		return nil
-	})
+	upload_filename, err := receiveUpdateFile(reader, base_dir)
 	if err != nil {
 		log.Printf("Update failed from %s (%s).\n", r.RemoteAddr, err.Error())
 		return
 	}
-	if !uploaded {
+	if upload_filename == "" {
 		return
 	}
 	log.Printf("%s uploaded %s for update.\n", r.RemoteAddr, upload_filename)

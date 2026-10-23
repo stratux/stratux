@@ -142,10 +142,14 @@ GXAirCom / SoftRF). See [hardware/ogn-ais-receivers.md](hardware/ogn-ais-receive
 
 The root filesystem runs on a RAM overlay (`init-overlay`, `overlayctl`) unless `PersistentLogging` is on.
 The FAT boot partition (`/boot/firmware`, which holds `stratux.conf` and staged updates) is remounted
-**read-only** by `stratux-pre-start.sh` every time the service starts. `stratuxrun` opens a short rw window
-(`withBootPartitionWritable` in `main/bootpartition.go`) only while it saves settings (atomic temp-file
-and rename) or receives an update upload, then syncs and closes it again. The current state is shown on the
-status and cockpit pages (`OverlayActive`, `BootReadOnly` in `/getStatus`).
+**read-only** by `stratux-pre-start.sh` every time the service starts. `stratuxrun` opens a rw window
+(`withBootPartitionWritable` in `main/bootpartition.go`) only while it writes settings or copies a received
+update onto the card, then syncs and closes it again. Uploads are first received into `/tmp`, so the window
+covers the local copy only, not the network transfer. Files are written to a temp file, fsynced and renamed
+over the old one, so an interrupted write never truncates `stratux.conf`. FAT has no journal, so a power cut
+during the rename itself can still need an `fsck`: the risk is much smaller, not zero. The current state is
+shown on the status and cockpit pages (`OverlayActive`, `BootReadOnly` in `/getStatus`). `OverlayActive` is
+true only when `/` is actually mounted as `overlay`.
 
 * Shell: `bootrw` / `bootro` aliases remount the boot partition by hand.
 * Opt out: create `/boot/firmware/.stratux-boot-rw` (e.g. from a PC) to leave it writable.
