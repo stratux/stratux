@@ -77,6 +77,18 @@ func setWifiChannel(channel int) {
 	}
 }
 
+// AP transmit power in dBm (0 = driver default). Applied by stratux-wifi.sh when the AP comes up.
+func setWifiTxPower(dbm int) {
+	if dbm < 0 || dbm > 31 {
+		log.Printf("Ignoring invalid WiFi TX power: %d dBm", dbm)
+		return
+	}
+	if dbm != globalSettings.WiFiTxPower {
+		globalSettings.WiFiTxPower = dbm
+		hasChanged = true
+	}
+}
+
 func setWifiSecurityEnabled(enabled bool) {
 	if globalSettings.WiFiSecurityEnabled != enabled {
 		globalSettings.WiFiSecurityEnabled = enabled;

@@ -263,7 +263,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
 	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'Pong_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
-		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'TraceLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
+		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'TraceLog', 'AHRSLog', 'PersistentLogging', 'BLE_Enabled', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
 
 	var settings = {};
 	for (var i = 0; i < toggles.length; i++) {
@@ -305,6 +305,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 		$scope.IMU_Sensor_Enabled = settings.IMU_Sensor_Enabled;
 		$scope.BMP_Sensor_Enabled = settings.BMP_Sensor_Enabled;
+		$scope.BLE_Enabled = settings.BLE_Enabled;
 		$scope.DisplayTrafficSource = settings.DisplayTrafficSource;
 		$scope.DEBUG = settings.DEBUG;
 		$scope.ReplayLog = settings.ReplayLog;
@@ -328,6 +329,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.WiFiPassphrase = settings.WiFiPassphrase;
 		$scope.WiFiSecurityEnabled = settings.WiFiSecurityEnabled;
 		$scope.WiFiChannel = settings.WiFiChannel;
+		$scope.WiFiTxPower = settings.WiFiTxPower || 0;
 		$scope.WiFiIPAddress = settings.WiFiIPAddress;
 
 		$scope.WiFiMode = settings.WiFiMode.toString();
@@ -337,6 +339,14 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.WiFiInternetPassThroughEnabled = settings.WiFiInternetPassThroughEnabled;
 
 		$scope.Channels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+		$scope.TxPowers = [
+			{ value: 0, label: 'Driver default' },
+			{ value: 20, label: '20 dBm (100 mW)' },
+			{ value: 17, label: '17 dBm (50 mW)' },
+			{ value: 14, label: '14 dBm (25 mW)' },
+			{ value: 10, label: '10 dBm (10 mW) - small cockpit' },
+			{ value: 7, label: '7 dBm (5 mW)' }
+		];
 
 		$scope.OGNAddrType = settings.OGNAddrType.toString();
 		$scope.OGNAddr = settings.OGNAddr;
@@ -688,6 +698,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 				"WiFiSecurityEnabled" : $scope.WiFiSecurityEnabled,
 				"WiFiPassphrase" : $scope.WiFiPassphrase,
 				"WiFiChannel" : parseInt($scope.WiFiChannel),
+				"WiFiTxPower" : parseInt($scope.WiFiTxPower) || 0,
 				"WiFiIPAddress" : $scope.WiFiIPAddress,
 				"WiFiMode" : parseInt($scope.WiFiMode),
 				"WiFiDirectPin": $scope.WiFiDirectPin,

@@ -52,6 +52,7 @@
 	<link rel="stylesheet" href="maui/css/mobile-angular-ui-desktop.min.css" />
 
 	<link rel="stylesheet" href="css/main.css" />
+	<link rel="stylesheet" href="css/cockpit.css" />
 	<link rel="stylesheet" href="css/ahrs.css" />
 	<link rel="stylesheet" href="css/radar.css" />
 	<link rel="stylesheet" href="css/ol.css" />
@@ -69,6 +70,7 @@
 	<script src="plates/js/logs.js"></script>
 	<script src="plates/js/settings.js"></script>
 	<script src="plates/js/status.js"></script>
+	<script src="plates/js/cockpit.js"></script>
 	<script src="plates/js/towers.js"></script>
 	<script src="plates/js/traffic.js"></script>
 	<script src="plates/js/weather.js"></script>
@@ -90,6 +92,7 @@
 				<div class="list-group" ui-turn-off='uiSidebarLeft'>
 					<!-- hrefs are redirected by the state engine in main.js -->
 					<a class="list-group-item" href="#/"><i class="fa fa-home"></i>            Status   <i class="fa fa-chevron-right pull-right"></i></a>
+					<a class="list-group-item" href="#/cockpit"><i class="fa fa-tachometer"></i>  Cockpit  <i class="fa fa-chevron-right pull-right"></i></a>
 					<div ng-show="UAT_Enabled || Ping_Enabled || Pong_Enabled">
 						<a class="list-group-item" href="#/weather"><i class="fa fa-cloud"></i>    Weather  <i class="fa fa-chevron-right pull-right"></i></a>
 					</div>

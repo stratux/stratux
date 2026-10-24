@@ -55,7 +55,11 @@ Notes:
   `-replay -uatlog <file>` (replay a UAT log), `-trace <file> -traceSpeed -traceFilter`
   (replay a recorded trace; filter contexts: `ais,nmea,aprs,ogn-rx,dump1090,godump978,lowpower_uat`),
   `-port <n>`, `-cpuprofile <file>`, `-write-network-config`.
-- **There are no Go unit tests** (`*_test.go`). The `test/` directory is a collection of
+- **Almost no Go unit tests.** The one exception is `main/bootpartition_test.go` (SD card
+  write protection), which tests `bootpartition.go` standalone, without the cgo deps. It needs
+  mount privileges, so run it in a user namespace (it skips otherwise):
+  `go test -c -o /tmp/bp.test main/bootpartition.go main/bootpartition_test.go && unshare -r -m --propagation private /tmp/bp.test -test.v`.
+  The `test/` directory is a collection of
   independent `package main` diagnostic tools (e.g. `icao2reg.go`, `uat_read.go`,
   `nexrad_annunciator.go`); `make -C test` just compiles each one. Sample input lives in
   `test-data/`.

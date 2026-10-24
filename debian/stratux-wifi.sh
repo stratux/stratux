@@ -54,6 +54,49 @@ function terminate {
 
 }
 
+STRATUX_CONF="/boot/firmware/stratux.conf"
+# Read a top-level value from stratux.conf ("" if unset). Images built before jq was added to the image
+# don't have it, and a .deb update doesn't pull it in, so fall back to python3 (always on Pi OS).
+function conf-get {
+	if command -v jq >/dev/null; then
+		jq -r "$1 // empty" "${STRATUX_CONF}" 2>/dev/null
+	else
+		python3 -c 'import json, sys
+v = json.load(open(sys.argv[1])).get(sys.argv[2].lstrip("."))
+print("" if v is None else v)' "${STRATUX_CONF}" "$1" 2>/dev/null
+	fi
+}
+
+# Set the regulatory domain before the AP starts. wpa_supplicant's country= alone is not always
+# applied by brcmfmac in AP mode, which can leave the radio on the restrictive world domain.
+function wifi-set-regdomain {
+	local country=$(conf-get .WiFiCountry)
+	if [ -n "$country" ]; then
+		wLog "Setting WiFi regulatory domain to $country"
+		iw reg set "$country" || wLog "iw reg set $country failed"
+	fi
+}
+
+# Most "EFB keeps dropping the Stratux" reports are WiFi, not Stratux. Power save on the Pi's
+# brcmfmac chip adds latency spikes and lets clients time out, so always turn it off. Optionally
+# pin the AP transmit power (WiFiTxPower in dBm, 0 = driver default).
+function wifi-tune {
+	local dev=$1
+	for d in wlan0 $dev; do
+		iw dev $d set power_save off 2>/dev/null && wLog "power_save off on $d"
+	done
+	local txpower=$(conf-get .WiFiTxPower)
+	if [ -n "$txpower" ] && [ "$txpower" -gt 0 ] 2>/dev/null; then
+		[ "$txpower" -gt 31 ] && txpower=31 # same bound as the Go side (networksettings.go)
+		local mbm=$((txpower * 100))
+		if iw dev $dev set txpower fixed $mbm || iw phy phy0 set txpower fixed $mbm; then
+			wLog "TX power on $dev set to ${txpower} dBm"
+		else
+			wLog "Setting TX power on $dev to ${txpower} dBm failed"
+		fi
+	fi
+}
+
 function prepare-start {
 	# Preliminaries. Kill off old services.
 	wLog "Killing wpa_supplicant AP services "
@@ -70,6 +113,7 @@ function ap-start {
 
 	/sbin/wpa_supplicant -P/run/wpa_supplicant_ap.pid -B -i $interface -c /etc/wpa_supplicant/wpa_supplicant_ap.conf
 	sleep 2
+	wifi-tune $interface
 
 	wLog "Restarting DHCP services"
 	dnsmasq -u dnsmasq --conf-dir=/etc/dnsmasq.d -i $interface
@@ -83,11 +127,13 @@ function wifi-direct-start {
 	wpa_cli -i $interface p2p_group_add persistent=0 freq=2
 	(while wpa_cli -i p2p-wlan0-0 wps_pin any $pin > /dev/null; do sleep 1; done) & disown
 	ifup p2p-wlan0-0
+	wifi-tune p2p-wlan0-0
 
 	dnsmasq -u dnsmasq --conf-dir=/etc/dnsmasq.d -i p2p-wlan0-0
 }
 
 prepare-start
+wifi-set-regdomain
 if [ "$mode" == "1" ]; then
 	wifi-direct-start
 else

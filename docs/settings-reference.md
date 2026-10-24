@@ -42,6 +42,7 @@ See [hardware/sdr-and-bands.md](hardware/sdr-and-bands.md),
 |---|---|---|
 | `NetworkOutputs` | []networkConnection | UDP outputs. Default: `:4000` GDL90, `:2000` FLARM/NMEA, `:49002` X-Plane/FF-sim. Each entry carries a `Capability` bitmask (see [other-transports.md](integration/other-transports.md)). |
 | `SerialOutputs` | map[string]serialConnection | Serial output ports (e.g. EFIS over RS-232/USB). Serializes as `null` when empty. |
+| `BLE_Enabled` | bool | Bluetooth LE output on/off (default `true`). Off skips BLE setup and soft-blocks the BT radio via `rfkill`. On the Pi, BT shares the 2.4 GHz chip and antenna with Wi-Fi, so turning it off removes coexistence slicing. A change takes effect after restart. |
 | `BleOutputs` | []bleConnection | Bluetooth LE outputs (FLARM/NMEA over GATT — SoftRF-style `FFE0/FFE1` and Nordic UART profiles). |
 | `StaticIps` | []string | Additional client IPs to always send GDL90 to (beyond DHCP-lease clients). |
 | `DisplayTrafficSource` | bool | Annotate traffic with its source (UAT/ES/OGN) for debugging. |
@@ -53,6 +54,7 @@ See [hardware/sdr-and-bands.md](hardware/sdr-and-bands.md),
 | `WiFiCountry` | string | Regulatory country code (affects allowed channels/power). |
 | `WiFiSSID` | string | Access-point SSID. |
 | `WiFiChannel` | int | Access-point channel. |
+| `WiFiTxPower` | int | AP transmit power in dBm (0 = driver default, valid 1–31). `stratux-wifi.sh` applies it with `iw` when the AP comes up. That script also always turns Wi-Fi power save off and sets the regulatory domain from `WiFiCountry`. |
 | `WiFiSecurityEnabled` | bool | Enable WPA on the AP. |
 | `WiFiPassphrase` | string | AP passphrase (when security enabled). |
 | `WiFiMode` | int | Wi-Fi mode (access point / client / direct). |
@@ -135,3 +137,19 @@ GXAirCom / SoftRF). See [hardware/ogn-ais-receivers.md](hardware/ogn-ais-receive
 | `DarkMode` | bool | Web UI dark theme. |
 | `NoSleep` | bool | *Advanced.* Disable [sleep-mode detection](integration/gdl90.md#sleep-mode) for GDL90 clients. Useful for always-on panel-mount EFIS where the display never sleeps. |
 | `RegionSelected` | int | `0`=none, `1`=US, `2`=EU. Drives UAT band selection and some OGN behavior. Prefer `POST /setRegion`. |
+
+## SD card write protection
+
+The root filesystem runs on a RAM overlay (`init-overlay`, `overlayctl`) unless `PersistentLogging` is on.
+The FAT boot partition (`/boot/firmware`, which holds `stratux.conf` and staged updates) is remounted
+**read-only** by `stratux-pre-start.sh` every time the service starts. `stratuxrun` opens a rw window
+(`withBootPartitionWritable` in `main/bootpartition.go`) only while it writes settings or copies a received
+update onto the card, then syncs and closes it again. Uploads are first received into `/tmp`, so the window
+covers the local copy only, not the network transfer. Files are written to a temp file, fsynced and renamed
+over the old one, so an interrupted write never truncates `stratux.conf`. FAT has no journal, so a power cut
+during the rename itself can still need an `fsck`: the risk is much smaller, not zero. The current state is
+shown on the status and cockpit pages (`OverlayActive`, `BootReadOnly` in `/getStatus`). `OverlayActive` is
+true only when `/` is actually mounted as `overlay`.
+
+* Shell: `bootrw` / `bootro` aliases remount the boot partition by hand.
+* Opt out: create `/boot/firmware/.stratux-boot-rw` (e.g. from a PC) to leave it writable.

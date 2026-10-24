@@ -157,6 +157,10 @@
 					<span class="col-xs-6">{{GPS_solution}}{{GPS_position_accuracy}}</span>
 				</div>
 				<div class="row" ng-class="{'section_invisible': !visible_gps}">
+					<label class="col-xs-6">GPS NACp (to EFB):</label>
+					<span class="col-xs-6"><span class="stx-badge stx-{{NACpLevel}}">{{GPS_NACp}}</span> <small>8 or higher is good</small></span>
+				</div>
+				<div class="row" ng-class="{'section_invisible': !visible_gps}">
 					<label class="col-xs-6">GPS satellites:</label>
 					<span class="col-xs-6">{{GPS_satellites_locked}} in solution; {{GPS_satellites_seen}} seen; {{GPS_satellites_tracked}} tracked</span>
 				</div>
@@ -173,6 +177,12 @@
 					<div class="col-sm-4 label_adj">
 						<span class="col-xs-5"><strong>Free Storage:</strong></span>
 						<span class="col-xs-7">{{DiskSpace}} MiB</span>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col-sm-12 label_adj">
+						<span class="col-xs-5 col-sm-2"><strong>SD Card:</strong></span>
+						<span class="col-xs-7 col-sm-10"><span class="stx-badge stx-{{SDProtection.level}}">{{SDProtection.text}}</span></span>
 					</div>
 				</div>
 				<div class="separator"></div>

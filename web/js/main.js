@@ -33,6 +33,33 @@ var URL_GET_STYLE           = URL_HOST_PROTOCOL + URL_HOST_BASE + "/mapdata/styl
 var URL_DEVELOPER_WS        = "ws://" + URL_HOST_BASE + "/developer";
 var URL_GPS_WS              = "ws://" + URL_HOST_BASE + "/situation";
 var URL_STATUS_WS           = "ws://" + URL_HOST_BASE + "/status";
+
+// Shared indicator helpers (status + cockpit pages). Levels: 'good' | 'caution' | 'warning'.
+function stxGpsHasFix(solution) {
+	return !(solution === undefined || solution === "" || solution === "Disconnected" || solution === "No Fix" || solution === "Unknown");
+}
+
+// NACp as sent to EFBs in the GDL90 ownship report (AC 20-165A). 8+ (EPU < 0.05 NM) is the
+// accuracy ADS-B Out requires; most EFBs are happy with it. 0 means no usable position.
+function stxNacpLevel(nacp, solution) {
+	if (!stxGpsHasFix(solution) || !nacp) return 'warning';
+	if (nacp >= 8) return 'good';
+	return 'caution';
+}
+
+function stxSdProtection(status) {
+	if (status.OverlayActive === undefined) return { level: 'caution', text: 'Unknown' };
+	if (!status.OverlayActive) return { level: 'warning', text: 'OFF - use Shutdown before power off' };
+	if (!status.BootReadOnly) return { level: 'caution', text: 'Root protected, boot partition writable' };
+	return { level: 'good', text: 'Protected (read-only)' };
+}
+
+function stxCpuTempLevel(t) {
+	if (t === undefined || t <= 0) return 'caution';
+	if (t >= 80) return 'warning'; // Pi starts throttling around 80-85C
+	if (t >= 70) return 'caution';
+	return 'good';
+}
 var URL_TRAFFIC_WS          = "ws://" + URL_HOST_BASE + "/traffic";
 var URL_WEATHER_WS          = "ws://" + URL_HOST_BASE + "/weather";
 var URL_RADAR_WS            = "ws://" + URL_HOST_BASE + "/radar";
@@ -52,6 +79,12 @@ app.config(function ($stateProvider, $urlRouterProvider) {
 			url: '/',
 			templateUrl: 'plates/status.html',
 			controller: 'StatusCtrl',
+			reloadOnSearch: false
+		})
+		.state('cockpit', {
+			url: '/cockpit',
+			templateUrl: 'plates/cockpit.html',
+			controller: 'CockpitCtrl',
 			reloadOnSearch: false
 		})
 		.state('towers', {

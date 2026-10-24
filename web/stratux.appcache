@@ -20,6 +20,9 @@ CACHE MANIFEST
 /plates/js/weather.js
 /plates/js/traffic.js
 /plates/js/status.js
+/plates/js/cockpit.js
+/plates/cockpit.html
+/css/cockpit.css
 /plates/js/settings.js
 /plates/js/gps.js
 /plates/js/towers.js
