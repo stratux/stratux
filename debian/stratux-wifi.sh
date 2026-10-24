@@ -55,8 +55,16 @@ function terminate {
 }
 
 STRATUX_CONF="/boot/firmware/stratux.conf"
+# Read a top-level value from stratux.conf ("" if unset). Images built before jq was added to the image
+# don't have it, and a .deb update doesn't pull it in, so fall back to python3 (always on Pi OS).
 function conf-get {
-	jq -r "$1 // empty" "${STRATUX_CONF}" 2>/dev/null
+	if command -v jq >/dev/null; then
+		jq -r "$1 // empty" "${STRATUX_CONF}" 2>/dev/null
+	else
+		python3 -c 'import json, sys
+v = json.load(open(sys.argv[1])).get(sys.argv[2].lstrip("."))
+print("" if v is None else v)' "${STRATUX_CONF}" "$1" 2>/dev/null
+	fi
 }
 
 # Set the regulatory domain before the AP starts. wpa_supplicant's country= alone is not always
