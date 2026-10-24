@@ -263,7 +263,8 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
 	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'AIS_Enabled', 'APRS_Enabled', 'Ping_Enabled', 'Pong_Enabled', 'OGNI2CTXEnabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
-		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'TraceLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode'];
+		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'TraceLog', 'AHRSLog', 'PersistentLogging', 'GDL90MSLAlt_Enabled', 'EstimateBearinglessDist', 'DarkMode',
+		'SoftRFEnabled'];
 
 	var settings = {};
 	for (var i = 0; i < toggles.length; i++) {
@@ -344,6 +345,19 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		$scope.OGNPilot = settings.OGNPilot;
 		$scope.OGNReg = settings.OGNReg;
 		$scope.OGNTxPower = settings.OGNTxPower;
+
+		// SoftRF-specific settings
+		$scope.SoftRFEnabled = settings.SoftRFEnabled;
+		$scope.hasTracker = $scope.hasTracker || settings.SoftRFEnabled;
+		$scope.SoftRFProtocol = (settings.SoftRFProtocol >= 0) ? settings.SoftRFProtocol.toString() : "7";
+		$scope.SoftRFAltProtocol = (settings.SoftRFAltProtocol >= 0) ? settings.SoftRFAltProtocol.toString() : "0";
+		$scope.SoftRFBand = (settings.SoftRFBand >= 0) ? settings.SoftRFBand.toString() : "2";
+		$scope.SoftRFAlarm = (settings.SoftRFAlarm >= 0) ? settings.SoftRFAlarm.toString() : "3";
+		$scope.SoftRFRelay = (settings.SoftRFRelay >= 0) ? settings.SoftRFRelay.toString() : "0";
+		$scope.SoftRFTxPower = (settings.SoftRFTxPower >= 0) ? settings.SoftRFTxPower.toString() : "2";
+		$scope.SoftRFStealth = settings.SoftRFStealth;
+		$scope.SoftRFNoTrack = settings.SoftRFNoTrack;
+		$scope.updateSoftRFCompatProtocols();
 
 		$scope.PWMDutyMin = settings.PWMDutyMin;
 
@@ -712,6 +726,26 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		return "???";
 	}
 
+	// SoftRF protocol compatibility map
+	var softRFCompatMap = {
+		'7':  {'1':true, '2':true, '5':true, '6':true, '8':true},  // Latest: OGNTP, P3I, FANET, Legacy, ADS-L
+		'6':  {'7':true},                                            // Legacy: Latest only (T-Echo restriction)
+		'1':  {'2':true, '5':true, '7':true, '8':true},             // OGNTP: P3I, FANET, Latest, ADS-L
+		'2':  {'1':true, '7':true, '8':true},                       // P3I: OGNTP, Latest, ADS-L
+		'5':  {'1':true, '7':true, '8':true},                       // FANET: OGNTP, Latest, ADS-L
+		'8':  {'1':true, '2':true, '5':true, '7':true},             // ADS-L: OGNTP, P3I, FANET, Latest
+	};
+
+	$scope.updateSoftRFCompatProtocols = function() {
+		var proto = $scope.SoftRFProtocol;
+		var allowed = softRFCompatMap[proto] || {};
+		$scope.softRFAltProtoAllowed = allowed;
+		// If current alt selection is no longer valid, reset to None
+		if ($scope.SoftRFAltProtocol !== '0' && !allowed[$scope.SoftRFAltProtocol]) {
+			$scope.SoftRFAltProtocol = '0';
+		}
+	};
+
 	$scope.updateOgnTrackerConfig = function(action) {
 		var newsettings = {
 			"OGNAddrType": parseInt($scope.OGNAddrType),
@@ -721,9 +755,22 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			"OGNReg": $scope.OGNReg,
 			"OGNTxPower": $scope.OGNTxPower
 		};
+
+		// Include SoftRF-specific settings if a SoftRF device is connected or HAT is enabled
+		if ($scope.gpsHardwareCode == 13 || $scope.SoftRFEnabled) {
+			newsettings["SoftRFProtocol"] = parseInt($scope.SoftRFProtocol);
+			newsettings["SoftRFAltProtocol"] = parseInt($scope.SoftRFAltProtocol);
+			newsettings["SoftRFBand"] = parseInt($scope.SoftRFBand);
+			newsettings["SoftRFAlarm"] = parseInt($scope.SoftRFAlarm);
+			newsettings["SoftRFRelay"] = parseInt($scope.SoftRFRelay);
+			newsettings["SoftRFTxPower"] = parseInt($scope.SoftRFTxPower);
+			newsettings["SoftRFStealth"] = $scope.SoftRFStealth;
+			newsettings["SoftRFNoTrack"] = $scope.SoftRFNoTrack;
+		}
+
 		setSettings(angular.toJson(newsettings));
 
-		// reload settings after a short time, to check if OGN tracker actually accepted the settings
+		// reload settings after a short time, to check if tracker actually accepted the settings
 		setTimeout(function() {
 			getSettings();
 		}, 1000);
