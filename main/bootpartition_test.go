@@ -198,6 +198,9 @@ func TestStalledUploadKeepsBootPartitionReadOnly(t *testing.T) {
 	updates := filepath.Join(mp, "StratuxUpdates")
 
 	pr, pw := io.Pipe()
+	// If the test fails mid-way, drop the "connection" so a receiver stuck in the rw window releases
+	// the lock instead of hanging every later test.
+	t.Cleanup(func() { pw.CloseWithError(errors.New("test ended")) })
 	mw := multipart.NewWriter(pw)
 	reader := multipart.NewReader(pr, mw.Boundary())
 
@@ -333,4 +336,45 @@ func TestOverlayDetectionUsesMountedFSType(t *testing.T) {
 	if got := isOverlayRootActive(); got != want {
 		t.Fatalf("isOverlayRootActive() = %v, findmnt says / is %q", got, strings.TrimSpace(string(out)))
 	}
+}
+
+// If the kernel refuses to make the partition read-only again (e.g. EBUSY because a file is still
+// open for writing), the caller must get an error, so saveSettings() reports it instead of
+// silently leaving the card writable.
+func TestFailedReadOnlyRemountIsReported(t *testing.T) {
+	mp := scratchBootPartition(t, true)
+	var open *os.File
+	err := withBootPartitionWritable(func() error {
+		var err error
+		open, err = os.Create(filepath.Join(mp, "still-open"))
+		return err
+	})
+	if err == nil {
+		t.Fatal("expected an error when the ro remount fails")
+	}
+	if isMountReadOnly(mp) {
+		t.Fatal("expected the partition to still be rw (the remount should have been refused)")
+	}
+	open.Close()
+	// Once the writer is gone the next window closes normally again.
+	if err := withBootPartitionWritable(func() error { return nil }); err != nil {
+		t.Fatalf("next window: %v", err)
+	}
+	if err := remountBootPartition("ro"); err != nil {
+		t.Fatal(err)
+	}
+	assertReadOnly(t, mp)
+}
+
+// When something is mounted over the boot partition, the topmost mount is what writes go to.
+func TestStackedMountTopmostWins(t *testing.T) {
+	mp := scratchBootPartition(t, true)
+	if out, err := exec.Command("mount", "-t", "ramfs", "stacked", mp).CombinedOutput(); err != nil {
+		t.Skipf("cannot stack a mount: %s %s", err, out)
+	}
+	defer exec.Command("umount", mp).Run()
+	if isMountReadOnly(mp) {
+		t.Fatal("rw mount stacked on top of a ro one reported as ro")
+	}
+	assertWritable(t, mp)
 }
