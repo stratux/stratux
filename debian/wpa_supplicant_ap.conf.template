@@ -23,7 +23,7 @@ network={
 {{end}}
 	mode=2
 
-{{if eq .WiFiMode 0}}
+{{if or (eq .WiFiMode 0) (eq .WiFiMode 2)}}
 	# Set channel in AP mode
 	{{if eq .WiFiChannel 1}}
 	frequency=2412
