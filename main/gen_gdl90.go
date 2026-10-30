@@ -1194,6 +1194,7 @@ type settings struct {
 	Ping_Enabled         bool
 	Pong_Enabled         bool
 	GPS_Enabled          bool
+	M1421_Enabled        bool
 	BMP_Sensor_Enabled   bool
 	IMU_Sensor_Enabled   bool
 	NetworkOutputs       []networkConnection
@@ -1290,6 +1291,7 @@ type status struct {
 	Ping_connected                             bool
 	Pong_connected                             bool
 	UATRadio_connected                         bool
+	M1421_connected                            bool
 	GPS_satellites_locked                      uint16
 	GPS_satellites_seen                        uint16
 	GPS_satellites_tracked                     uint16
@@ -1856,6 +1858,9 @@ func main() {
 
 	// Start reading from serial UAT radio.
 	initUATRadioSerial(isTraceReplayMode)
+
+	// Start reading from serial M1421 ADS-B receiver.
+	initM1421Serial(isTraceReplayMode)
 
 	if isTraceReplayMode {
 		msgTypes := []string{}

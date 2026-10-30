@@ -430,6 +430,8 @@ func handleSettingsSetRequest(w http.ResponseWriter, r *http.Request) {
 						globalSettings.OGNI2CTXEnabled = val.(bool)
 					case "GPS_Enabled":
 						globalSettings.GPS_Enabled = val.(bool)
+					case "M1421_Enabled":
+						globalSettings.M1421_Enabled = val.(bool)
 					case "IMU_Sensor_Enabled":
 						globalSettings.IMU_Sensor_Enabled = val.(bool)
 						if !globalSettings.IMU_Sensor_Enabled && globalStatus.IMUConnected {
