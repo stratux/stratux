@@ -14,11 +14,19 @@ import (
 
 var m1421SerialPort *serial.Port
 var m1421SerialConfig *serial.Config
+var m1421Device string // Will be set during auto-detection
 
-const M1421_DEVICE = "/dev/m1421"
 const M1421_BAUD = 115200
 const M1421_OUTPUT_FORMAT = "beast" // Beast binary format
 const BEAST_ESC = 0x1A
+
+// Common GPIO UART device paths to probe (in order of preference)
+var m1421UARTPaths = []string{
+	"/dev/ttyAMA0", // Primary UART on Pi 3/4/5
+	"/dev/ttyS0",   // Alternative naming
+	"/dev/serial0", // Symlink to primary UART
+	"/dev/serial1", // Secondary UART (if available)
+}
 
 // Supported baud rates for auto-detection
 var m1421BaudRates = []int{9600, 19200, 38400, 57600, 115200, 230400, 460800}
@@ -29,22 +37,25 @@ func initM1421Serial(isTraceReplayMode bool) error {
 	}
 
 	go func() {
-		watchTicker := time.NewTicker(1 * time.Second)
+		watchTicker := time.NewTicker(2 * time.Second)
 		for {
 			<-watchTicker.C
 
-			// Watch for the device and M1421 being enabled.
+			// Watch for M1421 being enabled.
 			if !globalSettings.M1421_Enabled || globalStatus.M1421_connected {
 				// M1421 not enabled or already connected.
 				continue
 			}
 
-			if _, err := os.Stat(M1421_DEVICE); err != nil {
-				// Device not connected.
+			// Auto-detect M1421 on GPIO UART
+			device, err := detectM1421Device()
+			if err != nil {
+				// Device not detected yet, continue trying
 				continue
 			}
 
-			log.Printf("===== M1421 Device found at %s =====\n", M1421_DEVICE)
+			m1421Device = device
+			log.Printf("===== M1421 Device found at %s =====\n", m1421Device)
 
 			// Attempt to detect baud rate and configure M1421.
 			if err := configureM1421(); err != nil {
@@ -63,6 +74,37 @@ func initM1421Serial(isTraceReplayMode bool) error {
 	return nil
 }
 
+// detectM1421Device probes common GPIO UART paths to find the M1421.
+// Returns the device path if found, error otherwise.
+func detectM1421Device() (string, error) {
+	for _, devicePath := range m1421UARTPaths {
+		if _, err := os.Stat(devicePath); err != nil {
+			// Device doesn't exist, try next
+			continue
+		}
+
+		// Try to probe this UART at common baud rates
+		for _, baud := range m1421BaudRates {
+			config := &serial.Config{Name: devicePath, Baud: baud}
+			port, err := serial.OpenPort(config)
+			if err != nil {
+				continue
+			}
+
+			// Send AT probe command
+			if err := sendM1421Command(port, "AT"); err == nil {
+				port.Close()
+				log.Printf("M1421 detected at %s (%d baud)\n", devicePath, baud)
+				return devicePath, nil
+			}
+
+			port.Close()
+		}
+	}
+
+	return "", fmt.Errorf("M1421 not detected on any GPIO UART")
+}
+
 // configureM1421 attempts to auto-detect the M1421's current baud rate,
 // then configures it to output Beast format at 115200 baud.
 func configureM1421() error {
@@ -71,7 +113,7 @@ func configureM1421() error {
 
 	// Try to detect current baud rate
 	log.Printf("Attempting to detect M1421 baud rate...\n")
-	detectedBaud, err = detectM1421BaudRate()
+	detectedBaud, err = detectM1421BaudRateOnDevice()
 	if err != nil {
 		log.Printf("Baud rate detection failed: %s, attempting default (%d)\n", err.Error(), M1421_BAUD)
 		detectedBaud = M1421_BAUD
@@ -80,10 +122,10 @@ func configureM1421() error {
 	}
 
 	// Open port at detected baud rate
-	m1421SerialConfig = &serial.Config{Name: M1421_DEVICE, Baud: detectedBaud}
+	m1421SerialConfig = &serial.Config{Name: m1421Device, Baud: detectedBaud}
 	port, err := serial.OpenPort(m1421SerialConfig)
 	if err != nil {
-		return fmt.Errorf("failed to open M1421 port: %w", err)
+		return fmt.Errorf("failed to open M1421 port at %s: %w", m1421Device, err)
 	}
 	defer port.Close()
 
@@ -114,7 +156,7 @@ func configureM1421() error {
 	}
 
 	// Re-open at target baud rate
-	m1421SerialConfig = &serial.Config{Name: M1421_DEVICE, Baud: M1421_BAUD}
+	m1421SerialConfig = &serial.Config{Name: m1421Device, Baud: M1421_BAUD}
 	p, err := serial.OpenPort(m1421SerialConfig)
 	if err != nil {
 		return fmt.Errorf("failed to reopen M1421 at target baud rate: %w", err)
@@ -124,11 +166,11 @@ func configureM1421() error {
 	return nil
 }
 
-// detectM1421BaudRate attempts to probe the M1421 at various baud rates
+// detectM1421BaudRateOnDevice attempts to probe the M1421 at various baud rates
 // by sending an AT command and looking for a valid response.
-func detectM1421BaudRate() (int, error) {
+func detectM1421BaudRateOnDevice() (int, error) {
 	for _, baud := range m1421BaudRates {
-		config := &serial.Config{Name: M1421_DEVICE, Baud: baud}
+		config := &serial.Config{Name: m1421Device, Baud: baud}
 		port, err := serial.OpenPort(config)
 		if err != nil {
 			continue
