@@ -1,5 +1,9 @@
 alias stratux-off='shutdown -P now'
 
+# SD card protection: the boot partition is read-only while Stratux runs
+alias bootrw='mount -o remount,rw /boot/firmware'
+alias bootro='sync && mount -o remount,ro /boot/firmware'
+
 alias eeprom='rtl_eeprom'
 alias sa='service --status-all'
 alias stxrestart='service stratux restart'

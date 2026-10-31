@@ -1,0 +1,102 @@
+/* Cockpit page and shared status badges.
+   Always high-contrast on black regardless of theme: readable in sunlight and dim at night. */
+
+.stx-cockpit {
+	background: #000;
+	color: #fff;
+	min-height: calc(100vh - 50px);
+	padding: 8px;
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.stx-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	gap: 8px;
+}
+
+.stx-stale {
+	opacity: 0.35;
+}
+
+.stx-tile {
+	border: 3px solid #555;
+	border-radius: 8px;
+	padding: 8px 10px;
+	min-height: 120px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+.stx-label {
+	font-size: 16px;
+	font-weight: bold;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #ccc;
+}
+
+.stx-value {
+	font-size: 44px;
+	font-weight: bold;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+
+.stx-sub {
+	font-size: 16px;
+	color: #ddd;
+}
+
+.stx-sub-large {
+	font-size: 22px;
+	font-weight: bold;
+	color: #fff;
+}
+
+/* Level colors: tile border + value color. Green/amber/red with shape cues from text, not color alone. */
+.stx-tile.stx-good    { border-color: #00c853; }
+.stx-tile.stx-good .stx-value { color: #00e676; }
+.stx-tile.stx-caution { border-color: #ffab00; }
+.stx-tile.stx-caution .stx-value { color: #ffc400; }
+.stx-tile.stx-warning { border-color: #ff1744; background: #2a0006; }
+.stx-tile.stx-warning .stx-value { color: #ff5252; }
+.stx-tile.stx-neutral { border-color: #2979ff; }
+
+.stx-banner {
+	font-size: 28px;
+	font-weight: bold;
+	text-align: center;
+	padding: 10px;
+	margin-bottom: 8px;
+	border-radius: 8px;
+}
+.stx-banner.stx-warning { background: #d50000; color: #fff; }
+
+.stx-errors {
+	margin-top: 8px;
+	border: 3px solid #ff1744;
+	border-radius: 8px;
+	padding: 8px 10px;
+	font-size: 18px;
+}
+
+@media (min-width: 768px) {
+	.stx-value { font-size: 56px; }
+	.stx-tile { min-height: 140px; }
+}
+
+/* Inline badges used on the regular status page */
+.stx-badge {
+	display: inline-block;
+	min-width: 2em;
+	padding: 1px 8px;
+	border-radius: 4px;
+	font-weight: bold;
+	text-align: center;
+	color: #fff;
+}
+.stx-badge.stx-good    { background: #00a046; }
+.stx-badge.stx-caution { background: #e69500; color: #000; }
+.stx-badge.stx-warning { background: #d50000; }

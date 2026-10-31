@@ -149,6 +149,104 @@
                 </div>
             </div>
         </div>
+        <!-- Hardware Settings -->
+        <div class="panel-group col-sm-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">Hardware &amp; Services</div>
+                <div class="panel-body">
+                    <p class="help-block col-xs-12">Turn off receivers, sensors and outputs you don't have or don't use.
+                        Each one that is off stops its decoder/poller, which lowers CPU load and heat.</p>
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">GPS</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='GPS_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">978 Mhz (UAT)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='UAT_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-xs-5">1090 Mhz (ADS-B/Mode-S ES)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='ES_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-xs-5">868 Mhz (OGN, ADS-L)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='OGN_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-xs-5">162 MHz (AIS)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='AIS_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-xs-5">Internet (OGN APRS)</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='APRS_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">AHRS Sensor</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='IMU_Sensor_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label col-xs-5">Baro Sensor</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='BMP_Sensor_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">Bluetooth LE output<br />
+                            <small>Off blocks the BT radio, which shares the WiFi antenna. Restart to apply.</small></label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='BLE_Enabled' ui-turn-on="modalRebootRequired" settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group" ng-show="IMU_Sensor_Enabled">
+                        <label class="control-label col-xs-5">Minimum fan duty cycle %</label>
+                        <div class="col-xs-7">
+                            <form name="PWMDutyMinForm" ng-submit="updatePWMDutyMin()" novalidate>
+                                <!-- type="number" not supported except on mobile -->
+                                <input class="col-xs-7" type="number" ng-model="PWMDutyMin" placeholder="0-100" min="0"
+                                    max="100" ng-change="updatePWMDutyMin()" />
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">Ping ADS-B</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='Ping_Enabled' ng-disabled='Pong_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">Pong ADS-B Receiver</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='Pong_Enabled' ng-disabled='Ping_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">OGN Transmission via I&#178;C/GPIO HAT</label>
+                        <div class="col-xs-7">
+                            <ui-switch ng-model='OGNI2CTXEnabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
     </div>
     <!-- End Left Col -->
     <!-- Begin Right Col -->
@@ -271,6 +369,7 @@
                                     ng-options="country.key as country.value for country in sortedCountries">
                                 <option value="" label="Unspecified">Unspecified</option>
                             </select>
+                            <p class="help-block col-xs-12" ng-show="!WiFiCountry">Set your country so the radio uses the correct channels and power limits.</p>
                         </div>
                         <div class="form-group reset-flow">
                             <label class="control-label col-xs-5">WiFi SSID</label>
@@ -298,12 +397,21 @@
                             <label class="control-label col-xs-5">WiFi Channel</label>
                             <select id="WiFiChannel" class="input-small col-sm-2 form-control-sm" ng-model="WiFiChannel"
                                 ng-options="x for x in Channels"></select>
+                            <p class="help-block col-xs-12">Use 1, 6 or 11 - they don't overlap. Pick the one least used at your field.</p>
+                        </div>
+                        <div class="form-group reset-flow" ng-show="WiFiMode=='0' || WiFiMode=='2'">
+                            <label class="control-label col-xs-5">WiFi TX Power</label>
+                            <select class="custom-select" ng-model="WiFiTxPower"
+                                ng-options="p.value as p.label for p in TxPowers"></select>
+                            <p class="help-block col-xs-12">A cockpit needs very little range. Lower power means less heat and interference.</p>
                         </div>
                         <div class="form-group reset-flow">
                             <label class="control-label col-xs-5">Stratux IP Address</label>
                             <input class="col-xs-7" type="text" ip-addr-input ng-model="WiFiIPAddress"
                                 placeholder="192.168.10.1" />
                         </div>
+                        <p class="help-block col-xs-12" ng-show="WiFiMode=='2'"><strong>In flight, use AccessPoint mode.</strong>
+                            In AP+Client mode the AP must follow the client network's channel and is interrupted by scans, which drops EFB connections.</p>
                         <div class="form-group reset-flow" ng-show="WiFiMode=='2'">
                             <label class="control-label col-xs-5">Internet Passthrough</label>
                             <div class="col-xs-5">
@@ -347,100 +455,6 @@
 </div>
 <!-- Developer mode area -->
 <div ng-show="DeveloperMode" class="col-sm-12" >
-    <!-- Begin Left Col -->
-    <div class="col-sm-6">
-        <!-- Hardware Settings -->
-        <div class="panel-group col-sm-12">
-            <div class="panel panel-default">
-                <div class="panel-heading">Hardware</div>
-                <div class="panel-body">
-                    <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">GPS</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='GPS_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-
-                    <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">978 Mhz (UAT)</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='UAT_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="control-label col-xs-5">1090 Mhz (ADS-B/Mode-S ES)</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='ES_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="control-label col-xs-5">868 Mhz (OGN, ADS-L)</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='OGN_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="control-label col-xs-5">162 MHz (AIS)</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='AIS_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="control-label col-xs-5">Internet (OGN APRS)</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='APRS_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-                    <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">AHRS Sensor</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='IMU_Sensor_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="control-label col-xs-5">Baro Sensor</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='BMP_Sensor_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-                    <div class="form-group" ng-show="IMU_Sensor_Enabled">
-                        <label class="control-label col-xs-5">Minimum fan duty cycle %</label>
-                        <div class="col-xs-7">
-                            <form name="PWMDutyMinForm" ng-submit="updatePWMDutyMin()" novalidate>
-                                <!-- type="number" not supported except on mobile -->
-                                <input class="col-xs-7" type="number" ng-model="PWMDutyMin" placeholder="0-100" min="0"
-                                    max="100" ng-change="updatePWMDutyMin()" />
-                            </form>
-                        </div>
-                    </div>
-
-                    <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">Ping ADS-B</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='Ping_Enabled' ng-disabled='Pong_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-
-                    <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">Pong ADS-B Receiver</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='Pong_Enabled' ng-disabled='Ping_Enabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-
-                    <div class="form-group reset-flow">
-                        <label class="control-label col-xs-5">OGN Transmission via I&#178;C/GPIO HAT</label>
-                        <div class="col-xs-7">
-                            <ui-switch ng-model='OGNI2CTXEnabled' settings-change></ui-switch>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- End Left Col -->
-    <!-- Begin Right Col -->
     <div class="col-sm-6">
         <!-- Diagnostics Values -->
         <div ng-show="DeveloperMode" class="panel-group col-sm-12">
@@ -479,7 +493,7 @@
                     </div>
                     <div class="form-group">
                         <label class="control-label col-xs-5">Persistent logging<br />
-                            <small>Write logs to micro SD instead of RAM</small></label>
+                            <small>Write logs to micro SD instead of RAM. Disables SD card write protection - always use Shutdown before removing power.</small></label>
                         <div class="col-xs-7">
                             <ui-switch ng-model='PersistentLogging' ui-turn-on="modalRebootRequired" settings-change>
                             </ui-switch>
@@ -507,7 +521,6 @@
             </div>
         </div>
     </div>
-    <!-- End Right Col -->
     <div class="col-sm-12">
         <div class="panel-group col-sm-12">
             <div class="panel panel-default">

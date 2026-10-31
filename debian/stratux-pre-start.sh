@@ -13,6 +13,33 @@ wLog "Running Stratux Updater Script."
 TEMP_DIRECTORY="/boot/firmware/StratuxUpdates"
 
 ######################
+# SD card protection: keep the FAT boot partition read-only while Stratux runs. Root is already
+# protected by the overlay; /boot/firmware (stratux.conf, updates) is the remaining part of the card
+# that gets corrupted when power is cut without shutting down. This script needs it rw for update
+# handling, so make it rw now and remount it ro on exit. stratuxrun opens a short rw window itself
+# whenever it saves settings or receives an update upload.
+# Opt out by creating /boot/firmware/.stratux-boot-rw (e.g. from a PC).
+BOOT_DIR="/boot/firmware"
+function boot-lock {
+	if [ -e "${BOOT_DIR}/.stratux-boot-rw" ]; then
+		wLog "${BOOT_DIR}/.stratux-boot-rw present, leaving boot partition writable"
+		return
+	fi
+	sync
+	if mount -o remount,ro "${BOOT_DIR}"; then
+		wLog "Boot partition remounted read-only"
+	else
+		wLog "WARNING: could not remount boot partition read-only"
+	fi
+}
+if mountpoint -q "${BOOT_DIR}"; then
+	mount -o remount,rw "${BOOT_DIR}" || wLog "WARNING: could not remount boot partition rw"
+	trap boot-lock EXIT
+fi
+# Leftovers of an atomic write (writeFileAtomicFrom in stratuxrun) that was interrupted by a power cut.
+rm -f "${BOOT_DIR}/stratux.conf.tmp" "${TEMP_DIRECTORY}"/*.tmp
+
+######################
 # script based update
 SCRIPT_MASK="update*stratux*v*.sh"
 TEMP_SCRIPT_LOCATION="$TEMP_DIRECTORY/$SCRIPT_MASK"

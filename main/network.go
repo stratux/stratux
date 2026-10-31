@@ -16,12 +16,14 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/stratux/serial"
+	"github.com/stratux/stratux/common"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"tinygo.org/x/bluetooth"
@@ -381,8 +383,25 @@ func parseBleUuid(uuidStr string) (uuid bluetooth.UUID) {
 }
 
 var bleAdapter = bluetooth.DefaultAdapter
+
+// setBluetoothRadio soft-blocks/unblocks the Bluetooth radio. On the Pi, WiFi and Bluetooth share one
+// 2.4GHz chip and antenna, so blocking an unused BT radio removes coexistence time-slicing from WiFi.
+func setBluetoothRadio(enabled bool) {
+	if !common.IsRunningAsRoot() {
+		return
+	}
+	action := "block"
+	if enabled {
+		action = "unblock"
+	}
+	if out, err := exec.Command("rfkill", action, "bluetooth").CombinedOutput(); err != nil {
+		log.Printf("rfkill %s bluetooth: %s %s\n", action, err.Error(), out)
+	}
+}
+
 func initBluetooth() {
-	if len(globalSettings.BleOutputs) == 0 {
+	setBluetoothRadio(globalSettings.BLE_Enabled)
+	if !globalSettings.BLE_Enabled || len(globalSettings.BleOutputs) == 0 {
 		return
 	}
 	for {

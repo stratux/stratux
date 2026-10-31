@@ -8,7 +8,8 @@
 apt update
 
 on_chroot << EOF
-    apt install --yes dnsmasq ifplugd iptables
+    # jq: stratux-pre-start.sh and stratux-wifi.sh read stratux.conf with it
+    apt install --yes dnsmasq ifplugd iptables jq
 
     # try to reduce writing to SD card as much as possible, so they don't get
     # bricked when yanking the power cable

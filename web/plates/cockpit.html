@@ -1,0 +1,69 @@
+<div class="stx-cockpit">
+	<div class="stx-banner stx-warning" ng-show="!linkOk">NO DATA FROM STRATUX</div>
+
+	<div class="stx-grid" ng-class="{'stx-stale': !linkOk}">
+		<div class="stx-tile stx-{{s.gpsLevel}}" ng-show="enabled.gps !== false">
+			<div class="stx-label">GPS</div>
+			<div class="stx-value">{{s.gpsFix ? 'FIX' : 'NO FIX'}}</div>
+			<div class="stx-sub">{{s.gpsSolution}}</div>
+		</div>
+
+		<div class="stx-tile stx-{{s.nacpLevel}}" ng-show="enabled.gps !== false">
+			<div class="stx-label">NACp</div>
+			<div class="stx-value">{{s.nacp}}</div>
+			<div class="stx-sub">{{s.accuracy}}</div>
+		</div>
+
+		<div class="stx-tile stx-{{s.satsLevel}}" ng-show="enabled.gps !== false">
+			<div class="stx-label">Satellites</div>
+			<div class="stx-value">{{s.satsUsed}}</div>
+			<div class="stx-sub">in solution, {{s.satsTracked}} tracked</div>
+		</div>
+
+		<div class="stx-tile stx-{{s.clientsLevel}}">
+			<div class="stx-label">EFB clients</div>
+			<div class="stx-value">{{s.clients}}</div>
+			<div class="stx-sub" ng-show="s.clients == 0">check iPad WiFi</div>
+		</div>
+
+		<div class="stx-tile stx-neutral" ng-show="enabled.es || enabled.uat">
+			<div class="stx-label">Traffic tracked</div>
+			<div class="stx-value">{{s.traffic}}</div>
+			<div class="stx-sub">
+				<span ng-show="enabled.es">1090: {{s.esMsgs}}/min</span>
+				<span ng-show="enabled.uat">&nbsp;UAT: {{s.uatMsgs}}/min</span>
+			</div>
+		</div>
+
+		<div class="stx-tile stx-neutral" ng-show="enabled.ogn || enabled.ais">
+			<div class="stx-label">Other receivers</div>
+			<div class="stx-sub stx-sub-large">
+				<div ng-show="enabled.ogn">OGN: {{s.ognMsgs}}/min</div>
+				<div ng-show="enabled.ais">AIS: {{s.aisMsgs}}/min</div>
+			</div>
+		</div>
+
+		<div class="stx-tile stx-{{s.cpuLevel}}">
+			<div class="stx-label">CPU temp</div>
+			<div class="stx-value">{{s.cpuTemp}}</div>
+		</div>
+
+		<div class="stx-tile stx-{{s.sd.level}}">
+			<div class="stx-label">SD card</div>
+			<div class="stx-sub stx-sub-large">{{s.sd.text}}</div>
+		</div>
+
+		<div class="stx-tile" ng-class="(s.imu || !enabled.imu) && (s.bmp || !enabled.bmp) ? 'stx-good' : 'stx-caution'" ng-show="enabled.imu || enabled.bmp">
+			<div class="stx-label">Sensors</div>
+			<div class="stx-sub stx-sub-large">
+				<div ng-show="enabled.imu">AHRS: {{s.imu ? 'OK' : 'not found'}}</div>
+				<div ng-show="enabled.bmp">Baro: {{s.bmp ? 'OK' : 'not found'}}</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="stx-errors" ng-show="s.errors.length > 0">
+		<div class="stx-label">Errors</div>
+		<div ng-repeat="err in s.errors track by $index">{{err}}</div>
+	</div>
+</div>

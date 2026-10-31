@@ -981,6 +981,7 @@ func updateStatus() {
 	globalStatus.GPS_satellites_seen = mySituation.GPSSatellitesSeen
 	globalStatus.GPS_satellites_tracked = mySituation.GPSSatellitesTracked
 	globalStatus.GPS_position_accuracy = mySituation.GPSHorizontalAccuracy
+	globalStatus.GPS_NACp = mySituation.GPSNACp
 
 	// Update Uptime value
 	globalStatus.Uptime = int64(stratuxClock.Milliseconds)
@@ -988,6 +989,8 @@ func updateStatus() {
 
 	usage := du.NewDiskUsage("/")
 	globalStatus.DiskBytesFree = usage.Free()
+	globalStatus.OverlayActive = isOverlayRootActive()
+	globalStatus.BootReadOnly = isMountReadOnly(bootPartitionMountPoint)
 	globalStatus.Logfile_Size = logFileSize()
 
 	var ahrsLogSize int64
@@ -1196,6 +1199,7 @@ type settings struct {
 	GPS_Enabled          bool
 	BMP_Sensor_Enabled   bool
 	IMU_Sensor_Enabled   bool
+	BLE_Enabled          bool // Bluetooth LE traffic output. Off = BT radio blocked (less 2.4GHz coexistence with WiFi)
 	NetworkOutputs       []networkConnection
 	SerialOutputs        map[string]serialConnection
 	BleOutputs           []bleConnection
@@ -1220,6 +1224,7 @@ type settings struct {
 	WiFiCountry          string
 	WiFiSSID             string
 	WiFiChannel          int
+	WiFiTxPower          int  // AP transmit power in dBm, 0 = driver default
 	WiFiSecurityEnabled  bool
 	WiFiPassphrase       string
 	NoSleep              bool
@@ -1285,6 +1290,7 @@ type status struct {
 	GPS_satellites_seen                        uint16
 	GPS_satellites_tracked                     uint16
 	GPS_position_accuracy                      float32
+	GPS_NACp                                   uint8 // NACp sent to EFBs in the ownship report (AC 20-165A categories)
 	GPS_connected                              bool
 	GPS_solution                               string
 	GPS_detected_type                          uint
@@ -1317,6 +1323,8 @@ type status struct {
 
 	OGNPrevRandomAddr                          string    // when OGN is in random stealth mode, it's ID changes randomly - keep the previous one so we can filter properly
 	Pong_Heartbeats                            int64     // Pong heartbeat counter
+	OverlayActive                              bool      // root filesystem is the RAM overlay (SD card write protected)
+	BootReadOnly                               bool      // /boot/firmware is mounted read-only
 }
 
 var globalSettings settings
@@ -1335,6 +1343,7 @@ func defaultSettings() {
 	globalSettings.GPS_Enabled = true
 	globalSettings.IMU_Sensor_Enabled = true
 	globalSettings.BMP_Sensor_Enabled = true
+	globalSettings.BLE_Enabled = true
 	//FIXME: Need to change format below.
 	globalSettings.NetworkOutputs = []networkConnection{
 		{Conn: nil, Ip: "", Port: 4000, Capability: NETWORK_GDL90_STANDARD | NETWORK_AHRS_GDL90},
@@ -1453,15 +1462,16 @@ func overlayctl(cmd string) {
 }
 
 func saveSettings() {
-	fd, err := os.OpenFile(configLocation, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(0644))
+	jsonSettings, _ := json.MarshalIndent(&globalSettings, "", "  ")
+	// The boot partition is normally read-only (SD card protection) - open a short rw window and
+	// replace the file atomically so a power cut can't leave a truncated stratux.conf behind.
+	err := withBootPartitionWritable(func() error {
+		return writeFileAtomic(configLocation, jsonSettings, os.FileMode(0644))
+	})
 	if err != nil {
 		addSingleSystemErrorf("save-settings", "can't save settings %s: %s", configLocation, err.Error())
 		return
 	}
-	defer fd.Close()
-	jsonSettings, _ := json.MarshalIndent(&globalSettings, "", "  ")
-	fd.Write(jsonSettings)
-	fd.Sync()
 	log.Printf("wrote settings.\n")
 }
 
