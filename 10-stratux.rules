@@ -50,6 +50,9 @@ SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}==
 # E80 ADS-B receiver on GPIO UART
 KERNEL=="ttyAMA0", SYMLINK+="E80"
 
+# E80 ADS-B receiver on USB-UART (CH340)
+SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="E80"
+
 # TTGO T-Beam (ESP32 with OTP CP2104 or QinHeng Electronics chip)
 SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{product}=="CP2104 USB to UART Bridge Controller", SYMLINK+="serialin"
 SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", SYMLINK+="serialin"
