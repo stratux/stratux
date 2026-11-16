@@ -55,6 +55,9 @@ func initPingSerial() bool {
 		device = "/dev/pingusb"
 		baudrate = int(57600)
 		pingDeviceModel = 1
+	} else if _, err := os.Stat("/dev/E80"); err == nil {
+		device = "/dev/E80"
+		baudrate = 38400
 	} else {
 		log.Printf("No suitable Ping device found.\n")
 		return false
@@ -166,7 +169,7 @@ func pingSerialReader() {
 		s = strings.TrimSpace(s)
 		//logString := fmt.Sprintf("Ping received: %s", s)
 		//log.Println(logString)
-		if s[0] == '*' {
+		if len(s) > 0 && s[0] == '*' {
 			// 1090ES report
 			// Ping appends a signal strength at the end of the message
 			// e.g. *8DC01C2860C37797E9732E555B23;ss=049D;
@@ -190,7 +193,7 @@ func pingSerialReader() {
 				//logString := fmt.Sprintf("Relaying 1090ES: %s;", report[0]);
 				//log.Println(logString)
 			}
-		} else if s[0] == '+' || s[0] == '-' {
+		} else if len(s) > 0 && (s[0] == '+' || s[0] == '-') {
 			// UAT report
 			// Ping appends a signal strength and RS bit errors corrected
 			// at the end of the message
