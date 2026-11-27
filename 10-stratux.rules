@@ -49,6 +49,7 @@ SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}==
 
 # E80 ADS-B receiver on GPIO UART
 KERNEL=="ttyAMA0", SYMLINK+="E80"
+KERNEL=="ttyS0", SYMLINK+="E80"
 
 # E80 ADS-B receiver on USB-UART (CH340)
 SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="E80"
